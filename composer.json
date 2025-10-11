@@ -1,0 +1,99 @@
+{
+    "name": "aichadigital/lara-verifactu",
+    "description": "Laravel package for AEAT Verifactu compliance with agnostic architecture",
+    "keywords": [
+        "aichadigital",
+        "laravel",
+        "verifactu",
+        "aeat",
+        "facturacion",
+        "invoice",
+        "blockchain",
+        "fiscal"
+    ],
+    "homepage": "https://github.com/aichadigital/lara-verifactu",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Aicha Digital",
+            "email": "info@aichadigital.com",
+            "role": "Developer"
+        }
+    ],
+    "require": {
+        "php": "^8.2|^8.3",
+        "illuminate/contracts": "^11.0|^12.0",
+        "spatie/laravel-package-tools": "^1.16",
+        "ext-soap": "*",
+        "ext-openssl": "*",
+        "ext-dom": "*",
+        "ext-libxml": "*",
+        "bacon/bacon-qr-code": "^3.0",
+        "phpseclib/phpseclib": "^3.0"
+    },
+    "require-dev": {
+        "laravel/pint": "^1.13",
+        "nunomaduro/collision": "^8.0",
+        "larastan/larastan": "^2.9",
+        "orchestra/testbench": "^9.0",
+        "pestphp/pest": "^2.34",
+        "pestphp/pest-plugin-arch": "^2.7",
+        "pestphp/pest-plugin-laravel": "^2.3",
+        "phpstan/extension-installer": "^1.3",
+        "phpstan/phpstan-deprecation-rules": "^1.1",
+        "phpstan/phpstan-phpunit": "^1.3",
+        "spatie/laravel-ray": "^1.35",
+        "spatie/pest-plugin-test-time": "^2.1"
+    },
+    "autoload": {
+        "psr-4": {
+            "AichaDigital\\LaraVerifactu\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "AichaDigital\\LaraVerifactu\\Tests\\": "tests/",
+            "Workbench\\App\\": "workbench/app/",
+            "Workbench\\Database\\Factories\\": "workbench/database/factories/",
+            "Workbench\\Database\\Seeders\\": "workbench/database/seeders/"
+        }
+    },
+    "scripts": {
+        "post-autoload-dump": "@composer run prepare",
+        "clear": "@php vendor/bin/testbench package:purge-skeleton --ansi",
+        "prepare": "@php vendor/bin/testbench package:discover --ansi",
+        "build": [
+            "@composer run prepare",
+            "@php vendor/bin/testbench workbench:build --ansi"
+        ],
+        "start": [
+            "Composer\\Config::disableProcessTimeout",
+            "@composer run build",
+            "@php vendor/bin/testbench serve"
+        ],
+        "analyse": "vendor/bin/phpstan analyse",
+        "test": "vendor/bin/pest",
+        "test-coverage": "vendor/bin/pest --coverage",
+        "format": "vendor/bin/pint"
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true,
+            "phpstan/extension-installer": true
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "AichaDigital\\LaraVerifactu\\LaraVerifactuServiceProvider"
+            ],
+            "aliases": {
+                "Verifactu": "AichaDigital\\LaraVerifactu\\Facades\\Verifactu"
+            }
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
+

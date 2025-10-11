@@ -1,0 +1,5 @@
+Portal de Pruebas Externas - https://preportal.aeat.es/
+Verifactu -> https://preportal.aeat.es/PRE-Exteriores/Inicio/_menu_/VERI_FACTU___Sistemas_Informaticos_de_Facturacion/VERI_FACTU___Sistemas_Informaticos_de_Facturacion.html
+Github -> https://github.com/hectorsipe/aeat-verifactu
+Ejemnplo Laravel/PHP -> https://github.com/josemmo/Verifactu-PHP
+Mejor ejemplo laravek apto para analisis y mejora -> https://github.com/squareetlabs/LaravelVerifactu

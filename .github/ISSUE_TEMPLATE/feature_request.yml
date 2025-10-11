@@ -1,0 +1,40 @@
+name: Feature Request
+description: Sugiere una idea para Lara Verifactu
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Gracias por tu sugerencia de mejora. Por favor completa la siguiente información.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problema Relacionado
+      description: ¿Está relacionado con un problema? Por favor descríbelo.
+      placeholder: Estoy frustrado cuando...
+    validations:
+      required: false
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Solución Propuesta
+      description: Describe la solución que te gustaría ver.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternativas Consideradas
+      description: Describe cualquier solución alternativa que hayas considerado.
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Información Adicional
+      description: Añade cualquier otro contexto o capturas de pantalla sobre la solicitud de función aquí.
+

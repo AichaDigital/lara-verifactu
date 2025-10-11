@@ -1,0 +1,137 @@
+# Lara Verifactu Package - Cursor Rules
+
+## Project Context
+
+This is a Laravel package for AEAT Verifactu compliance with agnostic architecture. It provides a complete implementation that can work with native models or integrate with existing systems through contracts.
+
+## Code Style and Standards
+
+- Follow PSR-12 coding standards
+- Use strict typing: `declare(strict_types=1);` in all PHP files
+- Use PHP 8.2+ features (enums, readonly properties, named arguments)
+- Follow Laravel conventions and best practices
+- Use explicit return types and parameter types
+- Prefer composition over inheritance
+- Apply SOLID principles rigorously
+
+## Architecture Principles
+
+- **Contract-First Design**: Always define contracts before implementations
+- **Agnostic Architecture**: Code should work with any model that implements required contracts
+- **Dependency Inversion**: Depend on abstractions, not concretions
+- **Single Responsibility**: Each class should have one reason to change
+- **Open/Closed**: Open for extension, closed for modification
+
+## Testing Requirements
+
+- Write tests for all public methods
+- Aim for 90%+ code coverage
+- Use Pest for testing
+- Create unit tests for services
+- Create feature tests for integration flows
+- Use architectural tests to enforce design rules
+- Mock external dependencies (AEAT API, certificates)
+
+## Package Structure
+
+```
+src/
+├── Contracts/          # Interfaces and contracts
+├── Models/             # Eloquent models (native mode)
+├── Services/           # Business logic services
+├── Facades/            # Laravel facades
+├── Commands/           # Artisan commands
+├── Jobs/               # Queue jobs
+├── Events/             # Event classes
+├── Listeners/          # Event listeners
+├── Exceptions/         # Custom exceptions
+├── Enums/              # Enumeration classes
+├── Traits/             # Reusable traits
+├── Http/               # HTTP layer (Resources, Requests)
+└── Support/            # Helper classes
+```
+
+## Naming Conventions
+
+- Contracts: end with `Contract` suffix
+- Enums: end with `Enum` suffix
+- Exceptions: end with `Exception` suffix
+- Events: use past tense (e.g., `InvoiceRegistered`)
+- Jobs: use imperative (e.g., `SendInvoiceToAeat`)
+- Commands: use imperative (e.g., `InstallCommand`)
+- Services: descriptive names (e.g., `HashGenerator`, `XmlBuilder`)
+
+## Documentation
+
+- All public methods must have PHPDoc blocks
+- Include `@param`, `@return`, `@throws` tags
+- Use generics annotations for collections: `Collection<Type>`
+- Document complex algorithms with inline comments
+- Keep README updated with examples
+
+## Git Commit Messages
+
+- Use conventional commits format
+- Types: feat, fix, docs, style, refactor, test, chore
+- Example: `feat: add hash generator service`
+- Include issue references when applicable
+
+## Dependencies
+
+- Minimize external dependencies
+- Prefer Laravel native solutions
+- Only add dependencies that are essential
+- Keep security updated
+
+## Security Considerations
+
+- Never commit certificates or credentials
+- Use environment variables for sensitive data
+- Validate all user inputs
+- Use strict SSL verification for AEAT communications
+- Follow OWASP security guidelines
+
+## Performance
+
+- Use lazy loading when appropriate
+- Implement caching for AEAT queries
+- Use queue jobs for async processing
+- Optimize database queries (avoid N+1)
+- Use chunking for batch operations
+
+## AEAT Compliance
+
+- Follow AEAT specifications strictly
+- Validate against XSD schemas
+- Generate SHA-256 hashes as specified
+- Maintain blockchain integrity
+- Keep audit trail of all operations
+
+## Error Handling
+
+- Use specific exception classes
+- Provide meaningful error messages
+- Log errors with context
+- Distinguish between retryable and non-retryable errors
+- Return structured error responses
+
+## Translation
+
+- Use Spanish for user-facing messages
+- Keep technical terms in English in code
+- Provide translations for all messages
+- Use Laravel's translation system
+
+## Code Review Checklist
+
+- [ ] All tests pass
+- [ ] PHPStan level 8 passes
+- [ ] Code is formatted with Pint
+- [ ] No new security vulnerabilities
+- [ ] Changelog updated
+- [ ] Documentation updated
+- [ ] Follows SOLID principles
+- [ ] Contracts properly implemented
+- [ ] Error handling is adequate
+- [ ] Performance considerations addressed
+
