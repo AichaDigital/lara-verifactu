@@ -1,26 +1,6 @@
 parameters:
 	ignoreErrors:
 		-
-			message: "#^Expression on left side of \\?\\? is not nullable\\.$#"
-			count: 1
-			path: src/Commands/StatusCommand.php
-
-		-
-			message: "#^Unsafe usage of new static\\(\\)\\.$#"
-			count: 1
-			path: src/Exceptions/VerifactuException.php
-
-		-
-			message: "#^Cannot access offset 'events' on Illuminate\\\\Contracts\\\\Foundation\\\\Application\\.$#"
-			count: 1
-			path: src/LaraVerifactuServiceProvider.php
-
-		-
-			message: "#^Class AichaDigital\\\\LaraVerifactu\\\\Verifactu constructor invoked with 0 parameters, 4 required\\.$#"
-			count: 1
-			path: src/LaraVerifactuServiceProvider.php
-
-		-
 			message: "#^Class AichaDigital\\\\LaraVerifactu\\\\Models\\\\Invoice uses generic trait Illuminate\\\\Database\\\\Eloquent\\\\Factories\\\\HasFactory but does not specify its types\\: TFactory$#"
 			count: 1
 			path: src/Models/Invoice.php
@@ -79,19 +59,4 @@ parameters:
 			message: "#^PHPDoc type array\\<string\\> of property AichaDigital\\\\LaraVerifactu\\\\Models\\\\Registry\\:\\:\\$fillable is not covariant with PHPDoc type array\\<int, string\\> of overridden property Illuminate\\\\Database\\\\Eloquent\\\\Model\\:\\:\\$fillable\\.$#"
 			count: 1
 			path: src/Models/Registry.php
-
-		-
-			message: "#^Parameter \\#1 \\$registry of method AichaDigital\\\\LaraVerifactu\\\\Contracts\\\\AeatClientContract\\:\\:sendRegistration\\(\\) expects AichaDigital\\\\LaraVerifactu\\\\Contracts\\\\RegistryContract, string given\\.$#"
-			count: 1
-			path: src/Services/InvoiceRegistrar.php
-
-		-
-			message: "#^Parameter \\#2 \\$aeatCsv of method AichaDigital\\\\LaraVerifactu\\\\Services\\\\RegistryManager\\:\\:markAsSubmitted\\(\\) expects string, string\\|null given\\.$#"
-			count: 1
-			path: src/Services/InvoiceRegistrar.php
-
-		-
-			message: "#^Parameter \\#3 \\$aeatResponse of method AichaDigital\\\\LaraVerifactu\\\\Services\\\\RegistryManager\\:\\:markAsSubmitted\\(\\) expects string, string\\|null given\\.$#"
-			count: 1
-			path: src/Services/InvoiceRegistrar.php
 

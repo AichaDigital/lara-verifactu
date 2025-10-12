@@ -96,18 +96,15 @@ final class InvoiceRegistrar
                     'registry_number' => $registry->getRegistryNumber(),
                 ]);
 
-            // Use signed XML if available, otherwise use regular XML
-            $xml = $registry->getSignedXml() ?? $registry->getXml();
-
             // Submit to AEAT
-            $response = $this->aeatClient->sendRegistration($xml);
+            $response = $this->aeatClient->sendRegistration($registry);
 
             // Update registry based on response
             if ($response->isSuccess()) {
                 $this->registryManager->markAsSubmitted(
                     $registry,
-                    $response->getCsv(),
-                    $response->getMessage()
+                    $response->getCsv() ?? '',
+                    $response->getMessage() ?? ''
                 );
 
                 Log::channel(config('verifactu.logging.channel', 'single'))

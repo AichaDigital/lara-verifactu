@@ -74,14 +74,14 @@ class LaraVerifactuServiceProvider extends PackageServiceProvider
         );
 
         $this->app->singleton('verifactu', function ($app) {
-            return new \AichaDigital\LaraVerifactu\Verifactu;
+            return $app->make(\AichaDigital\LaraVerifactu\Verifactu::class);
         });
     }
 
     protected function bootEvents(): void
     {
         /** @var \Illuminate\Events\Dispatcher $events */
-        $events = $this->app['events'];
+        $events = $this->app->make('events');
 
         // Register event listeners
         $events->listen(

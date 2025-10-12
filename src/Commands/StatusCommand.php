@@ -111,7 +111,7 @@ class StatusCommand extends Command
         $data = $registries->map(function (Registry $registry) {
             return [
                 $registry->registry_number,
-                $registry->invoice?->number ?? 'N/A',
+                $registry->invoice->number ?? 'N/A',
                 $registry->status->value,
                 substr($registry->hash, 0, 12) . '...',
                 $registry->created_at->format('Y-m-d H:i'),
