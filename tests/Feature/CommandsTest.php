@@ -22,4 +22,3 @@ it('retry failed command is defined', function () {
 it('verify blockchain command is defined', function () {
     expect(VerifyBlockchainCommand::class)->toBeString();
 });
-

@@ -61,7 +61,7 @@ it('submit registry job has correct configuration', function () {
 });
 
 it('retry failed job has correct configuration', function () {
-    $job = new RetryFailedRegistriesJob();
+    $job = new RetryFailedRegistriesJob;
 
     expect($job->tries)->toBe(1)
         ->and($job->timeout)->toBeGreaterThan(0)
@@ -70,9 +70,8 @@ it('retry failed job has correct configuration', function () {
 });
 
 it('verify blockchain job has correct configuration', function () {
-    $job = new VerifyBlockchainIntegrityJob();
+    $job = new VerifyBlockchainIntegrityJob;
 
     expect($job->tries)->toBe(1)
         ->and($job->timeout)->toBeGreaterThan(0);
 });
-
