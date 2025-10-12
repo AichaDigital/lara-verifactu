@@ -48,8 +48,13 @@ return [
         'environment' => env('VERIFACTU_ENVIRONMENT', 'production'), // production|sandbox
 
         'endpoints' => [
-            'production' => env('VERIFACTU_PRODUCTION_ENDPOINT', 'https://www7.aeat.es/verifactu/ws'),
-            'sandbox' => env('VERIFACTU_SANDBOX_ENDPOINT', 'https://prewww7.aeat.es/verifactu/ws'),
+            'production' => env('VERIFACTU_PRODUCTION_ENDPOINT', 'https://www2.agenciatributaria.gob.es/wlpl/TIKE-CONT/ws/SistemaFacturacion'),
+            'sandbox' => env('VERIFACTU_SANDBOX_ENDPOINT', 'https://prewww2.aeat.es/wlpl/TIKE-CONT/ws/SistemaFacturacion'),
+        ],
+
+        'wsdl' => [
+            'production' => env('VERIFACTU_PRODUCTION_WSDL', 'https://www2.agenciatributaria.gob.es/wlpl/TIKE-CONT/ws/SistemaFacturacion?wsdl'),
+            'sandbox' => env('VERIFACTU_SANDBOX_WSDL', 'https://prewww2.aeat.es/wlpl/TIKE-CONT/ws/SistemaFacturacion?wsdl'),
         ],
 
         'timeout' => env('VERIFACTU_TIMEOUT', 30),

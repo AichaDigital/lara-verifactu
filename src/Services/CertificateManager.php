@@ -6,6 +6,9 @@ namespace AichaDigital\LaraVerifactu\Services;
 
 use AichaDigital\LaraVerifactu\Contracts\CertificateManagerContract;
 use AichaDigital\LaraVerifactu\Exceptions\CertificateException;
+use DOMDocument;
+use RobRichards\XMLSecLibs\XMLSecurityDSig;
+use RobRichards\XMLSecLibs\XMLSecurityKey;
 
 final class CertificateManager implements CertificateManagerContract
 {
@@ -18,6 +21,16 @@ final class CertificateManager implements CertificateManagerContract
      * @var array<string, mixed>|null
      */
     private ?array $privateKey = null;
+
+    /**
+     * Raw certificate content (PEM format)
+     */
+    private ?string $certificatePem = null;
+
+    /**
+     * Raw private key content (PEM format)
+     */
+    private ?string $privateKeyPem = null;
 
     /**
      * Load certificate from file
@@ -57,6 +70,8 @@ final class CertificateManager implements CertificateManagerContract
         $this->validateCertificateDates($certData);
 
         $this->certificate = $certData;
+        $this->certificatePem = $certs['cert'];
+        $this->privateKeyPem = $certs['pkey'];
 
         // Extract private key
         $privateKey = openssl_pkey_get_private($certs['pkey']);
@@ -73,24 +88,61 @@ final class CertificateManager implements CertificateManagerContract
     }
 
     /**
-     * Sign content with certificate
+     * Sign XML content with XAdES-EPES signature
      *
      * @throws CertificateException
      */
     public function sign(string $content): string
     {
-        if ($this->certificate === null || $this->privateKey === null) {
+        if ($this->certificatePem === null || $this->privateKeyPem === null) {
             throw CertificateException::make('Certificate not loaded');
         }
 
-        $signature = '';
-        $result = openssl_sign($content, $signature, $this->privateKey['key'] ?? '', OPENSSL_ALGO_SHA256);
+        try {
+            // Load XML document
+            $doc = new DOMDocument;
+            $doc->loadXML($content);
 
-        if (! $result) {
-            throw CertificateException::make('Failed to sign content');
+            // Create signature object
+            $signature = new XMLSecurityDSig;
+            $signature->setCanonicalMethod(XMLSecurityDSig::EXC_C14N);
+
+            // Add reference to sign the entire document
+            $signature->addReference(
+                $doc,
+                XMLSecurityDSig::SHA256,
+                ['http://www.w3.org/2000/09/xmldsig#enveloped-signature'],
+                ['force_uri' => true]
+            );
+
+            // Create security key
+            $key = new XMLSecurityKey(XMLSecurityKey::RSA_SHA256, ['type' => 'private']);
+            $key->loadKey($this->privateKeyPem, false);
+
+            // Sign the document
+            $signature->sign($key);
+
+            // Add certificate info
+            $signature->add509Cert($this->certificatePem);
+
+            // Append signature to document root
+            if ($doc->documentElement === null) {
+                throw CertificateException::make('Invalid XML document structure');
+            }
+
+            $signature->appendSignature($doc->documentElement);
+
+            // Return signed XML
+            $signedXml = $doc->saveXML();
+
+            if ($signedXml === false) {
+                throw CertificateException::make('Failed to generate signed XML');
+            }
+
+            return $signedXml;
+        } catch (\Exception $e) {
+            throw CertificateException::make('Failed to sign XML: ' . $e->getMessage());
         }
-
-        return base64_encode($signature);
     }
 
     /**

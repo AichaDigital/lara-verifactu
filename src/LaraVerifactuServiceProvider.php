@@ -26,6 +26,7 @@ class LaraVerifactuServiceProvider extends PackageServiceProvider
                 \AichaDigital\LaraVerifactu\Commands\RetryFailedCommand::class,
                 \AichaDigital\LaraVerifactu\Commands\VerifyBlockchainCommand::class,
                 \AichaDigital\LaraVerifactu\Commands\StatusCommand::class,
+                \AichaDigital\LaraVerifactu\Commands\TestAeatConnectionCommand::class,
             ])
             ->hasInstallCommand(function (\Spatie\LaravelPackageTools\Commands\InstallCommand $command): void {
                 $command
