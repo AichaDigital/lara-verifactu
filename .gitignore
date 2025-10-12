@@ -25,3 +25,13 @@ storage/
 .cursor/
 .cursorignore/
 .claude/
+.env
+
+# NUNCA subas el certificado a Git
+*.p12
+*.pfx
+*.pem
+*.key
+aeat-cert.*
+certificates/
+.certificates/
