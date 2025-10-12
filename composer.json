@@ -47,7 +47,8 @@
     },
     "autoload": {
         "psr-4": {
-            "AichaDigital\\LaraVerifactu\\": "src/"
+            "AichaDigital\\LaraVerifactu\\": "src/",
+            "AichaDigital\\LaraVerifactu\\Database\\Factories\\": "database/factories/"
         }
     },
     "autoload-dev": {

@@ -5,33 +5,110 @@ declare(strict_types=1);
 namespace AichaDigital\LaraVerifactu\Contracts;
 
 use AichaDigital\LaraVerifactu\Enums\InvoiceTypeEnum;
+use AichaDigital\LaraVerifactu\Enums\OperationTypeEnum;
+use AichaDigital\LaraVerifactu\Enums\RegimeTypeEnum;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 
+/**
+ * Invoice Contract
+ *
+ * Defines the interface for invoices within the Verifactu system.
+ * Both native models and custom user models must implement this interface.
+ */
 interface InvoiceContract
 {
-    public function getIssuerTaxId(): string;
-
-    public function getInvoiceNumber(): string;
-
-    public function getIssueDate(): Carbon;
-
-    public function getInvoiceType(): InvoiceTypeEnum;
-
-    public function getDescription(): ?string;
-
-    public function getTotalAmount(): string;
-
-    public function getTotalTaxAmount(): string;
+    /**
+     * Get the invoice serie (optional).
+     */
+    public function getSerie(): ?string;
 
     /**
-     * @return Collection<InvoiceBreakdownContract>
+     * Get the invoice number.
+     */
+    public function getNumber(): string;
+
+    /**
+     * Get the invoice issue date.
+     */
+    public function getIssueDate(): Carbon;
+
+    /**
+     * Get the invoice issue time.
+     */
+    public function getIssueTime(): Carbon;
+
+    /**
+     * Get the invoice type (F1, F2, etc.).
+     */
+    public function getType(): InvoiceTypeEnum;
+
+    /**
+     * Check if the invoice is simplified.
+     */
+    public function isSimplified(): bool;
+
+    /**
+     * Get the rectification type (if applicable).
+     */
+    public function getRectificationType(): ?string;
+
+    /**
+     * Get the invoice base amount.
+     */
+    public function getBaseAmount(): float;
+
+    /**
+     * Get the invoice tax amount.
+     */
+    public function getTaxAmount(): float;
+
+    /**
+     * Get the invoice total amount.
+     */
+    public function getTotalAmount(): float;
+
+    /**
+     * Get the invoice currency (default: EUR).
+     */
+    public function getCurrency(): string;
+
+    /**
+     * Get the recipient (if exists).
+     */
+    public function getRecipient(): ?RecipientContract;
+
+    /**
+     * Check if the invoice has recipient information.
+     */
+    public function hasRecipient(): bool;
+
+    /**
+     * Get the tax breakdowns.
+     *
+     * @return Collection<int, InvoiceBreakdownContract>
      */
     public function getBreakdowns(): Collection;
 
-    public function getRecipient(): ?RecipientContract;
+    /**
+     * Get the tax regime type.
+     */
+    public function getRegimeType(): RegimeTypeEnum;
 
-    public function getPreviousInvoiceId(): ?string;
+    /**
+     * Get the operation key.
+     */
+    public function getOperationKey(): OperationTypeEnum;
 
-    public function getPreviousHash(): ?string;
+    /**
+     * Get the invoice description (optional).
+     */
+    public function getDescription(): ?string;
+
+    /**
+     * Get additional metadata as array.
+     *
+     * @return array<string, mixed>
+     */
+    public function getMetadata(): array;
 }
