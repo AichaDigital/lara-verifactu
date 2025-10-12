@@ -55,7 +55,7 @@ class InvoiceFactory extends Factory
             'recipient_name' => $this->faker->company(),
             'recipient_country' => 'ES',
             'regime_type' => RegimeTypeEnum::GENERAL,
-            'operation_key' => OperationTypeEnum::SALE,
+            'operation_key' => OperationTypeEnum::NORMAL,
             'description' => $this->faker->sentence(),
             'metadata' => null,
         ];
