@@ -43,11 +43,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Integration with certificate signing
 - Proper error handling and logging
 
+### Added - Phase 3: Models & Persistence
+- **Invoice Model**: Eloquent model implementing InvoiceContract (12 tests)
+- **Registry Model**: Eloquent model implementing RegistryContract (15 tests)
+- **InvoiceBreakdown Model**: Eloquent model implementing InvoiceBreakdownContract (11 tests)
+- Database migrations with proper indexes and constraints
+- Model factories for testing and seeding
+- Comprehensive model relationships (hasOne, hasMany, belongsTo)
+- Soft delete support with cascade
+- Type casting for enums, decimals, dates, and JSON
+- Model feature tests with RefreshDatabase
+
+### Added - Phase 4: Service Integration
+- **RegistryManager Service**: Orchestrate registry operations
+  - Create registries with hash generation
+  - Manage blockchain integrity
+  - Track submission status
+  - Generate registry numbers
+  - Retry failed submissions
+- **InvoiceRegistrar Service**: Main orchestrator for invoice registration
+  - Complete registration workflow
+  - AEAT submission handling
+  - Batch processing support
+  - Retry logic for failed submissions
+  - Blockchain verification
+- Updated HashGenerator and XmlBuilder to work with Invoice models
+- Service integration tests
+
+### Added - Phase 5: Commands & Jobs
+- **Artisan Commands** (4):
+  - `verifactu:register` - Register invoices (single or batch)
+  - `verifactu:retry-failed` - Retry failed AEAT submissions
+  - `verifactu:verify-blockchain` - Verify blockchain integrity
+  - `verifactu:status` - Show system status dashboard
+- **Queue Jobs** (4):
+  - `ProcessInvoiceRegistrationJob` - Full invoice registration process
+  - `SubmitRegistryToAeatJob` - Submit registry to AEAT
+  - `RetryFailedRegistriesJob` - Batch retry failed registries
+  - `VerifyBlockchainIntegrityJob` - Verify blockchain integrity
+- All jobs configured with retries, timeouts, and backoff
+- Command and job tests (12 tests)
+
+### Added - Phase 6: Events & Listeners
+- **Events** (5):
+  - `InvoiceRegisteredEvent` - Fired when invoice is registered
+  - `RegistryCreatedEvent` - Fired when registry is created
+  - `RegistrySubmittedEvent` - Fired on successful AEAT submission
+  - `RegistryFailedEvent` - Fired on failed AEAT submission
+  - `BlockchainVerifiedEvent` - Fired after blockchain verification
+- **Listeners** (5):
+  - `LogInvoiceRegistration` - Logs invoice registrations
+  - `LogRegistryCreation` - Logs registry creations
+  - `LogRegistrySubmission` - Logs successful submissions
+  - `LogRegistryFailure` - Logs failed submissions
+  - `LogBlockchainVerification` - Logs verification results
+- Event-listener registration in ServiceProvider
+- Comprehensive event logging with context data
+- Event tests (6 tests)
+
 ### Status
-- ⚠️ **DEVELOPMENT VERSION - NOT FOR PRODUCTION USE**
-- ✅ Phase 1: Complete (30%)
-- ✅ Phase 2: Complete (50% total)
-- ⏳ Phase 3-8: In development
+- ⚠️ **BETA VERSION - NOT FOR PRODUCTION USE**
+- ✅ Phase 1: Arquitectura base (100%)
+- ✅ Phase 2: Servicios core (100%)
+- ✅ Phase 3: Modelos y persistencia (100%)
+- ✅ Phase 4: Integración servicios (100%)
+- ✅ Phase 5: Commands & Jobs (100%)
+- ✅ Phase 6: Events & Listeners (100%)
+- ⏳ Phase 7: API Integration (planned for v0.2.0)
+- ⏳ Phase 8: Production hardening (planned for v1.0.0)
+- **Total Progress: 85%**
+- **Tests: 68/68 passing ✅ (186 assertions)**
+- **PHPStan: Level 8 ✅**
+- **Code Style: PSR-12 ✅**
 
 [Unreleased]: https://github.com/aichadigital/lara-verifactu/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/aichadigital/lara-verifactu/releases/tag/v0.1.0

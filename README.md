@@ -7,16 +7,23 @@
 
 > **⚠️ IMPORTANTE: PAQUETE EN DESARROLLO**
 >
-> **Este paquete se encuentra actualmente en desarrollo activo (v0.1.0-dev).**
+> **Este paquete se encuentra actualmente en versión 0.1.0 (Beta).**
 > 
 > **🚧 NO USAR EN PRODUCCIÓN 🚧**
 > 
-> - ✅ Fase 1 completada: Arquitectura base
-> - ✅ Fase 2 completada: Servicios core (50% del proyecto)
-> - ⏳ Fase 3 en desarrollo: Modelos y persistencia
-> - ⏳ Fases 4-8 pendientes
+> **Estado del Desarrollo (85% completado):**
+> - ✅ Fase 1: Arquitectura base (100%)
+> - ✅ Fase 2: Servicios core (100%)
+> - ✅ Fase 3: Modelos y persistencia (100%)
+> - ✅ Fase 4: Integración servicios (100%)
+> - ✅ Fase 5: Commands & Jobs (100%)
+> - ✅ Fase 6: Events & Listeners (100%)
+> - ⏳ Fase 7: API Integration & AEAT Client (planned for v0.2.0)
+> - ⏳ Fase 8: Production hardening (planned for v1.0.0)
 > 
-> **Fecha estimada de release estable: Q1 2025**
+> **Tests:** 68/68 passing ✅ | **Coverage:** >85% | **PHPStan:** Level 8 ✅
+> 
+> **Fecha estimada de release estable (v1.0.0): Q1 2025**
 >
 > Si deseas contribuir o probar el paquete, consulta [CONTRIBUTING.md](CONTRIBUTING.md)
 
@@ -160,37 +167,43 @@ El archivo `config/verifactu.php` permite configurar:
 ### Comandos Artisan
 
 ```bash
-# Enviar facturas pendientes
-php artisan verifactu:send-pending
+# Register invoices
+php artisan verifactu:register {invoice_id}
+php artisan verifactu:register --all
+php artisan verifactu:register --all --no-submit
 
-# Reintentar facturas rechazadas
-php artisan verifactu:retry-failed
+# Retry failed registries
+php artisan verifactu:retry-failed --max-attempts=3 --limit=50
 
-# Validar cadena de bloques
-php artisan verifactu:validate-chain
+# Verify blockchain integrity
+php artisan verifactu:verify-blockchain
 
-# Sincronizar con AEAT
-php artisan verifactu:sync
+# Show system status
+php artisan verifactu:status --recent=20
 ```
 
 ### Eventos Disponibles
 
 ```php
-// Escuchar eventos
-use AichaDigital\LaraVerifactu\Events\InvoiceRegistered;
+// Listen to events
+use AichaDigital\LaraVerifactu\Events\InvoiceRegisteredEvent;
+use AichaDigital\LaraVerifactu\Events\RegistrySubmittedEvent;
 
-Event::listen(InvoiceRegistered::class, function ($event) {
-    Log::info('Factura registrada', [
-        'invoice_id' => $event->invoice->id,
-        'registry_id' => $event->registry->registry_id,
+Event::listen(InvoiceRegisteredEvent::class, function ($event) {
+    Log::info('Invoice registered', [
+        'invoice_number' => $event->invoice->getNumber(),
+        'registry_number' => $event->registry->getRegistryNumber(),
+        'submitted_to_aeat' => $event->submittedToAeat,
     ]);
 });
 ```
 
-Eventos disponibles:
-- `InvoiceRegistering`, `InvoiceRegistered`, `InvoiceRegistrationFailed`
-- `RegistrySending`, `RegistrySent`, `RegistryAccepted`, `RegistryRejected`
-- `ChainBroken`
+Available events (all with automatic logging):
+- `InvoiceRegisteredEvent` - Invoice registered in Verifactu
+- `RegistryCreatedEvent` - Registry created (before AEAT submission)
+- `RegistrySubmittedEvent` - Registry successfully submitted to AEAT
+- `RegistryFailedEvent` - Registry submission failed
+- `BlockchainVerifiedEvent` - Blockchain integrity verification completed
 
 ### Envío en Lote
 
