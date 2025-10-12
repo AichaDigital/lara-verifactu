@@ -253,8 +253,8 @@ final class InvoiceRegistrar
             throw VerifactuException::make('Certificate file not found');
         }
 
-        $this->certificateManager->loadCertificate($certificatePath, $certificatePassword);
+        $this->certificateManager->load($certificatePath, $certificatePassword);
 
-        return $this->certificateManager->signContent($xml);
+        return $this->certificateManager->sign($xml);
     }
 }

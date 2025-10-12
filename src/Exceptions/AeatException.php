@@ -20,4 +20,9 @@ class AeatException extends VerifactuException
     {
         return self::make("Invalid AEAT response: {$reason}");
     }
+
+    public static function connectionFailed(string $message): self
+    {
+        return self::make("AEAT connection failed: {$message}");
+    }
 }
