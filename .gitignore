@@ -35,3 +35,11 @@ storage/
 aeat-cert.*
 certificates/
 .certificates/
+
+# Excludes
+FASE_7_COMPLETADA.md
+FASE_7_REQUISITOS.md
+RESUMEN_PROYECTO.md
+LICENSE.md
+.DS_Store
+.vscode/
