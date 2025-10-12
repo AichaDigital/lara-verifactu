@@ -60,6 +60,39 @@ final class QrGenerator implements QrGeneratorContract
     }
 
     /**
+     * {@inheritDoc}
+     */
+    public function generateUrl(InvoiceContract $invoice, string $hash): string
+    {
+        return $this->getValidationUrl($invoice, $hash);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function generateSvg(InvoiceContract $invoice, string $hash): string
+    {
+        return $this->generate($invoice, $hash);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function generatePng(InvoiceContract $invoice, string $hash): string
+    {
+        $url = $this->getValidationUrl($invoice, $hash);
+
+        $renderer = new ImageRenderer(
+            new RendererStyle(self::QR_SIZE, self::QR_MARGIN),
+            new ImagickImageBackEnd
+        );
+
+        $writer = new Writer($renderer);
+
+        return $writer->writeString($url);
+    }
+
+    /**
      * Generate QR code image from URL
      */
     private function generateQrCode(string $url): string

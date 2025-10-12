@@ -27,8 +27,8 @@ class LogBlockchainVerification
         Log::channel(config('verifactu.logging.channel', 'single'))
             ->log($level, $message, [
                 'valid' => $event->result['valid'],
-                'errors' => $event->result['errors'] ?? [],
-                'error_count' => count($event->result['errors'] ?? []),
+                'errors' => $event->result['errors'],
+                'error_count' => count($event->result['errors']),
             ]);
     }
 }

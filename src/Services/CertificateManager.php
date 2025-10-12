@@ -9,8 +9,14 @@ use AichaDigital\LaraVerifactu\Exceptions\CertificateException;
 
 final class CertificateManager implements CertificateManagerContract
 {
+    /**
+     * @var array<string, mixed>|null
+     */
     private ?array $certificate = null;
 
+    /**
+     * @var array<string, mixed>|null
+     */
     private ?array $privateKey = null;
 
     /**
@@ -51,7 +57,19 @@ final class CertificateManager implements CertificateManagerContract
         $this->validateCertificateDates($certData);
 
         $this->certificate = $certData;
-        $this->privateKey = openssl_pkey_get_details(openssl_pkey_get_private($certs['pkey']));
+
+        // Extract private key
+        $privateKey = openssl_pkey_get_private($certs['pkey']);
+        if ($privateKey === false) {
+            throw CertificateException::invalidPrivateKey();
+        }
+
+        $pkeyDetails = openssl_pkey_get_details($privateKey);
+        if ($pkeyDetails === false) {
+            throw CertificateException::invalidPrivateKey();
+        }
+
+        $this->privateKey = $pkeyDetails;
     }
 
     /**
@@ -122,6 +140,8 @@ final class CertificateManager implements CertificateManagerContract
 
     /**
      * Validate certificate dates
+     *
+     * @param  array<string, mixed>  $certData
      *
      * @throws CertificateException
      */

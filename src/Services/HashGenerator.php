@@ -87,6 +87,8 @@ final class HashGenerator implements HashGeneratorContract
 
     /**
      * Build hash string from parts according to AEAT format
+     *
+     * @param  array<string, string>  $parts
      */
     private function buildHashString(array $parts): string
     {

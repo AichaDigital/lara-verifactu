@@ -37,19 +37,23 @@ final class AeatClient implements AeatClientContract
         try {
             $this->ensureClientInitialized();
 
-            $xml = $registry->getXmlContent();
+            $xml = $registry->getSignedXml() ?? $registry->getXml();
 
             // Sign XML with certificate
             $signedXml = $this->signXml($xml);
 
             // Send to AEAT
+            if ($this->client === null) {
+                throw AeatConnectionException::cannotConnect($this->endpoint);
+            }
+
             $response = $this->client->enviarRegistro([
                 'xml' => $signedXml,
             ]);
 
             Log::channel(config('verifactu.logging.channel', 'verifactu'))
                 ->info('Registry sent to AEAT', [
-                    'registry_id' => $registry->getRegistryId(),
+                    'registry_number' => $registry->getRegistryNumber(),
                     'response' => $response,
                 ]);
 
@@ -68,6 +72,10 @@ final class AeatClient implements AeatClientContract
     {
         try {
             $this->ensureClientInitialized();
+
+            if ($this->client === null) {
+                throw AeatConnectionException::cannotConnect($this->endpoint);
+            }
 
             $response = $this->client->anularRegistro([
                 'registryId' => $registryId,
@@ -88,7 +96,8 @@ final class AeatClient implements AeatClientContract
     /**
      * Send batch of registrations to AEAT
      *
-     * @return Collection<AeatResponse>
+     * @param  \Illuminate\Support\Collection<int, RegistryContract>  $registries
+     * @return \Illuminate\Support\Collection<int, AeatResponse>
      *
      * @throws AeatConnectionException|AeatAuthenticationException
      */
@@ -102,7 +111,7 @@ final class AeatClient implements AeatClientContract
                 $responses->push($response);
             } catch (\Throwable $e) {
                 $responses->push(AeatResponse::failure(
-                    errors: ['message' => $e->getMessage()],
+                    errors: [$e->getMessage()],
                     message: 'Failed to send registry',
                     code: $e->getCode() ? (string) $e->getCode() : null
                 ));
@@ -121,6 +130,10 @@ final class AeatClient implements AeatClientContract
     {
         try {
             $this->ensureClientInitialized();
+
+            if ($this->client === null) {
+                throw AeatConnectionException::cannotConnect($this->endpoint);
+            }
 
             $response = $this->client->consultarRegistro([
                 'registryId' => $registryId,
@@ -141,6 +154,10 @@ final class AeatClient implements AeatClientContract
     {
         try {
             $this->ensureClientInitialized();
+
+            if ($this->client === null) {
+                throw AeatConnectionException::cannotConnect($this->endpoint);
+            }
 
             $response = $this->client->validarQR([
                 'qrCode' => $qrCode,
@@ -196,7 +213,7 @@ final class AeatClient implements AeatClientContract
     /**
      * Parse AEAT response
      */
-    private function parseResponse($response): AeatResponse
+    private function parseResponse(mixed $response): AeatResponse
     {
         // Note: Actual AEAT response parsing would be more complex
         // This is a simplified version for the initial implementation
@@ -210,8 +227,11 @@ final class AeatClient implements AeatClientContract
             }
 
             if ($response->resultado === 'RECHAZADO') {
+                $errors = isset($response->errores) ? (array) $response->errores : [];
+                $errorMessages = array_map(fn ($e) => is_object($e) ? ($e->descripcion ?? 'Unknown error') : (string) $e, $errors);
+
                 return AeatResponse::failure(
-                    errors: isset($response->errores) ? (array) $response->errores : [],
+                    errors: $errorMessages,
                     message: 'Registry rejected by AEAT',
                     code: $response->codigo ?? null
                 );
@@ -245,7 +265,7 @@ final class AeatClient implements AeatClientContract
         }
 
         return AeatResponse::failure(
-            errors: ['soap_fault' => $e->faultstring],
+            errors: [$e->faultstring],
             message: 'SOAP communication error',
             code: (string) $e->faultcode
         );

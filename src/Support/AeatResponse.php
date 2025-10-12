@@ -38,6 +38,16 @@ class AeatResponse
         return $this->message;
     }
 
+    public function getCsv(): ?string
+    {
+        return $this->code;
+    }
+
+    public function getErrorMessage(): string
+    {
+        return $this->message ?? 'Unknown error';
+    }
+
     /**
      * @return array<string, mixed>|null
      */

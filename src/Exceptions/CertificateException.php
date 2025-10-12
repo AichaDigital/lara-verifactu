@@ -30,4 +30,9 @@ final class CertificateException extends VerifactuException
     {
         return self::make('Certificate is not yet valid.');
     }
+
+    public static function invalidPrivateKey(): self
+    {
+        return self::make('Invalid or missing private key in certificate');
+    }
 }

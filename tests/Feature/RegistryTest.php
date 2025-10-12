@@ -170,10 +170,11 @@ it('tracks AEAT submission attempts', function () {
 
 it('stores AEAT responses', function () {
     $registry = Registry::factory()->submitted()->create([
-        'aeat_response' => 'Success: Invoice registered',
+        'aeat_response' => ['status' => 'ACEPTADO', 'message' => 'Success'],
         'aeat_csv' => 'CSV-ABC123',
     ]);
 
-    expect($registry->getAeatResponse())->toBe('Success: Invoice registered')
+    expect($registry->getAeatResponse())->toBeArray()
+        ->and($registry->getAeatResponse()['status'])->toBe('ACEPTADO')
         ->and($registry->getAeatCsv())->toBe('CSV-ABC123');
 });

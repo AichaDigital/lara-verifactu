@@ -57,7 +57,7 @@ interface RegistryContract
     /**
      * Get the XML representation.
      */
-    public function getXml(): string;
+    public function getXml(): ?string;
 
     /**
      * Get the signed XML (with electronic signature).
@@ -81,8 +81,10 @@ interface RegistryContract
 
     /**
      * Get the AEAT response.
+     *
+     * @return array<string, mixed>|null
      */
-    public function getAeatResponse(): ?string;
+    public function getAeatResponse(): ?array;
 
     /**
      * Get the AEAT error message (if any).

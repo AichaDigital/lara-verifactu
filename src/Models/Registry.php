@@ -85,6 +85,7 @@ class Registry extends Model implements RegistryContract
         'submitted_at' => 'datetime',
         'submission_attempts' => 'integer',
         'status' => RegistryStatusEnum::class,
+        'aeat_response' => 'array',
     ];
 
     /**
@@ -206,7 +207,7 @@ class Registry extends Model implements RegistryContract
     /**
      * Get the AEAT response.
      */
-    public function getAeatResponse(): ?string
+    public function getAeatResponse(): ?array
     {
         return $this->aeat_response;
     }

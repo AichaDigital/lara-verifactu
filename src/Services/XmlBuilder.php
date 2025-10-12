@@ -79,13 +79,19 @@ final class XmlBuilder implements XmlBuilderContract
     public function buildBatchXml(Collection $invoices): string
     {
         try {
+            if ($invoices->isEmpty()) {
+                throw new \InvalidArgumentException('Invoice collection cannot be empty');
+            }
+
             $dom = $this->createDomDocument();
 
             $root = $dom->createElementNS(self::NAMESPACE_URI, self::NAMESPACE_PREFIX . ':RegFactuSistemaFacturacion');
             $dom->appendChild($root);
 
-            // Add header for batch
-            $this->addHeader($dom, $root, $invoices->first());
+            // Add header for batch (use first invoice for issuer data)
+            /** @var InvoiceContract $firstInvoice */
+            $firstInvoice = $invoices->first();
+            $this->addHeader($dom, $root, $firstInvoice);
 
             // Add all invoices
             foreach ($invoices as $invoice) {
@@ -237,7 +243,10 @@ final class XmlBuilder implements XmlBuilderContract
      */
     private function addEncadenamiento(DOMDocument $dom, \DOMElement $alta, InvoiceContract $invoice): void
     {
-        if (! $invoice->getPreviousHash()) {
+        $previousHash = $invoice->getPreviousHash();
+        $previousInvoiceId = $invoice->getPreviousInvoiceId();
+
+        if ($previousHash === null || $previousInvoiceId === null) {
             return;
         }
 
@@ -247,10 +256,10 @@ final class XmlBuilder implements XmlBuilderContract
         $registroAnterior = $dom->createElement('RegistroAnterior');
         $encadenamiento->appendChild($registroAnterior);
 
-        $idRegistro = $dom->createElement('IDRegistroAnterior', $invoice->getPreviousInvoiceId());
+        $idRegistro = $dom->createElement('IDRegistroAnterior', $previousInvoiceId);
         $registroAnterior->appendChild($idRegistro);
 
-        $huella = $dom->createElement('HuellaAnterior', $invoice->getPreviousHash());
+        $huella = $dom->createElement('HuellaAnterior', $previousHash);
         $registroAnterior->appendChild($huella);
     }
 
