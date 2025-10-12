@@ -139,7 +139,7 @@ final class XmlBuilder implements XmlBuilderContract
         $obligado = $dom->createElement('Obligado');
         $cabecera->appendChild($obligado);
 
-        $nif = $dom->createElement('NIF', $invoice->getIssuerTaxId());
+        $nif = $dom->createElement('NIF', config('verifactu.company.tax_id', ''));
         $obligado->appendChild($nif);
 
         // System information
@@ -172,10 +172,13 @@ final class XmlBuilder implements XmlBuilderContract
         $idFactura = $dom->createElement('IDFactura');
         $alta->appendChild($idFactura);
 
-        $emisor = $dom->createElement('IDEmisorFactura', $invoice->getIssuerTaxId());
+        $emisor = $dom->createElement('IDEmisorFactura', config('verifactu.company.tax_id', ''));
         $idFactura->appendChild($emisor);
 
-        $numero = $dom->createElement('NumSerieFactura', $invoice->getInvoiceNumber());
+        $invoiceNumber = $invoice->getSerie()
+            ? $invoice->getSerie() . $invoice->getNumber()
+            : $invoice->getNumber();
+        $numero = $dom->createElement('NumSerieFactura', $invoiceNumber);
         $idFactura->appendChild($numero);
 
         $fecha = $dom->createElement('FechaExpedicionFactura', $invoice->getIssueDate()->format('d-m-Y'));
@@ -185,7 +188,7 @@ final class XmlBuilder implements XmlBuilderContract
         $datosFactura = $dom->createElement('DatosFactura');
         $alta->appendChild($datosFactura);
 
-        $tipoFactura = $dom->createElement('TipoFactura', $invoice->getInvoiceType()->value);
+        $tipoFactura = $dom->createElement('TipoFactura', $invoice->getType()->value);
         $datosFactura->appendChild($tipoFactura);
 
         // Import data
@@ -268,8 +271,8 @@ final class XmlBuilder implements XmlBuilderContract
     /**
      * Format amount for XML (2 decimals, dot separator)
      */
-    private function formatAmount(string $amount): string
+    private function formatAmount(float $amount): string
     {
-        return number_format((float) $amount, 2, '.', '');
+        return number_format($amount, 2, '.', '');
     }
 }
