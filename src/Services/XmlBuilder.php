@@ -227,8 +227,8 @@ final class XmlBuilder implements XmlBuilderContract
             $cuota = $dom->createElement('Cuota', $this->formatAmount($breakdown->getTaxAmount()));
             $desglose->appendChild($cuota);
 
-            $tipoOperacion = $dom->createElement('TipoOperacion', $breakdown->getOperationType()->value);
-            $desglose->appendChild($tipoOperacion);
+            // Note: TipoOperacion is from Invoice, not breakdown
+            // This should be handled at invoice level, not breakdown level
         }
     }
 
