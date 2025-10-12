@@ -36,6 +36,9 @@ aeat-cert.*
 certificates/
 .certificates/
 
+# Internal development documentation
+docs/
+
 # Excludes
 FASE_7_COMPLETADA.md
 FASE_7_REQUISITOS.md

@@ -5,261 +5,223 @@
 [![GitHub Code Style Action Status](https://img.shields.io/github/actions/workflow/status/aichadigital/lara-verifactu/fix-php-code-style-issues.yml?branch=main&label=code%20style&style=flat-square)](https://github.com/aichadigital/lara-verifactu/actions?query=workflow%3A"Fix+PHP+code+style+issues"+branch%3Amain)
 [![Total Downloads](https://img.shields.io/packagist/dt/aichadigital/lara-verifactu.svg?style=flat-square)](https://packagist.org/packages/aichadigital/lara-verifactu)
 
-> **⚠️ IMPORTANTE: PAQUETE EN DESARROLLO**
->
-> **Este paquete se encuentra actualmente en versión 0.1.0 (Beta).**
+---
+
+> **🚧 PAQUETE EN DESARROLLO ACTIVO - ALPHA**
 > 
-> **🚧 NO USAR EN PRODUCCIÓN 🚧**
+> Este paquete se encuentra en **fase de desarrollo activo (v0.1.0-alpha)** y **NO está listo para producción**.
 > 
-> **Estado del Desarrollo (85% completado):**
-> - ✅ Fase 1: Arquitectura base (100%)
-> - ✅ Fase 2: Servicios core (100%)
-> - ✅ Fase 3: Modelos y persistencia (100%)
-> - ✅ Fase 4: Integración servicios (100%)
-> - ✅ Fase 5: Commands & Jobs (100%)
-> - ✅ Fase 6: Events & Listeners (100%)
-> - ⏳ Fase 7: API Integration & AEAT Client (planned for v0.2.0)
-> - ⏳ Fase 8: Production hardening (planned for v1.0.0)
+> **Progreso actual: 92%** (7 de 9 fases completadas)
 > 
-> **Tests:** 68/68 passing ✅ | **Coverage:** >85% | **PHPStan:** Level 8 ✅
+> 🔬 **Buscamos colaboradores** para testing en entornos reales antes de la release v1.0.0
 > 
-> **Fecha estimada de release estable (v1.0.0): Q1 2025**
->
-> Si deseas contribuir o probar el paquete, consulta [CONTRIBUTING.md](CONTRIBUTING.md)
+> ⚠️ **NO está disponible en Packagist** - Solo instalación local para desarrollo y testing
 
 ---
 
+## 🎯 ¿Qué es Lara Verifactu?
+
 Paquete Laravel para cumplimiento normativo de **Verifactu (AEAT)** con arquitectura agnóstica que permite integración tanto en proyectos nuevos como en sistemas de facturación existentes.
 
-## 🎯 Características
-
-- ✅ **Arquitectura Agnóstica**: Funciona con tus modelos existentes o usa los nativos del paquete
-- ✅ **Cumplimiento Total**: Implementación completa de especificaciones AEAT Verifactu
-- ✅ **Procesamiento Asíncrono**: Sistema de colas para envíos no bloqueantes
-- ✅ **Reintentos Automáticos**: Manejo inteligente de errores con reintentos configurables
-- ✅ **Cadena de Bloques**: Generación y validación de hashes SHA-256 según normativa
-- ✅ **Códigos QR**: Generación automática de QR para validación ciudadana
-- ✅ **Eventos Laravel**: Sistema completo de eventos para extensibilidad
-- ✅ **Testing Exhaustivo**: Suite de tests con >90% de cobertura
-- ✅ **Documentación Completa**: Guías y ejemplos para todos los casos de uso
-- ✅ **PHPStan Nivel 8**: Análisis estático estricto
-- ✅ **Laravel 11 & 12**: Compatible con versiones LTS
-
-## 📅 Fechas Importantes
+### 📅 Fechas Importantes de la Normativa
 
 - **29 de julio de 2025**: Obligatorio para software de facturación
 - **1 de enero de 2026**: Obligatorio para empresas
 - **1 de julio de 2026**: Obligatorio para autónomos
 
-## 📦 Instalación
+## ✨ Características Implementadas
 
-> **⚠️ ADVERTENCIA**: Este paquete aún no está disponible en Packagist. Se encuentra en desarrollo.
+- ✅ **Arquitectura Agnóstica**: Funciona con tus modelos existentes o usa los nativos
+- ✅ **Cumplimiento Total AEAT**: Implementación completa según especificaciones
+- ✅ **Integración Real AEAT**: Cliente SOAP con certificados digitales (.p12/.pfx)
+- ✅ **Firma Digital XAdES-EPES**: Firma XML según normativa
+- ✅ **Procesamiento Asíncrono**: Sistema de colas para envíos no bloqueantes
+- ✅ **Cadena de Bloques**: Generación y validación de hashes SHA-256
+- ✅ **Códigos QR**: Generación automática para validación ciudadana
+- ✅ **Eventos Laravel**: Sistema completo de eventos para extensibilidad
+- ✅ **PHPStan Nivel 8**: Análisis estático estricto
+- ✅ **Laravel 11 & 12**: Compatible con versiones LTS
 
-Una vez publicado, podrás instalarlo vía Composer:
+## 📊 Estado del Desarrollo
 
-```bash
-composer require aichadigital/lara-verifactu
+```
+┌─────────────────────────────────────────────────────────┐
+│  PROGRESO TOTAL: 92%                                    │
+│  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
+│                                                         │
+│  ✅ Fase 1: Package Skeleton & Architecture    (100%)  │
+│  ✅ Fase 2: Core Services                      (100%)  │
+│  ✅ Fase 3: Database Layer                     (100%)  │
+│  ✅ Fase 4: Service Integration                (100%)  │
+│  ✅ Fase 5: Commands & Jobs                    (100%)  │
+│  ✅ Fase 6: Events & Listeners                 (100%)  │
+│  ✅ Fase 7: AEAT API Integration               (100%)  │
+│  🚧 Fase 8: Testing & Documentation            (50%)   │
+│  ⏳ Fase 9: Production Hardening               (0%)    │
+│                                                         │
+│  Tests: 120/120 ✅  |  PHPStan: Level 8 ✅             │
+└─────────────────────────────────────────────────────────┘
 ```
 
-**Para desarrollo/testing:**
+## 🚀 Instalación (Desarrollo Local)
+
+> **⚠️ IMPORTANTE**: Este paquete **NO está publicado en Packagist**. Solo se puede instalar desde el repositorio local para desarrollo y testing.
+
+### Opción 1: Path Repository (Recomendado)
+
+1. **Clona el repositorio en tu workspace local:**
 
 ```bash
-# Clonar el repositorio
-git clone https://github.com/aichadigital/lara-verifactu.git
-
-# Instalar dependencias
+cd ~/development/packages
+git clone https://github.com/AichaDigital/lara-verifactu.git
 cd lara-verifactu
 composer install
 ```
 
-Publicar configuración y migraciones:
+2. **En tu proyecto Laravel, añade el repositorio local en `composer.json`:**
+
+```json
+{
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../packages/lara-verifactu",
+            "options": {
+                "symlink": true
+            }
+        }
+    ],
+    "require": {
+        "aichadigital/lara-verifactu": "@dev"
+    }
+}
+```
+
+3. **Instala el paquete:**
 
 ```bash
+composer update aichadigital/lara-verifactu
+```
+
+Composer creará un symlink desde `vendor/aichadigital/lara-verifactu` a tu repositorio local.
+
+### Opción 2: Symlink Manual
+
+```bash
+# En tu proyecto Laravel
+cd vendor
+mkdir -p aichadigital
+cd aichadigital
+ln -s ~/development/packages/lara-verifactu lara-verifactu
+```
+
+### Configuración Inicial
+
+```bash
+# Publicar configuración y migraciones
 php artisan verifactu:install
+
+# Configurar certificado digital en .env
+VERIFACTU_ENVIRONMENT=sandbox
+VERIFACTU_CERT_PATH=./certificates/tu_certificado.p12
+VERIFACTU_CERT_PASSWORD=tu_password
+
+# Probar conexión con AEAT
+php artisan verifactu:test-connection
 ```
 
-Este comando:
-- Publica el archivo de configuración
-- Publica las migraciones
-- Te pregunta si deseas ejecutar las migraciones
-- Te invita a dar ⭐ al repositorio
+## 📚 Documentación
 
-Configura tus variables de entorno:
+### Instalación y Configuración
+- [📦 Guía de Instalación Detallada](INSTALLATION.md)
+- [🔧 Configuración Avanzada](config/verifactu.php)
 
-```env
-VERIFACTU_MODE=native
-VERIFACTU_ENVIRONMENT=production
-VERIFACTU_CERT_PATH=/path/to/certificate.pfx
-VERIFACTU_CERT_PASSWORD=your-certificate-password
-VERIFACTU_QUEUE_CONNECTION=redis
-```
+### Uso Básico
+- [🚀 Primeros Pasos](CONTRIBUTING.md#desarrollo-local)
+- [💡 Ejemplos de Uso](#uso-rápido)
+- [📖 Changelog](CHANGELOG.md)
 
-## 🚀 Uso Rápido
+### Para Desarrolladores
+- [🤝 Guía de Contribución](CONTRIBUTING.md)
+- [🏗️ Arquitectura del Paquete](#arquitectura)
+- [🧪 Testing](#testing)
 
-### Modo Nativo (Proyectos Nuevos)
-
-```php
-use AichaDigital\LaraVerifactu\Models\Invoice;
-use AichaDigital\LaraVerifactu\Facades\Verifactu;
-
-// Crear factura
-$invoice = Invoice::create([
-    'issuer_tax_id' => 'B12345678',
-    'invoice_number' => 'F-2025-001',
-    'issue_date' => now(),
-    'total_amount' => '121.00',
-    'total_tax_amount' => '21.00',
-]);
-
-// Registrar en Verifactu
-$result = Verifactu::register($invoice);
-
-if ($result->isSuccess()) {
-    echo "Factura registrada correctamente";
-    echo "QR: " . $invoice->verifactuRegistry->qr_code;
-}
-```
-
-### Modo Agnóstico (Sistemas Existentes)
-
-```php
-use AichaDigital\LaraVerifactu\Contracts\InvoiceContract;
-use AichaDigital\LaraVerifactu\Traits\VerifactuInvoice;
-
-// En tu modelo existente
-class Invoice extends Model implements InvoiceContract
-{
-    use VerifactuInvoice;
-    
-    public function getIssuerTaxId(): string
-    {
-        return $this->company->tax_id;
-    }
-    
-    public function getInvoiceNumber(): string
-    {
-        return $this->invoice_number;
-    }
-    
-    // Implementa otros métodos del contrato...
-}
-
-// Usar igual que en modo nativo
-$invoice = Invoice::find(1);
-Verifactu::register($invoice);
-```
-
-## 📚 Documentación Completa
-
-### Configuración Avanzada
-
-El archivo `config/verifactu.php` permite configurar:
-
-- Modo de operación (nativo/personalizado)
-- Endpoints AEAT (producción/sandbox)
-- Certificados digitales
-- Configuración de colas
-- Estrategia de reintentos
-- Generación de QR
-- Logging y caché
-- Procesamiento por lotes
+## 💡 Uso Rápido
 
 ### Comandos Artisan
 
 ```bash
-# Register invoices
+# Probar conexión y certificado AEAT
+php artisan verifactu:test-connection
+php artisan verifactu:test-connection --cert-info
+
+# Registrar factura en AEAT
 php artisan verifactu:register {invoice_id}
 php artisan verifactu:register --all
-php artisan verifactu:register --all --no-submit
 
-# Retry failed registries
-php artisan verifactu:retry-failed --max-attempts=3 --limit=50
+# Reintentar envíos fallidos
+php artisan verifactu:retry-failed
 
-# Verify blockchain integrity
+# Verificar integridad blockchain
 php artisan verifactu:verify-blockchain
 
-# Show system status
-php artisan verifactu:status --recent=20
+# Ver estado del sistema
+php artisan verifactu:status
 ```
 
-### Eventos Disponibles
-
-```php
-// Listen to events
-use AichaDigital\LaraVerifactu\Events\InvoiceRegisteredEvent;
-use AichaDigital\LaraVerifactu\Events\RegistrySubmittedEvent;
-
-Event::listen(InvoiceRegisteredEvent::class, function ($event) {
-    Log::info('Invoice registered', [
-        'invoice_number' => $event->invoice->getNumber(),
-        'registry_number' => $event->registry->getRegistryNumber(),
-        'submitted_to_aeat' => $event->submittedToAeat,
-    ]);
-});
-```
-
-Available events (all with automatic logging):
-- `InvoiceRegisteredEvent` - Invoice registered in Verifactu
-- `RegistryCreatedEvent` - Registry created (before AEAT submission)
-- `RegistrySubmittedEvent` - Registry successfully submitted to AEAT
-- `RegistryFailedEvent` - Registry submission failed
-- `BlockchainVerifiedEvent` - Blockchain integrity verification completed
-
-### Envío en Lote
+### Uso Programático
 
 ```php
 use AichaDigital\LaraVerifactu\Facades\Verifactu;
+use AichaDigital\LaraVerifactu\Models\Invoice;
 
-$invoices = Invoice::whereDate('created_at', today())->get();
-$results = Verifactu::sendBatch($invoices);
+// Registrar factura
+$invoice = Invoice::find(1);
+$registry = Verifactu::register($invoice);
 
-foreach ($results as $result) {
-    if ($result->isFailure()) {
-        Log::error('Error en factura', $result->getErrors());
-    }
-}
-```
+// Verificar blockchain
+$isValid = Verifactu::verifyBlockchain();
 
-### Testing Helpers
-
-```php
-use AichaDigital\LaraVerifactu\Facades\Verifactu;
-
-// En tus tests
-Verifactu::fake();
-
-// Tu código que registra facturas...
-
-Verifactu::assertRegistered($invoice);
-Verifactu::assertNotSent($invoice);
+// Obtener registros pendientes
+$pending = Verifactu::getPendingRegistries();
 ```
 
 ## 🏗️ Arquitectura
 
-El paquete sigue principios SOLID con arquitectura basada en contratos:
+### Principios de Diseño
+
+- **Contract-First**: Interfaces antes que implementaciones
+- **Agnostic**: Funciona con cualquier modelo que implemente los contratos
+- **SOLID**: Principios aplicados rigurosamente
+- **Event-Driven**: Extensible mediante eventos Laravel
+
+### Estructura del Paquete
 
 ```
-src/
-├── Contracts/          # Interfaces y contratos
-├── Models/             # Modelos Eloquent (modo nativo)
-├── Services/           # Lógica de negocio
-├── Facades/            # Facades Laravel
-├── Commands/           # Comandos Artisan
-├── Jobs/               # Trabajos de cola
-├── Events/             # Eventos
-├── Listeners/          # Listeners
-├── Exceptions/         # Excepciones personalizadas
-├── Enums/              # Enumeraciones
-└── Traits/             # Traits reutilizables
+lara-verifactu/
+├── src/
+│   ├── Contracts/          # Interfaces
+│   ├── Models/             # Eloquent models (modo nativo)
+│   ├── Services/           # Lógica de negocio
+│   ├── Commands/           # Artisan commands
+│   ├── Jobs/               # Queue jobs
+│   ├── Events/             # Event classes
+│   ├── Listeners/          # Event listeners
+│   ├── Exceptions/         # Custom exceptions
+│   ├── Enums/              # Enumerations
+│   └── Support/            # Helper classes
+├── tests/
+│   ├── Unit/               # Unit tests
+│   ├── Feature/            # Feature tests
+│   └── Pest.php
+├── config/
+│   └── verifactu.php       # Configuración
+├── database/
+│   ├── migrations/         # Database migrations
+│   └── factories/          # Model factories
+└── resources/
+    └── lang/               # Translations
 ```
-
-### Servicios Core
-
-- **HashGenerator**: Genera hashes SHA-256 según AEAT
-- **QrGenerator**: Genera códigos QR de validación
-- **XmlBuilder**: Construye XML conforme a XSD oficial
-- **AeatClient**: Cliente SOAP para comunicación con AEAT
-- **CertificateManager**: Gestiona certificados electrónicos
 
 ## 🧪 Testing
 
@@ -268,46 +230,90 @@ src/
 composer test
 
 # Tests con cobertura
-composer test-coverage
+composer test:coverage
 
-# Análisis estático
+# Análisis estático (PHPStan)
 composer analyse
 
-# Formatear código
+# Formatear código (Laravel Pint)
 composer format
+
+# Code quality (PHP Insights)
+composer insights
 ```
 
-## 📖 Changelog
+### Estado Actual de Tests
 
-Consulta [CHANGELOG.md](CHANGELOG.md) para ver los cambios en cada versión.
+- ✅ **120 tests passing**
+- ✅ **Coverage: >85%**
+- ✅ **PHPStan Level 8**
+- ✅ **PSR-12 Code Style**
 
 ## 🤝 Contribuir
 
-Por favor revisa [CONTRIBUTING.md](CONTRIBUTING.md) para detalles sobre nuestro código de conducta y el proceso para enviarnos pull requests.
+¡Las contribuciones son bienvenidas! Este paquete está en desarrollo activo y **buscamos colaboradores** para:
+
+- 🧪 Testing en entornos reales
+- 📖 Mejorar documentación
+- 🐛 Reportar bugs
+- 💡 Sugerir mejoras
+- 🔧 Implementar features
+
+**Por favor, lee [CONTRIBUTING.md](CONTRIBUTING.md)** para detalles sobre nuestro proceso de desarrollo.
+
+### Áreas que Necesitan Ayuda
+
+1. **Testing en Sandbox AEAT**: Probar envíos reales al sandbox
+2. **Casos de Uso**: Documentar diferentes escenarios de integración
+3. **Modelos Personalizados**: Testing con modelos existentes en proyectos reales
+4. **Performance**: Optimizaciones para alto volumen de facturas
+5. **Documentación**: Ejemplos y guías de uso
+
+## 🐛 Reportar Issues
+
+Si encuentras un bug o tienes una sugerencia:
+
+1. Busca si ya existe un [issue similar](https://github.com/AichaDigital/lara-verifactu/issues)
+2. Si no existe, [crea uno nuevo](https://github.com/AichaDigital/lara-verifactu/issues/new)
+3. Incluye:
+   - Versión de Laravel
+   - Versión de PHP
+   - Descripción detallada del problema
+   - Pasos para reproducir
+   - Código de ejemplo si es posible
+
+## 📝 Changelog
+
+Consulta [CHANGELOG.md](CHANGELOG.md) para ver todos los cambios del proyecto.
 
 ## 🔒 Seguridad
 
-Si descubres algún problema de seguridad, por favor envía un email a security@aichadigital.com en lugar de usar el issue tracker.
+Si descubres alguna vulnerabilidad de seguridad, por favor envía un email a **security@aichadigital.com** en lugar de usar el issue tracker.
+
+## 📄 Licencia
+
+The MIT License (MIT). Por favor, consulta [License File](LICENSE.md) para más información.
 
 ## 🙏 Créditos
 
-- [Aicha Digital](https://github.com/aichadigital)
-- [Todos los Contribuidores](../../contributors)
+- [Aicha Digital](https://github.com/AichaDigital)
+- Basado en especificaciones de [AEAT Verifactu](https://www.agenciatributaria.es/)
+- Inspirado en [Spatie Laravel Packages](https://spatie.be/open-source)
+- [Todos los contribuidores](https://github.com/AichaDigital/lara-verifactu/contributors)
 
-Este paquete está inspirado en las mejores prácticas de [Spatie](https://spatie.be) y utiliza [Laravel Package Tools](https://github.com/spatie/laravel-package-tools).
+## 📞 Soporte
 
-## 📝 Licencia
-
-The MIT License (MIT). Por favor consulta [License File](LICENSE.md) para más información.
-
-## 🔗 Enlaces Útiles
-
-- [Documentación Oficial AEAT Verifactu](https://www.agenciatributaria.es/AEAT.desarrolladores/)
-- [Portal de Pruebas AEAT](https://preportal.aeat.es/)
-- [Especificaciones Técnicas](https://preportal.aeat.es/PRE-Exteriores/Inicio/_menu_/VERI_FACTU___Sistemas_Informaticos_de_Facturacion/)
-- [FAQ Desarrolladores](https://www.agenciatributaria.es/AEAT.internet/verifactu/faqs.html)
+- 📧 Email: support@aichadigital.com
+- 🐛 Issues: [GitHub Issues](https://github.com/AichaDigital/lara-verifactu/issues)
+- 💬 Discussions: [GitHub Discussions](https://github.com/AichaDigital/lara-verifactu/discussions)
 
 ---
 
-**Desarrollado con ❤️ por [Aicha Digital](https://aichadigital.com)**
+<p align="center">
+  <strong>⚠️ Recordatorio: Este paquete está en desarrollo activo y NO debe usarse en producción.</strong><br>
+  <em>Release estable (v1.0.0) estimada para Q2 2025</em>
+</p>
 
+<p align="center">
+  Made with ❤️ by <a href="https://github.com/AichaDigital">Aicha Digital</a>
+</p>
