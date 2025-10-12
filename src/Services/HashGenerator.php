@@ -28,10 +28,10 @@ final class HashGenerator implements HashGeneratorContract
      *
      * @throws HashException If hash cannot be generated
      */
-    public function generate(InvoiceContract $invoice): string
+    public function generate(InvoiceContract $invoice, ?string $previousHash = null): string
     {
         try {
-            $data = $this->prepareDataForHash($invoice);
+            $data = $this->prepareDataForHash($invoice, $previousHash);
 
             return hash('sha256', $data);
         } catch (\Throwable $e) {
@@ -58,20 +58,25 @@ final class HashGenerator implements HashGeneratorContract
     /**
      * Prepare invoice data for hash generation according to AEAT specs
      */
-    private function prepareDataForHash(InvoiceContract $invoice): string
+    private function prepareDataForHash(InvoiceContract $invoice, ?string $previousHash = null): string
     {
+        // Build invoice number (Serie + Number)
+        $invoiceNumber = $invoice->getSerie()
+            ? $invoice->getSerie() . $invoice->getNumber()
+            : $invoice->getNumber();
+
         $parts = [
-            'IDEmisorFactura' => $this->sanitize($invoice->getIssuerTaxId()),
-            'NumSerieFactura' => $this->sanitize($invoice->getInvoiceNumber()),
+            'IDEmisorFactura' => config('verifactu.company.tax_id', ''),
+            'NumSerieFactura' => $this->sanitize($invoiceNumber),
             'FechaExpedicionFactura' => $this->formatDate($invoice->getIssueDate()),
-            'TipoFactura' => $invoice->getInvoiceType()->value,
-            'CuotaTotal' => $this->formatAmount($invoice->getTotalTaxAmount()),
+            'TipoFactura' => $invoice->getType()->value,
+            'CuotaTotal' => $this->formatAmount($invoice->getTaxAmount()),
             'ImporteTotal' => $this->formatAmount($invoice->getTotalAmount()),
         ];
 
         // Add previous hash if exists (for blockchain)
-        if ($invoice->getPreviousHash()) {
-            $parts['Huella'] = $invoice->getPreviousHash();
+        if ($previousHash) {
+            $parts['Huella'] = $previousHash;
         }
 
         // Add timestamp (current time in ISO 8601 format with timezone)
@@ -115,9 +120,9 @@ final class HashGenerator implements HashGeneratorContract
      * Format amount for hash generation
      * According to AEAT specs: decimal with 2 decimals, dot as separator
      */
-    private function formatAmount(string $amount): string
+    private function formatAmount(float $amount): string
     {
-        return number_format((float) $amount, 2, '.', '');
+        return number_format($amount, 2, '.', '');
     }
 
     /**
