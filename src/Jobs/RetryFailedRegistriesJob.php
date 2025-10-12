@@ -27,17 +27,13 @@ class RetryFailedRegistriesJob implements ShouldQueue
 
     /**
      * The number of times the job may be attempted.
-     *
-     * @var int
      */
-    public $tries = 1; // Only try once, the registries themselves have their own retry logic
+    public int $tries = 1; // Only try once, the registries themselves have their own retry logic
 
     /**
      * The number of seconds the job can run before timing out.
-     *
-     * @var int
      */
-    public $timeout = 300; // 5 minutes for batch processing
+    public int $timeout = 300; // 5 minutes for batch processing
 
     /**
      * Create a new job instance.

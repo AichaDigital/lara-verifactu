@@ -16,8 +16,6 @@ class RetryFailedCommand extends Command
 {
     /**
      * The name and signature of the console command.
-     *
-     * @var string
      */
     protected $signature = 'verifactu:retry-failed
                             {--max-attempts=3 : Maximum number of attempts before giving up}
@@ -25,8 +23,6 @@ class RetryFailedCommand extends Command
 
     /**
      * The console command description.
-     *
-     * @var string
      */
     protected $description = 'Retry failed registry submissions to AEAT';
 

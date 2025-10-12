@@ -152,22 +152,6 @@ final class RegistryManager
     }
 
     /**
-     * Generate a unique registry number
-     *
-     * Format: REG-YYYYMMDD-NNNNNN
-     */
-    private function generateRegistryNumber(): string
-    {
-        $date = Carbon::now()->format('Ymd');
-
-        // Get count of registries today
-        $count = Registry::whereDate('created_at', Carbon::today())
-            ->count() + 1;
-
-        return sprintf('REG-%s-%06d', $date, $count);
-    }
-
-    /**
      * Mark a registry as submitted to AEAT
      */
     public function markAsSubmitted(
@@ -227,5 +211,21 @@ final class RegistryManager
             ->orderBy('created_at', 'asc')
             ->limit($limit)
             ->get();
+    }
+
+    /**
+     * Generate a unique registry number
+     *
+     * Format: REG-YYYYMMDD-NNNNNN
+     */
+    private function generateRegistryNumber(): string
+    {
+        $date = Carbon::now()->format('Ymd');
+
+        // Get count of registries today
+        $count = Registry::whereDate('created_at', Carbon::today())
+            ->count() + 1;
+
+        return sprintf('REG-%s-%06d', $date, $count);
     }
 }

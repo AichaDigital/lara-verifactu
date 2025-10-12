@@ -16,15 +16,11 @@ class VerifyBlockchainCommand extends Command
 {
     /**
      * The name and signature of the console command.
-     *
-     * @var string
      */
     protected $signature = 'verifactu:verify-blockchain';
 
     /**
      * The console command description.
-     *
-     * @var string
      */
     protected $description = 'Verify the integrity of the Verifactu blockchain';
 

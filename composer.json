@@ -32,9 +32,10 @@
         "phpseclib/phpseclib": "^3.0"
     },
     "require-dev": {
+        "larastan/larastan": "^2.9",
         "laravel/pint": "^1.13",
         "nunomaduro/collision": "^8.0",
-        "larastan/larastan": "^2.9",
+        "nunomaduro/phpinsights": "^2.13",
         "orchestra/testbench": "^9.0",
         "pestphp/pest": "^2.34",
         "pestphp/pest-plugin-arch": "^2.7",
@@ -75,11 +76,36 @@
         "analyse": "vendor/bin/phpstan analyse",
         "test": "vendor/bin/pest",
         "test-coverage": "vendor/bin/pest --coverage",
-        "format": "vendor/bin/pint"
+        "test-parallel": "vendor/bin/pest --parallel",
+        "test-profile": "vendor/bin/pest --profile",
+        "test-mutate": "vendor/bin/pest --mutate",
+        "format": "vendor/bin/pint",
+        "phpstan": "vendor/bin/phpstan analyse --memory-limit=1G",
+        "phpstan-baseline": "vendor/bin/phpstan analyse --generate-baseline --memory-limit=1G",
+        "phpinsights": "vendor/bin/phpinsights",
+        "phpinsights-fix": "vendor/bin/phpinsights fix",
+        "phpinsights-baseline": "vendor/bin/phpinsights analyse --generate-baseline",
+        "quality": [
+            "@format",
+            "@phpstan",
+            "@test-coverage"
+        ],
+        "quality-full": [
+            "@format",
+            "@phpstan",
+            "@test-coverage",
+            "@test-mutate"
+        ],
+        "precommit": [
+            "@format",
+            "@phpstan",
+            "@test-parallel"
+        ]
     },
     "config": {
         "sort-packages": true,
         "allow-plugins": {
+            "dealerdirect/phpcodesniffer-composer-installer": true,
             "pestphp/pest-plugin": true,
             "phpstan/extension-installer": true
         }
@@ -97,4 +123,3 @@
     "minimum-stability": "dev",
     "prefer-stable": true
 }
-

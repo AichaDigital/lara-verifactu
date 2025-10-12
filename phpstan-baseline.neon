@@ -601,6 +601,11 @@ parameters:
 			path: src/Services/AeatClient.php
 
 		-
+			message: "#^Parameter \\$errors of static method AichaDigital\\\\LaraVerifactu\\\\Support\\\\AeatResponse\\:\\:failure\\(\\) expects array\\<int, string\\>\\|null, array\\<string, string\\> given\\.$#"
+			count: 2
+			path: src/Services/AeatClient.php
+
+		-
 			message: "#^Method AichaDigital\\\\LaraVerifactu\\\\Services\\\\CertificateManager\\:\\:getCertificateInfo\\(\\) return type has no value type specified in iterable type array\\.$#"
 			count: 1
 			path: src/Services/CertificateManager.php
@@ -781,41 +786,6 @@ parameters:
 			path: src/Services/XmlBuilder.php
 
 		-
-			message: "#^Method AichaDigital\\\\LaraVerifactu\\\\Support\\\\AeatResponse\\:\\:__construct\\(\\) has parameter \\$data with no value type specified in iterable type array\\.$#"
-			count: 1
-			path: src/Support/AeatResponse.php
-
-		-
-			message: "#^Method AichaDigital\\\\LaraVerifactu\\\\Support\\\\AeatResponse\\:\\:__construct\\(\\) has parameter \\$errors with no value type specified in iterable type array\\.$#"
-			count: 1
-			path: src/Support/AeatResponse.php
-
-		-
-			message: "#^Method AichaDigital\\\\LaraVerifactu\\\\Support\\\\AeatResponse\\:\\:failure\\(\\) has parameter \\$errors with no value type specified in iterable type array\\.$#"
-			count: 1
-			path: src/Support/AeatResponse.php
-
-		-
-			message: "#^Method AichaDigital\\\\LaraVerifactu\\\\Support\\\\AeatResponse\\:\\:getData\\(\\) return type has no value type specified in iterable type array\\.$#"
-			count: 1
-			path: src/Support/AeatResponse.php
-
-		-
-			message: "#^Method AichaDigital\\\\LaraVerifactu\\\\Support\\\\AeatResponse\\:\\:getErrors\\(\\) return type has no value type specified in iterable type array\\.$#"
-			count: 1
-			path: src/Support/AeatResponse.php
-
-		-
-			message: "#^Method AichaDigital\\\\LaraVerifactu\\\\Support\\\\AeatResponse\\:\\:success\\(\\) has parameter \\$data with no value type specified in iterable type array\\.$#"
-			count: 1
-			path: src/Support/AeatResponse.php
-
-		-
-			message: "#^Method AichaDigital\\\\LaraVerifactu\\\\Support\\\\AeatResponse\\:\\:toArray\\(\\) return type has no value type specified in iterable type array\\.$#"
-			count: 1
-			path: src/Support/AeatResponse.php
-
-		-
 			message: "#^Method AichaDigital\\\\LaraVerifactu\\\\Verifactu\\:\\:sendBatch\\(\\) has parameter \\$invoices with generic class Illuminate\\\\Support\\\\Collection but does not specify its types\\: TKey, TValue$#"
 			count: 1
 			path: src/Verifactu.php
@@ -824,4 +794,3 @@ parameters:
 			message: "#^Method AichaDigital\\\\LaraVerifactu\\\\Verifactu\\:\\:sendBatch\\(\\) return type with generic class Illuminate\\\\Support\\\\Collection does not specify its types\\: TKey, TValue$#"
 			count: 1
 			path: src/Verifactu.php
-

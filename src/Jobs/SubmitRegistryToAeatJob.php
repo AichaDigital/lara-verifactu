@@ -28,17 +28,13 @@ class SubmitRegistryToAeatJob implements ShouldQueue
 
     /**
      * The number of times the job may be attempted.
-     *
-     * @var int
      */
-    public $tries;
+    public int $tries;
 
     /**
      * The number of seconds the job can run before timing out.
-     *
-     * @var int
      */
-    public $timeout;
+    public int $timeout;
 
     /**
      * Create a new job instance.

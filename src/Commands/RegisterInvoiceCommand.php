@@ -17,8 +17,6 @@ class RegisterInvoiceCommand extends Command
 {
     /**
      * The name and signature of the console command.
-     *
-     * @var string
      */
     protected $signature = 'verifactu:register
                             {invoice? : Invoice ID to register}
@@ -28,8 +26,6 @@ class RegisterInvoiceCommand extends Command
 
     /**
      * The console command description.
-     *
-     * @var string
      */
     protected $description = 'Register invoices in the Verifactu system';
 

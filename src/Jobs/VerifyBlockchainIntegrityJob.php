@@ -27,17 +27,13 @@ class VerifyBlockchainIntegrityJob implements ShouldQueue
 
     /**
      * The number of times the job may be attempted.
-     *
-     * @var int
      */
-    public $tries = 1;
+    public int $tries = 1;
 
     /**
      * The number of seconds the job can run before timing out.
-     *
-     * @var int
      */
-    public $timeout = 600; // 10 minutes for large chains
+    public int $timeout = 600; // 10 minutes for large chains
 
     /**
      * Create a new job instance.

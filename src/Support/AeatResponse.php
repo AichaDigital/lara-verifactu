@@ -6,6 +6,10 @@ namespace AichaDigital\LaraVerifactu\Support;
 
 class AeatResponse
 {
+    /**
+     * @param  array<string, mixed>|null  $data
+     * @param  array<int, string>|null  $errors
+     */
     public function __construct(
         protected bool $success,
         protected ?string $code = null,
@@ -34,11 +38,17 @@ class AeatResponse
         return $this->message;
     }
 
+    /**
+     * @return array<string, mixed>|null
+     */
     public function getData(): ?array
     {
         return $this->data;
     }
 
+    /**
+     * @return array<int, string>|null
+     */
     public function getErrors(): ?array
     {
         return $this->errors;
@@ -46,9 +56,12 @@ class AeatResponse
 
     public function hasErrors(): bool
     {
-        return ! empty($this->errors);
+        return $this->errors !== null && $this->errors !== [];
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     public function toArray(): array
     {
         return [
@@ -60,6 +73,9 @@ class AeatResponse
         ];
     }
 
+    /**
+     * @param  array<string, mixed>|null  $data
+     */
     public static function success(?array $data = null, ?string $message = null): self
     {
         return new self(
@@ -69,6 +85,9 @@ class AeatResponse
         );
     }
 
+    /**
+     * @param  array<int, string>|null  $errors
+     */
     public static function failure(?array $errors = null, ?string $message = null, ?string $code = null): self
     {
         return new self(

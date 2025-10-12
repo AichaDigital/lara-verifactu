@@ -27,7 +27,7 @@ class LaraVerifactuServiceProvider extends PackageServiceProvider
                 \AichaDigital\LaraVerifactu\Commands\VerifyBlockchainCommand::class,
                 \AichaDigital\LaraVerifactu\Commands\StatusCommand::class,
             ])
-            ->hasInstallCommand(function (\Spatie\LaravelPackageTools\Commands\InstallCommand $command) {
+            ->hasInstallCommand(function (\Spatie\LaravelPackageTools\Commands\InstallCommand $command): void {
                 $command
                     ->publishConfigFile()
                     ->publishMigrations()
