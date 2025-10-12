@@ -15,6 +15,21 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  *
  * Native implementation of InvoiceBreakdownContract for Verifactu system.
  * Represents the tax breakdown of an invoice.
+ *
+ * @property int $id
+ * @property int $invoice_id
+ * @property TaxTypeEnum $tax_type
+ * @property float $tax_rate
+ * @property float $base_amount
+ * @property float $tax_amount
+ * @property float|null $surcharge_rate
+ * @property float|null $surcharge_amount
+ * @property bool $exempt
+ * @property string|null $exemption_reason
+ * @property array<string, mixed>|null $metadata
+ * @property \Carbon\Carbon $created_at
+ * @property \Carbon\Carbon $updated_at
+ * @property-read Invoice $invoice
  */
 class InvoiceBreakdown extends Model implements InvoiceBreakdownContract
 {

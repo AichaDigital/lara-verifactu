@@ -9,7 +9,7 @@ interface HashGeneratorContract
     /**
      * Generate SHA-256 hash for an invoice according to AEAT specifications
      */
-    public function generate(InvoiceContract $invoice): string;
+    public function generate(InvoiceContract $invoice, ?string $previousHash = null): string;
 
     /**
      * Verify if a hash matches an invoice

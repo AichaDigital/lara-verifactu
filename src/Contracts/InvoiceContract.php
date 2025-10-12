@@ -19,6 +19,16 @@ use Illuminate\Support\Collection;
 interface InvoiceContract
 {
     /**
+     * Get unique invoice ID
+     */
+    public function getId(): ?int;
+
+    /**
+     * Get issuer tax ID (NIF/CIF)
+     */
+    public function getIssuerTaxId(): string;
+
+    /**
      * Get the invoice serie (optional).
      */
     public function getSerie(): ?string;
@@ -27,6 +37,11 @@ interface InvoiceContract
      * Get the invoice number.
      */
     public function getNumber(): string;
+
+    /**
+     * Get complete invoice number (serie + number)
+     */
+    public function getInvoiceNumber(): string;
 
     /**
      * Get the invoice issue date.
@@ -44,6 +59,11 @@ interface InvoiceContract
     public function getType(): InvoiceTypeEnum;
 
     /**
+     * Alias for getType() for backwards compatibility
+     */
+    public function getInvoiceType(): InvoiceTypeEnum;
+
+    /**
      * Check if the invoice is simplified.
      */
     public function isSimplified(): bool;
@@ -52,6 +72,16 @@ interface InvoiceContract
      * Get the rectification type (if applicable).
      */
     public function getRectificationType(): ?string;
+
+    /**
+     * Get previous invoice ID for rectifications
+     */
+    public function getPreviousInvoiceId(): ?string;
+
+    /**
+     * Get previous invoice hash for rectifications
+     */
+    public function getPreviousHash(): ?string;
 
     /**
      * Get the invoice base amount.

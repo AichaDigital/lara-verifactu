@@ -23,6 +23,8 @@ interface CertificateManagerContract
 
     /**
      * Get certificate information
+     *
+     * @return array<string, mixed>
      */
     public function getCertificateInfo(): array;
 }

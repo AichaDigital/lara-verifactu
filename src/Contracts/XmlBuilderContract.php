@@ -20,6 +20,8 @@ interface XmlBuilderContract
 
     /**
      * Build XML for batch submission
+     *
+     * @param  \Illuminate\Support\Collection<int, InvoiceContract>  $invoices
      */
     public function buildBatchXml(Collection $invoices): string;
 

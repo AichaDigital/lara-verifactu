@@ -24,6 +24,33 @@ use Illuminate\Support\Collection;
  *
  * Native implementation of InvoiceContract for Verifactu system.
  * Represents an invoice with all required AEAT fields.
+ *
+ * @property int $id
+ * @property string|null $serie
+ * @property string $number
+ * @property \Carbon\Carbon $issue_date
+ * @property \Carbon\Carbon $issue_time
+ * @property InvoiceTypeEnum $type
+ * @property bool $simplified
+ * @property string|null $rectification_type
+ * @property float $base_amount
+ * @property float $tax_amount
+ * @property float $total_amount
+ * @property string $currency
+ * @property string|null $recipient_nif
+ * @property IdTypeEnum|null $recipient_id_type
+ * @property string|null $recipient_id
+ * @property string|null $recipient_name
+ * @property string|null $recipient_country
+ * @property RegimeTypeEnum $regime_type
+ * @property OperationTypeEnum $operation_key
+ * @property string|null $description
+ * @property array<string, mixed>|null $metadata
+ * @property \Carbon\Carbon $created_at
+ * @property \Carbon\Carbon $updated_at
+ * @property \Carbon\Carbon|null $deleted_at
+ * @property-read Registry|null $registry
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, InvoiceBreakdown> $breakdowns
  */
 class Invoice extends Model implements InvoiceContract
 {
@@ -103,6 +130,22 @@ class Invoice extends Model implements InvoiceContract
     // ========================================
 
     /**
+     * Get unique invoice ID
+     */
+    public function getId(): ?int
+    {
+        return $this->id;
+    }
+
+    /**
+     * Get issuer tax ID (NIF/CIF)
+     */
+    public function getIssuerTaxId(): string
+    {
+        return config('verifactu.company.tax_id', '');
+    }
+
+    /**
      * Get the invoice serie.
      */
     public function getSerie(): ?string
@@ -116,6 +159,14 @@ class Invoice extends Model implements InvoiceContract
     public function getNumber(): string
     {
         return $this->number;
+    }
+
+    /**
+     * Get complete invoice number (serie + number)
+     */
+    public function getInvoiceNumber(): string
+    {
+        return $this->serie ? $this->serie . $this->number : $this->number;
     }
 
     /**
@@ -143,6 +194,14 @@ class Invoice extends Model implements InvoiceContract
     }
 
     /**
+     * Alias for getType() for backwards compatibility
+     */
+    public function getInvoiceType(): InvoiceTypeEnum
+    {
+        return $this->getType();
+    }
+
+    /**
      * Check if the invoice is simplified.
      */
     public function isSimplified(): bool
@@ -156,6 +215,22 @@ class Invoice extends Model implements InvoiceContract
     public function getRectificationType(): ?string
     {
         return $this->rectification_type;
+    }
+
+    /**
+     * Get previous invoice ID for rectifications
+     */
+    public function getPreviousInvoiceId(): ?string
+    {
+        return $this->metadata['previous_invoice_id'] ?? null;
+    }
+
+    /**
+     * Get previous invoice hash for rectifications
+     */
+    public function getPreviousHash(): ?string
+    {
+        return $this->metadata['previous_hash'] ?? null;
     }
 
     /**

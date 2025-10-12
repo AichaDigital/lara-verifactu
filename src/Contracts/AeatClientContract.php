@@ -21,6 +21,9 @@ interface AeatClientContract
 
     /**
      * Send batch of registrations to AEAT
+     *
+     * @param  \Illuminate\Support\Collection<int, RegistryContract>  $registries
+     * @return \Illuminate\Support\Collection<int, AeatResponse>
      */
     public function sendBatch(Collection $registries): Collection;
 
