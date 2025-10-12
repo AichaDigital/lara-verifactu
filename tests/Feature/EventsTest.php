@@ -71,4 +71,3 @@ it('blockchain verified event contains result data', function () {
         ->and($event->result['valid'])->toBeTrue()
         ->and($event->result['errors'])->toBeArray();
 });
-
