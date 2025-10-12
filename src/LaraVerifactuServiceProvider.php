@@ -80,6 +80,30 @@ class LaraVerifactuServiceProvider extends PackageServiceProvider
 
     protected function bootEvents(): void
     {
-        // Register event listeners if needed
+        // Register event listeners
+        $this->app['events']->listen(
+            \AichaDigital\LaraVerifactu\Events\InvoiceRegisteredEvent::class,
+            \AichaDigital\LaraVerifactu\Listeners\LogInvoiceRegistration::class
+        );
+
+        $this->app['events']->listen(
+            \AichaDigital\LaraVerifactu\Events\RegistryCreatedEvent::class,
+            \AichaDigital\LaraVerifactu\Listeners\LogRegistryCreation::class
+        );
+
+        $this->app['events']->listen(
+            \AichaDigital\LaraVerifactu\Events\RegistrySubmittedEvent::class,
+            \AichaDigital\LaraVerifactu\Listeners\LogRegistrySubmission::class
+        );
+
+        $this->app['events']->listen(
+            \AichaDigital\LaraVerifactu\Events\RegistryFailedEvent::class,
+            \AichaDigital\LaraVerifactu\Listeners\LogRegistryFailure::class
+        );
+
+        $this->app['events']->listen(
+            \AichaDigital\LaraVerifactu\Events\BlockchainVerifiedEvent::class,
+            \AichaDigital\LaraVerifactu\Listeners\LogBlockchainVerification::class
+        );
     }
 }

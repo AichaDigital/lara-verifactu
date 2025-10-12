@@ -8,6 +8,10 @@ use AichaDigital\LaraVerifactu\Contracts\AeatClientContract;
 use AichaDigital\LaraVerifactu\Contracts\CertificateManagerContract;
 use AichaDigital\LaraVerifactu\Contracts\InvoiceContract;
 use AichaDigital\LaraVerifactu\Contracts\RegistryContract;
+use AichaDigital\LaraVerifactu\Events\BlockchainVerifiedEvent;
+use AichaDigital\LaraVerifactu\Events\InvoiceRegisteredEvent;
+use AichaDigital\LaraVerifactu\Events\RegistryFailedEvent;
+use AichaDigital\LaraVerifactu\Events\RegistrySubmittedEvent;
 use AichaDigital\LaraVerifactu\Exceptions\AeatException;
 use AichaDigital\LaraVerifactu\Exceptions\VerifactuException;
 use AichaDigital\LaraVerifactu\Support\AeatResponse;
@@ -72,6 +76,9 @@ final class InvoiceRegistrar
                 $this->submitToAeat($registry);
             }
 
+            // Dispatch event
+            event(new InvoiceRegisteredEvent($invoice, $registry, $submitToAeat));
+
             return $registry;
         });
     }
@@ -108,6 +115,9 @@ final class InvoiceRegistrar
                         'registry_number' => $registry->getRegistryNumber(),
                         'csv' => $response->getCsv(),
                     ]);
+
+                // Dispatch success event
+                event(new RegistrySubmittedEvent($registry, $response));
             } else {
                 $this->registryManager->markAsFailed(
                     $registry,
@@ -119,6 +129,9 @@ final class InvoiceRegistrar
                         'registry_number' => $registry->getRegistryNumber(),
                         'error' => $response->getErrorMessage(),
                     ]);
+
+                // Dispatch failure event
+                event(new RegistryFailedEvent($registry, $response->getErrorMessage(), $registry->getSubmissionAttempts()));
             }
 
             return $response;
@@ -131,6 +144,9 @@ final class InvoiceRegistrar
                     'error' => $e->getMessage(),
                     'trace' => $e->getTraceAsString(),
                 ]);
+
+            // Dispatch failure event
+            event(new RegistryFailedEvent($registry, $e->getMessage(), $registry->getSubmissionAttempts()));
 
             throw AeatException::connectionFailed($e->getMessage());
         }
@@ -215,7 +231,12 @@ final class InvoiceRegistrar
      */
     public function verifyBlockchain(): array
     {
-        return $this->registryManager->verifyBlockchain();
+        $result = $this->registryManager->verifyBlockchain();
+
+        // Dispatch event
+        event(new BlockchainVerifiedEvent($result));
+
+        return $result;
     }
 
     /**

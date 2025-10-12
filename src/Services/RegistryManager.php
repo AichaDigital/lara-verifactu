@@ -10,6 +10,7 @@ use AichaDigital\LaraVerifactu\Contracts\QrGeneratorContract;
 use AichaDigital\LaraVerifactu\Contracts\RegistryContract;
 use AichaDigital\LaraVerifactu\Contracts\XmlBuilderContract;
 use AichaDigital\LaraVerifactu\Enums\RegistryStatusEnum;
+use AichaDigital\LaraVerifactu\Events\RegistryCreatedEvent;
 use AichaDigital\LaraVerifactu\Exceptions\VerifactuException;
 use AichaDigital\LaraVerifactu\Models\Registry;
 use Carbon\Carbon;
@@ -75,6 +76,9 @@ final class RegistryManager
                 'status' => RegistryStatusEnum::PENDING->value,
                 'submission_attempts' => 0,
             ]);
+
+            // Dispatch event
+            event(new RegistryCreatedEvent($registry, $invoice));
 
             return $registry;
         });
