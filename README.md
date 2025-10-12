@@ -5,6 +5,23 @@
 [![GitHub Code Style Action Status](https://img.shields.io/github/actions/workflow/status/aichadigital/lara-verifactu/fix-php-code-style-issues.yml?branch=main&label=code%20style&style=flat-square)](https://github.com/aichadigital/lara-verifactu/actions?query=workflow%3A"Fix+PHP+code+style+issues"+branch%3Amain)
 [![Total Downloads](https://img.shields.io/packagist/dt/aichadigital/lara-verifactu.svg?style=flat-square)](https://packagist.org/packages/aichadigital/lara-verifactu)
 
+> **⚠️ IMPORTANTE: PAQUETE EN DESARROLLO**
+>
+> **Este paquete se encuentra actualmente en desarrollo activo (v0.1.0-dev).**
+> 
+> **🚧 NO USAR EN PRODUCCIÓN 🚧**
+> 
+> - ✅ Fase 1 completada: Arquitectura base
+> - ✅ Fase 2 completada: Servicios core (50% del proyecto)
+> - ⏳ Fase 3 en desarrollo: Modelos y persistencia
+> - ⏳ Fases 4-8 pendientes
+> 
+> **Fecha estimada de release estable: Q1 2025**
+>
+> Si deseas contribuir o probar el paquete, consulta [CONTRIBUTING.md](CONTRIBUTING.md)
+
+---
+
 Paquete Laravel para cumplimiento normativo de **Verifactu (AEAT)** con arquitectura agnóstica que permite integración tanto en proyectos nuevos como en sistemas de facturación existentes.
 
 ## 🎯 Características
@@ -29,10 +46,23 @@ Paquete Laravel para cumplimiento normativo de **Verifactu (AEAT)** con arquitec
 
 ## 📦 Instalación
 
-Puedes instalar el paquete vía Composer:
+> **⚠️ ADVERTENCIA**: Este paquete aún no está disponible en Packagist. Se encuentra en desarrollo.
+
+Una vez publicado, podrás instalarlo vía Composer:
 
 ```bash
 composer require aichadigital/lara-verifactu
+```
+
+**Para desarrollo/testing:**
+
+```bash
+# Clonar el repositorio
+git clone https://github.com/aichadigital/lara-verifactu.git
+
+# Instalar dependencias
+cd lara-verifactu
+composer install
 ```
 
 Publicar configuración y migraciones:
