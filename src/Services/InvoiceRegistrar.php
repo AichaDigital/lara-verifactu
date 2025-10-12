@@ -1,0 +1,239 @@
+<?php
+
+declare(strict_types=1);
+
+namespace AichaDigital\LaraVerifactu\Services;
+
+use AichaDigital\LaraVerifactu\Contracts\AeatClientContract;
+use AichaDigital\LaraVerifactu\Contracts\CertificateManagerContract;
+use AichaDigital\LaraVerifactu\Contracts\InvoiceContract;
+use AichaDigital\LaraVerifactu\Contracts\RegistryContract;
+use AichaDigital\LaraVerifactu\Exceptions\AeatException;
+use AichaDigital\LaraVerifactu\Exceptions\VerifactuException;
+use AichaDigital\LaraVerifactu\Support\AeatResponse;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+
+/**
+ * Invoice Registrar Service
+ *
+ * Main orchestrator service for invoice registration process.
+ * Handles the complete flow from registry creation to AEAT submission.
+ */
+final class InvoiceRegistrar
+{
+    public function __construct(
+        private readonly RegistryManager $registryManager,
+        private readonly CertificateManagerContract $certificateManager,
+        private readonly AeatClientContract $aeatClient
+    ) {}
+
+    /**
+     * Register an invoice in the Verifactu system
+     *
+     * Complete flow:
+     * 1. Create registry with hash, QR, and XML
+     * 2. Sign XML with certificate
+     * 3. Submit to AEAT
+     * 4. Update registry status based on response
+     *
+     * @throws VerifactuException
+     */
+    public function register(InvoiceContract $invoice, bool $submitToAeat = true): RegistryContract
+    {
+        return DB::transaction(function () use ($invoice, $submitToAeat) {
+            // Step 1: Create registry
+            Log::channel(config('verifactu.logging.channel', 'single'))
+                ->info('Creating registry for invoice', [
+                    'invoice_number' => $invoice->getNumber(),
+                    'serie' => $invoice->getSerie(),
+                ]);
+
+            $registry = $this->registryManager->createRegistry($invoice);
+
+            // Step 2: Sign XML
+            try {
+                $signedXml = $this->signXml($registry->getXml());
+
+                if ($registry instanceof \AichaDigital\LaraVerifactu\Models\Registry) {
+                    $registry->update(['signed_xml' => $signedXml]);
+                }
+            } catch (\Throwable $e) {
+                Log::channel(config('verifactu.logging.channel', 'single'))
+                    ->warning('Failed to sign XML', [
+                        'registry_number' => $registry->getRegistryNumber(),
+                        'error' => $e->getMessage(),
+                    ]);
+                // Continue without signed XML (optional feature)
+            }
+
+            // Step 3: Submit to AEAT if requested
+            if ($submitToAeat) {
+                $this->submitToAeat($registry);
+            }
+
+            return $registry;
+        });
+    }
+
+    /**
+     * Submit a registry to AEAT
+     *
+     * @throws AeatException
+     */
+    public function submitToAeat(RegistryContract $registry): AeatResponse
+    {
+        try {
+            Log::channel(config('verifactu.logging.channel', 'single'))
+                ->info('Submitting registry to AEAT', [
+                    'registry_number' => $registry->getRegistryNumber(),
+                ]);
+
+            // Use signed XML if available, otherwise use regular XML
+            $xml = $registry->getSignedXml() ?? $registry->getXml();
+
+            // Submit to AEAT
+            $response = $this->aeatClient->sendRegistration($xml);
+
+            // Update registry based on response
+            if ($response->isSuccess()) {
+                $this->registryManager->markAsSubmitted(
+                    $registry,
+                    $response->getCsv(),
+                    $response->getMessage()
+                );
+
+                Log::channel(config('verifactu.logging.channel', 'single'))
+                    ->info('Registry submitted successfully', [
+                        'registry_number' => $registry->getRegistryNumber(),
+                        'csv' => $response->getCsv(),
+                    ]);
+            } else {
+                $this->registryManager->markAsFailed(
+                    $registry,
+                    $response->getErrorMessage()
+                );
+
+                Log::channel(config('verifactu.logging.channel', 'single'))
+                    ->error('Registry submission failed', [
+                        'registry_number' => $registry->getRegistryNumber(),
+                        'error' => $response->getErrorMessage(),
+                    ]);
+            }
+
+            return $response;
+        } catch (\Throwable $e) {
+            $this->registryManager->markAsFailed($registry, $e->getMessage());
+
+            Log::channel(config('verifactu.logging.channel', 'single'))
+                ->error('Exception during AEAT submission', [
+                    'registry_number' => $registry->getRegistryNumber(),
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
+
+            throw AeatException::connectionFailed($e->getMessage());
+        }
+    }
+
+    /**
+     * Batch register multiple invoices
+     *
+     * @param  array<InvoiceContract>  $invoices
+     * @return array{success: int, failed: int, registries: array<RegistryContract>}
+     */
+    public function batchRegister(array $invoices, bool $submitToAeat = true): array
+    {
+        $results = [
+            'success' => 0,
+            'failed' => 0,
+            'registries' => [],
+        ];
+
+        foreach ($invoices as $invoice) {
+            try {
+                $registry = $this->register($invoice, $submitToAeat);
+                $results['registries'][] = $registry;
+                $results['success']++;
+            } catch (\Throwable $e) {
+                $results['failed']++;
+
+                Log::channel(config('verifactu.logging.channel', 'single'))
+                    ->error('Failed to register invoice in batch', [
+                        'invoice_number' => $invoice->getNumber(),
+                        'error' => $e->getMessage(),
+                    ]);
+            }
+        }
+
+        return $results;
+    }
+
+    /**
+     * Retry failed registries
+     *
+     * @return array{success: int, failed: int, skipped: int}
+     */
+    public function retryFailed(int $maxAttempts = 3, int $limit = 50): array
+    {
+        $results = [
+            'success' => 0,
+            'failed' => 0,
+            'skipped' => 0,
+        ];
+
+        $registries = $this->registryManager->getRetryableRegistries($maxAttempts, $limit);
+
+        foreach ($registries as $registry) {
+            // Skip if max attempts reached
+            if ($registry->getSubmissionAttempts() >= $maxAttempts) {
+                $results['skipped']++;
+
+                continue;
+            }
+
+            try {
+                $response = $this->submitToAeat($registry);
+
+                if ($response->isSuccess()) {
+                    $results['success']++;
+                } else {
+                    $results['failed']++;
+                }
+            } catch (\Throwable $e) {
+                $results['failed']++;
+            }
+        }
+
+        return $results;
+    }
+
+    /**
+     * Verify blockchain integrity
+     *
+     * @return array{valid: bool, errors: array<string>}
+     */
+    public function verifyBlockchain(): array
+    {
+        return $this->registryManager->verifyBlockchain();
+    }
+
+    /**
+     * Sign XML with certificate
+     *
+     * @throws VerifactuException
+     */
+    private function signXml(string $xml): string
+    {
+        $certificatePath = config('verifactu.certificate.path');
+        $certificatePassword = config('verifactu.certificate.password');
+
+        if (! $certificatePath || ! file_exists($certificatePath)) {
+            throw VerifactuException::make('Certificate file not found');
+        }
+
+        $this->certificateManager->loadCertificate($certificatePath, $certificatePassword);
+
+        return $this->certificateManager->signContent($xml);
+    }
+}
