@@ -82,7 +82,7 @@ class InvoiceFactory extends Factory
     public function rectification(): static
     {
         return $this->state(fn (array $attributes) => [
-            'type' => InvoiceTypeEnum::F2,
+            'type' => InvoiceTypeEnum::RECTIFICATIVE,
             'rectification_type' => 'S',
         ]);
     }

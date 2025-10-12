@@ -68,7 +68,7 @@ it('can be marked as submitted', function () {
     expect($registry->isSubmitted())->toBeTrue()
         ->and($registry->isPending())->toBeFalse()
         ->and($registry->hasErrors())->toBeFalse()
-        ->and($registry->getStatus())->toBe(RegistryStatusEnum::SUBMITTED)
+        ->and($registry->getStatus())->toBe(RegistryStatusEnum::SENT)
         ->and($registry->getSubmittedAt())->toBeInstanceOf(Carbon::class)
         ->and($registry->getAeatCsv())->not->toBeNull()
         ->and($registry->getSubmissionAttempts())->toBeGreaterThan(0);
@@ -80,7 +80,7 @@ it('can be marked as failed', function () {
     expect($registry->hasErrors())->toBeTrue()
         ->and($registry->isSubmitted())->toBeFalse()
         ->and($registry->isPending())->toBeFalse()
-        ->and($registry->getStatus())->toBe(RegistryStatusEnum::FAILED)
+        ->and($registry->getStatus())->toBe(RegistryStatusEnum::ERROR)
         ->and($registry->getAeatError())->not->toBeNull()
         ->and($registry->getSubmissionAttempts())->toBeGreaterThan(0);
 });

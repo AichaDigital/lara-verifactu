@@ -86,7 +86,7 @@ it('can create a foreign recipient invoice', function () {
 it('can create a rectification invoice', function () {
     $invoice = Invoice::factory()->rectification()->create();
 
-    expect($invoice->getType())->toBe(InvoiceTypeEnum::F2)
+    expect($invoice->getType())->toBe(InvoiceTypeEnum::RECTIFICATIVE)
         ->and($invoice->getRectificationType())->toBe('S');
 });
 

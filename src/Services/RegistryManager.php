@@ -72,7 +72,7 @@ final class RegistryManager
                 'qr_svg' => $qrSvg,
                 'qr_png' => $qrPng,
                 'xml' => $xml,
-                'status' => RegistryStatusEnum::PENDING,
+                'status' => RegistryStatusEnum::PENDING->value,
                 'submission_attempts' => 0,
             ]);
 
@@ -173,7 +173,7 @@ final class RegistryManager
     ): void {
         if ($registry instanceof Registry) {
             $registry->update([
-                'status' => RegistryStatusEnum::SUBMITTED,
+                'status' => RegistryStatusEnum::SENT->value,
                 'submitted_at' => Carbon::now(),
                 'aeat_csv' => $aeatCsv,
                 'aeat_response' => $aeatResponse,
@@ -191,7 +191,7 @@ final class RegistryManager
     ): void {
         if ($registry instanceof Registry) {
             $registry->update([
-                'status' => RegistryStatusEnum::FAILED,
+                'status' => RegistryStatusEnum::ERROR->value,
                 'aeat_error' => $error,
                 'submission_attempts' => $registry->submission_attempts + 1,
             ]);
@@ -205,7 +205,7 @@ final class RegistryManager
      */
     public function getPendingRegistries(int $limit = 100): \Illuminate\Support\Collection
     {
-        return Registry::where('status', RegistryStatusEnum::PENDING)
+        return Registry::where('status', RegistryStatusEnum::PENDING->value)
             ->orderBy('created_at', 'asc')
             ->limit($limit)
             ->get();
@@ -218,7 +218,7 @@ final class RegistryManager
      */
     public function getRetryableRegistries(int $maxAttempts = 3, int $limit = 50): \Illuminate\Support\Collection
     {
-        return Registry::where('status', RegistryStatusEnum::FAILED)
+        return Registry::where('status', RegistryStatusEnum::ERROR->value)
             ->where('submission_attempts', '<', $maxAttempts)
             ->orderBy('created_at', 'asc')
             ->limit($limit)

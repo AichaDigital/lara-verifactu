@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use AichaDigital\LaraVerifactu\Enums\RegistryStatusEnum;
 use AichaDigital\LaraVerifactu\Models\Invoice;
 use AichaDigital\LaraVerifactu\Models\InvoiceBreakdown;
 use AichaDigital\LaraVerifactu\Models\Registry;
@@ -95,7 +96,7 @@ it('can query invoices through registry', function () {
     Registry::factory()->forInvoice($invoice)->submitted()->create();
 
     $foundInvoice = Invoice::whereHas('registry', function ($query) {
-        $query->where('status', 'submitted');
+        $query->where('status', RegistryStatusEnum::SENT->value);
     })->first();
 
     expect($foundInvoice)->not->toBeNull()

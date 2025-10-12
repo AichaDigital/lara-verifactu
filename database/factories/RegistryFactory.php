@@ -57,7 +57,7 @@ class RegistryFactory extends Factory
     public function submitted(): static
     {
         return $this->state(fn (array $attributes) => [
-            'status' => RegistryStatusEnum::SUBMITTED,
+            'status' => RegistryStatusEnum::SENT,
             'submitted_at' => Carbon::now(),
             'aeat_csv' => 'CSV-' . $this->faker->regexify('[A-Z0-9]{16}'),
             'aeat_response' => 'Accepted',
@@ -71,7 +71,7 @@ class RegistryFactory extends Factory
     public function failed(): static
     {
         return $this->state(fn (array $attributes) => [
-            'status' => RegistryStatusEnum::FAILED,
+            'status' => RegistryStatusEnum::ERROR,
             'aeat_error' => 'Submission error',
             'submission_attempts' => 3,
         ]);

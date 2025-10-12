@@ -31,6 +31,27 @@ class Invoice extends Model implements InvoiceContract
     use SoftDeletes;
 
     /**
+     * Boot the model.
+     */
+    protected static function boot(): void
+    {
+        parent::boot();
+
+        // Handle cascade deletes when soft deleting
+        static::deleting(function (Invoice $invoice) {
+            if ($invoice->isForceDeleting()) {
+                return; // Let database cascade handle it
+            }
+
+            // Soft delete registry
+            $invoice->registry()->delete();
+
+            // Soft delete breakdowns
+            $invoice->breakdowns()->delete();
+        });
+    }
+
+    /**
      * The table associated with the model.
      */
     protected $table = 'verifactu_invoices';

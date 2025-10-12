@@ -49,6 +49,21 @@ class InvoiceBreakdownFactory extends Factory
     }
 
     /**
+     * Configure the factory to recalculate tax_amount based on base_amount and tax_rate.
+     */
+    public function configure(): static
+    {
+        return $this->afterMaking(function (InvoiceBreakdown $breakdown) {
+            if (isset($breakdown->base_amount) && isset($breakdown->tax_rate)) {
+                $breakdown->tax_amount = round($breakdown->base_amount * ($breakdown->tax_rate / 100), 2);
+            }
+            if (isset($breakdown->base_amount) && isset($breakdown->surcharge_rate) && $breakdown->surcharge_rate > 0) {
+                $breakdown->surcharge_amount = round($breakdown->base_amount * ($breakdown->surcharge_rate / 100), 2);
+            }
+        });
+    }
+
+    /**
      * Set IVA at 21%.
      */
     public function iva21(): static
@@ -56,7 +71,6 @@ class InvoiceBreakdownFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'tax_type' => TaxTypeEnum::IVA,
             'tax_rate' => 21.00,
-            'tax_amount' => round($attributes['base_amount'] * 0.21, 2),
         ]);
     }
 
@@ -68,7 +82,6 @@ class InvoiceBreakdownFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'tax_type' => TaxTypeEnum::IVA,
             'tax_rate' => 10.00,
-            'tax_amount' => round($attributes['base_amount'] * 0.10, 2),
         ]);
     }
 
@@ -80,7 +93,6 @@ class InvoiceBreakdownFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'tax_type' => TaxTypeEnum::IVA,
             'tax_rate' => 4.00,
-            'tax_amount' => round($attributes['base_amount'] * 0.04, 2),
         ]);
     }
 
@@ -104,7 +116,6 @@ class InvoiceBreakdownFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'surcharge_rate' => $rate,
-            'surcharge_amount' => round($attributes['base_amount'] * ($rate / 100), 2),
         ]);
     }
 

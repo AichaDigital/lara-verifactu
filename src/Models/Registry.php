@@ -210,7 +210,7 @@ class Registry extends Model implements RegistryContract
      */
     public function isSubmitted(): bool
     {
-        return $this->status === RegistryStatusEnum::SUBMITTED;
+        return $this->status === RegistryStatusEnum::SENT;
     }
 
     /**
@@ -226,6 +226,6 @@ class Registry extends Model implements RegistryContract
      */
     public function hasErrors(): bool
     {
-        return $this->status === RegistryStatusEnum::FAILED;
+        return $this->status === RegistryStatusEnum::ERROR;
     }
 }
