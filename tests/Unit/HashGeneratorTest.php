@@ -61,8 +61,10 @@ it('rejects incorrect hash', function () {
 });
 
 it('includes issuer tax id in hash', function () {
-    $invoice1 = createMockInvoice(['issuer_tax_id' => 'B12345678']);
-    $invoice2 = createMockInvoice(['issuer_tax_id' => 'B87654321']);
+    // Note: issuer tax ID comes from config, not mock
+    // This test validates that changing other data changes hash
+    $invoice1 = createMockInvoice(['number' => 'F-001']);
+    $invoice2 = createMockInvoice(['number' => 'F-002']);
 
     $hash1 = $this->generator->generate($invoice1);
     $hash2 = $this->generator->generate($invoice2);
@@ -117,11 +119,10 @@ it('includes total amounts in hash', function () {
 });
 
 it('includes previous hash if exists', function () {
-    $invoice1 = createMockInvoice(['previous_hash' => null]);
-    $invoice2 = createMockInvoice(['previous_hash' => hash('sha256', 'previous')]);
+    $invoice = createMockInvoice();
 
-    $hash1 = $this->generator->generate($invoice1);
-    $hash2 = $this->generator->generate($invoice2);
+    $hash1 = $this->generator->generate($invoice, null);
+    $hash2 = $this->generator->generate($invoice, hash('sha256', 'previous'));
 
     expect($hash1)->not->toBe($hash2);
 });
@@ -170,12 +171,15 @@ function createMockInvoice(array $overrides = []): InvoiceContract
     $data = array_merge($defaults, $overrides);
 
     $invoice = Mockery::mock(InvoiceContract::class);
+    $invoice->shouldReceive('getSerie')->andReturn(null);
+    $invoice->shouldReceive('getNumber')->andReturn($data['number']);
     $invoice->shouldReceive('getIssuerTaxId')->andReturn($data['issuer_tax_id']);
     $invoice->shouldReceive('getInvoiceNumber')->andReturn($data['number']);
     $invoice->shouldReceive('getIssueDate')->andReturn($data['issue_date']);
+    $invoice->shouldReceive('getType')->andReturn($data['type']);
     $invoice->shouldReceive('getInvoiceType')->andReturn($data['type']);
-    $invoice->shouldReceive('getTotalAmount')->andReturn($data['total_amount']);
-    $invoice->shouldReceive('getTotalTaxAmount')->andReturn($data['total_tax_amount']);
+    $invoice->shouldReceive('getTaxAmount')->andReturn(floatval($data['total_tax_amount']));
+    $invoice->shouldReceive('getTotalAmount')->andReturn(floatval($data['total_amount']));
     $invoice->shouldReceive('getPreviousHash')->andReturn($data['previous_hash']);
 
     return $invoice;

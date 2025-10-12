@@ -9,9 +9,9 @@ use Exception;
 class VerifactuException extends Exception
 {
     /**
-     * @return static
+     * Factory method for creating exceptions
      */
-    public static function make(string $message, int $code = 0, ?\Throwable $previous = null): self
+    public static function make(string $message, int $code = 0, ?\Throwable $previous = null): static
     {
         return new static($message, $code, $previous);
     }

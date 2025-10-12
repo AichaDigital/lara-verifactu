@@ -11,6 +11,7 @@ use AichaDigital\LaraVerifactu\Services\XmlBuilder;
 use Carbon\Carbon;
 
 beforeEach(function () {
+    config()->set('verifactu.company.tax_id', 'B12345678');
     $this->builder = new XmlBuilder;
 });
 
@@ -176,12 +177,15 @@ function createMockInvoiceForXml(array $overrides = []): InvoiceContract
     $data = array_merge($defaults, $overrides);
 
     $invoice = Mockery::mock(InvoiceContract::class);
+    $invoice->shouldReceive('getSerie')->andReturn(null);
+    $invoice->shouldReceive('getNumber')->andReturn($data['number']);
     $invoice->shouldReceive('getIssuerTaxId')->andReturn($data['issuer_tax_id']);
     $invoice->shouldReceive('getInvoiceNumber')->andReturn($data['number']);
     $invoice->shouldReceive('getIssueDate')->andReturn($data['issue_date']);
+    $invoice->shouldReceive('getType')->andReturn($data['type']);
     $invoice->shouldReceive('getInvoiceType')->andReturn($data['type']);
-    $invoice->shouldReceive('getTotalAmount')->andReturn($data['total_amount']);
-    $invoice->shouldReceive('getTotalTaxAmount')->andReturn($data['total_tax_amount']);
+    $invoice->shouldReceive('getTaxAmount')->andReturn(floatval($data['total_tax_amount']));
+    $invoice->shouldReceive('getTotalAmount')->andReturn(floatval($data['total_amount']));
     $invoice->shouldReceive('getBreakdowns')->andReturn($data['breakdowns']);
     $invoice->shouldReceive('getPreviousHash')->andReturn($data['previous_hash']);
     $invoice->shouldReceive('getPreviousInvoiceId')->andReturn($data['previous_invoice_id']);

@@ -84,7 +84,7 @@ final class QrGenerator implements QrGeneratorContract
 
         $renderer = new ImageRenderer(
             new RendererStyle(self::QR_SIZE, self::QR_MARGIN),
-            new ImagickImageBackEnd
+            new \BaconQrCode\Renderer\Image\ImagickImageBackEnd
         );
 
         $writer = new Writer($renderer);
