@@ -31,8 +31,8 @@ return [
     'models' => [
         'invoice' => \AichaDigital\LaraVerifactu\Models\Invoice::class,
         'breakdown' => \AichaDigital\LaraVerifactu\Models\InvoiceBreakdown::class,
-        'recipient' => \AichaDigital\LaraVerifactu\Models\Recipient::class,
-        'registry' => \AichaDigital\LaraVerifactu\Models\InvoiceRegistry::class,
+        'registry' => \AichaDigital\LaraVerifactu\Models\Registry::class,
+        // Note: Recipient is a contract, not a model. Implement in Invoice::getRecipient()
     ],
 
     /*

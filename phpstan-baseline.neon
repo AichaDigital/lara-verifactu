@@ -1,16 +1,6 @@
 parameters:
 	ignoreErrors:
 		-
-			message: "#^Class AichaDigital\\\\LaraVerifactu\\\\Models\\\\InvoiceRegistry not found\\.$#"
-			count: 1
-			path: config/verifactu.php
-
-		-
-			message: "#^Class AichaDigital\\\\LaraVerifactu\\\\Models\\\\Recipient not found\\.$#"
-			count: 1
-			path: config/verifactu.php
-
-		-
 			message: "#^Access to an undefined property AichaDigital\\\\LaraVerifactu\\\\Models\\\\Invoice\\:\\:\\$number\\.$#"
 			count: 1
 			path: src/Commands/RegisterInvoiceCommand.php
