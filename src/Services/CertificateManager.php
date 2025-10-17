@@ -180,9 +180,17 @@ final class CertificateManager implements CertificateManagerContract
             throw CertificateException::make('Certificate not loaded');
         }
 
+        if(is_array($this->certificate['subject'])) {
+            $subject = $this->certificate['subject']['CN'];
+        }
+
+        if(is_array($this->certificate['issuer'])) {
+            $issuer = $this->certificate['issuer']['O'];
+        }
+
         return [
-            'subject' => $this->certificate['subject'] ?? [],
-            'issuer' => $this->certificate['issuer'] ?? [],
+            'subject' => $subject ?? null,
+            'issuer' => $issuer ?? null,
             'valid_from' => $this->certificate['validFrom_time_t'] ?? null,
             'valid_to' => $this->certificate['validTo_time_t'] ?? null,
             'serial_number' => $this->certificate['serialNumberHex'] ?? $this->certificate['serialNumber'] ?? null,
