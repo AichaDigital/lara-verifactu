@@ -56,6 +56,7 @@ class Invoice extends Model implements InvoiceContract
 {
     /** @phpstan-use HasFactory<\AichaDigital\LaraVerifactu\Database\Factories\InvoiceFactory> */
     use HasFactory;
+
     use SoftDeletes;
 
     /**

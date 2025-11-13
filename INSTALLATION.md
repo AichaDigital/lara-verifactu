@@ -6,7 +6,7 @@
 
 ## 📋 Requisitos
 
-- PHP 8.2 o superior
+- PHP 8.3 o superior
 - Laravel 11.0 o 12.0
 - Composer
 - OpenSSL extension
@@ -50,7 +50,7 @@ En el `composer.json` de tu proyecto Laravel, añade el repositorio local:
         }
     ],
     "require": {
-        "php": "^8.2",
+        "php": "^8.3",
         "laravel/framework": "^11.0|^12.0",
         "aichadigital/lara-verifactu": "@dev"
     }
@@ -350,10 +350,10 @@ php artisan verifactu:test-connection --cert-info
 2. Si no está, instálala:
    ```bash
    # Ubuntu/Debian
-   sudo apt-get install php8.2-soap
+   sudo apt-get install php8.3-soap
    
    # macOS (Homebrew)
-   brew install php@8.2
+   brew install php@8.3
    ```
 
 3. Reinicia el servidor:

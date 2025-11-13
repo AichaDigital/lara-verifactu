@@ -45,6 +45,7 @@ class Registry extends Model implements RegistryContract
 {
     /** @phpstan-use HasFactory<\AichaDigital\LaraVerifactu\Database\Factories\RegistryFactory> */
     use HasFactory;
+
     use SoftDeletes;
 
     /**
