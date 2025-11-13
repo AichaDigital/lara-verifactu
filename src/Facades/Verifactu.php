@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Facade;
 /**
  * @method static \AichaDigital\LaraVerifactu\Support\AeatResponse register(\AichaDigital\LaraVerifactu\Contracts\InvoiceContract $invoice)
  * @method static \AichaDigital\LaraVerifactu\Support\AeatResponse cancel(string $registryId)
- * @method static \Illuminate\Support\Collection sendBatch(\Illuminate\Support\Collection $invoices)
+ * @method static \Illuminate\Support\Collection<int, mixed> sendBatch(\Illuminate\Support\Collection<int, \AichaDigital\LaraVerifactu\Contracts\InvoiceContract> $invoices)
  * @method static \AichaDigital\LaraVerifactu\Support\AeatResponse status(\AichaDigital\LaraVerifactu\Contracts\InvoiceContract $invoice)
  * @method static string qr(\AichaDigital\LaraVerifactu\Contracts\InvoiceContract $invoice)
  * @method static bool validateChain(\AichaDigital\LaraVerifactu\Contracts\InvoiceContract $invoice)

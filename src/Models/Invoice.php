@@ -54,6 +54,7 @@ use Illuminate\Support\Collection;
  */
 class Invoice extends Model implements InvoiceContract
 {
+    /** @phpstan-use HasFactory<\AichaDigital\LaraVerifactu\Database\Factories\InvoiceFactory> */
     use HasFactory;
     use SoftDeletes;
 
@@ -65,7 +66,7 @@ class Invoice extends Model implements InvoiceContract
     /**
      * The attributes that are mass assignable.
      *
-     * @var array<string>
+     * @var list<string>
      */
     protected $fillable = [
         'serie',
@@ -111,18 +112,28 @@ class Invoice extends Model implements InvoiceContract
 
     /**
      * Get the invoice registry.
+     *
+     * @return HasOne<Registry, static>
      */
     public function registry(): HasOne
     {
-        return $this->hasOne(Registry::class);
+        /** @var HasOne<Registry, static> $relation */
+        $relation = $this->hasOne(Registry::class);
+
+        return $relation;
     }
 
     /**
      * Get the invoice breakdowns.
+     *
+     * @return HasMany<InvoiceBreakdown, static>
      */
     public function breakdowns(): HasMany
     {
-        return $this->hasMany(InvoiceBreakdown::class);
+        /** @var HasMany<InvoiceBreakdown, static> $relation */
+        $relation = $this->hasMany(InvoiceBreakdown::class);
+
+        return $relation;
     }
 
     // ========================================
@@ -326,7 +337,12 @@ class Invoice extends Model implements InvoiceContract
      */
     public function getBreakdowns(): Collection
     {
-        return $this->breakdowns;
+        /** @var Collection<int, InvoiceBreakdownContract> $collection */
+        $collection = collect($this->breakdowns->all())
+            ->map(static fn (InvoiceBreakdownContract $breakdown): InvoiceBreakdownContract => $breakdown)
+            ->values();
+
+        return $collection;
     }
 
     /**

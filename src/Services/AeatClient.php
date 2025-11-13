@@ -11,6 +11,7 @@ use AichaDigital\LaraVerifactu\Exceptions\AeatAuthenticationException;
 use AichaDigital\LaraVerifactu\Exceptions\AeatConnectionException;
 use AichaDigital\LaraVerifactu\Exceptions\AeatException;
 use AichaDigital\LaraVerifactu\Exceptions\AeatRejectionException;
+use AichaDigital\LaraVerifactu\Exceptions\ValidationException;
 use AichaDigital\LaraVerifactu\Support\AeatResponse;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
@@ -60,8 +61,8 @@ final class AeatClient implements AeatClientContract
 
             $xml = $registry->getSignedXml() ?? $registry->getXml();
 
-            if ($xml === '') {
-                throw AeatException::connectionFailed('Empty XML content for registry');
+            if ($xml === null || $xml === '') {
+                throw ValidationException::invalidXml('Registry XML content is missing.');
             }
 
             // Sign XML with certificate

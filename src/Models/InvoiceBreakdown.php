@@ -33,6 +33,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class InvoiceBreakdown extends Model implements InvoiceBreakdownContract
 {
+    /** @phpstan-use HasFactory<\AichaDigital\LaraVerifactu\Database\Factories\InvoiceBreakdownFactory> */
     use HasFactory;
 
     /**
@@ -43,7 +44,7 @@ class InvoiceBreakdown extends Model implements InvoiceBreakdownContract
     /**
      * The attributes that are mass assignable.
      *
-     * @var array<string>
+     * @var list<string>
      */
     protected $fillable = [
         'invoice_id',
@@ -76,10 +77,15 @@ class InvoiceBreakdown extends Model implements InvoiceBreakdownContract
 
     /**
      * Get the invoice that owns this breakdown.
+     *
+     * @return BelongsTo<Invoice, static>
      */
     public function invoice(): BelongsTo
     {
-        return $this->belongsTo(Invoice::class);
+        /** @var BelongsTo<Invoice, static> $relation */
+        $relation = $this->belongsTo(Invoice::class);
+
+        return $relation;
     }
 
     // ========================================

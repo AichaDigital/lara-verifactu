@@ -13,6 +13,7 @@ use AichaDigital\LaraVerifactu\Events\InvoiceRegisteredEvent;
 use AichaDigital\LaraVerifactu\Events\RegistryFailedEvent;
 use AichaDigital\LaraVerifactu\Events\RegistrySubmittedEvent;
 use AichaDigital\LaraVerifactu\Exceptions\AeatException;
+use AichaDigital\LaraVerifactu\Exceptions\ValidationException;
 use AichaDigital\LaraVerifactu\Exceptions\VerifactuException;
 use AichaDigital\LaraVerifactu\Support\AeatResponse;
 use Illuminate\Support\Facades\DB;
@@ -57,7 +58,13 @@ final class InvoiceRegistrar
 
             // Step 2: Sign XML
             try {
-                $signedXml = $this->signXml($registry->getXml());
+                $xml = $registry->getXml();
+
+                if ($xml === null || $xml === '') {
+                    throw ValidationException::invalidXml('Registry XML content is missing.');
+                }
+
+                $signedXml = $this->signXml($xml);
 
                 if ($registry instanceof \AichaDigital\LaraVerifactu\Models\Registry) {
                     $registry->update(['signed_xml' => $signedXml]);

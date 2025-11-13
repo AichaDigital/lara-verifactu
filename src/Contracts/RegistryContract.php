@@ -57,7 +57,7 @@ interface RegistryContract
     /**
      * Get the XML representation.
      */
-    public function getXml(): string;
+    public function getXml(): ?string;
 
     /**
      * Get the signed XML (with electronic signature).

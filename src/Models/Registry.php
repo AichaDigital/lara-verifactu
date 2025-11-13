@@ -43,6 +43,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  */
 class Registry extends Model implements RegistryContract
 {
+    /** @phpstan-use HasFactory<\AichaDigital\LaraVerifactu\Database\Factories\RegistryFactory> */
     use HasFactory;
     use SoftDeletes;
 
@@ -54,7 +55,7 @@ class Registry extends Model implements RegistryContract
     /**
      * The attributes that are mass assignable.
      *
-     * @var array<string>
+     * @var list<string>
      */
     protected $fillable = [
         'invoice_id',
@@ -90,10 +91,15 @@ class Registry extends Model implements RegistryContract
 
     /**
      * Get the invoice associated with this registry.
+     *
+     * @return BelongsTo<Invoice, static>
      */
     public function invoice(): BelongsTo
     {
-        return $this->belongsTo(Invoice::class);
+        /** @var BelongsTo<Invoice, static> $relation */
+        $relation = $this->belongsTo(Invoice::class);
+
+        return $relation;
     }
 
     // ========================================
@@ -167,7 +173,7 @@ class Registry extends Model implements RegistryContract
     /**
      * Get the XML representation.
      */
-    public function getXml(): string
+    public function getXml(): ?string
     {
         return $this->xml;
     }
