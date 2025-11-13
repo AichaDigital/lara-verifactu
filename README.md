@@ -40,12 +40,12 @@ Paquete Laravel para cumplimiento normativo de **Verifactu (AEAT)** con arquitec
 - ✅ **Códigos QR**: Generación automática para validación ciudadana
 - ✅ **Eventos Laravel**: Sistema completo de eventos para extensibilidad
 - ✅ **PHPStan Nivel 8**: Análisis estático estricto
-- ✅ **Laravel 11 & 12**: Compatible con versiones LTS
+- ✅ **Laravel 12**: Compatible con la última versión LTS
 
 ## 🔧 Requisitos Técnicos
 
 - PHP 8.3 o superior
-- Laravel 11.x o 12.x
+- Laravel 12.x
 - Extensiones: `soap`, `openssl`, `dom`, `libxml`
 
 ## 📊 Estado del Desarrollo

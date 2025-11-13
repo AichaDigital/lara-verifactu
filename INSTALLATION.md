@@ -7,7 +7,7 @@
 ## 📋 Requisitos
 
 - PHP 8.3 o superior
-- Laravel 11.0 o 12.0
+- Laravel 12.0 o superior
 - Composer
 - OpenSSL extension
 - SOAP extension
@@ -51,7 +51,7 @@ En el `composer.json` de tu proyecto Laravel, añade el repositorio local:
     ],
     "require": {
         "php": "^8.3",
-        "laravel/framework": "^11.0|^12.0",
+        "laravel/framework": "^12.0",
         "aichadigital/lara-verifactu": "@dev"
     }
 }

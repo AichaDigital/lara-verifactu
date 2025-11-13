@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - LaraVerifactuServiceProvider with automatic service binding
 - Verifactu Facade for fluent API
 - Configuration file with native and custom mode support
-- Support for Laravel 11 and 12
+- Support for Laravel 12
 - PHPStan level 8 configuration
 - Laravel Pint code style configuration
 - Pest testing framework setup
