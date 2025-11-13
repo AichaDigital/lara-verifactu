@@ -14,13 +14,10 @@ jobs:
       fail-fast: true
       matrix:
         os: [ubuntu-latest]
-        php: [8.3, 8.2]
-        laravel: [11.*, 12.*]
-        stability: [prefer-lowest, prefer-stable]
+        php: [8.3]
+        laravel: [12.*]
+        stability: [prefer-stable]
         include:
-          - laravel: 11.*
-            testbench: 9.*
-            carbon: ^2.63
           - laravel: 12.*
             testbench: 10.*
             carbon: ^3.0
@@ -36,7 +33,7 @@ jobs:
         with:
           php-version: ${{ matrix.php }}
           extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, sqlite, pdo_sqlite, soap, openssl
-          coverage: none
+          coverage: pcov
 
       - name: Setup problem matchers
         run: |

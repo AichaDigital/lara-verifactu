@@ -13,7 +13,7 @@ class LaraVerifactuServiceProvider extends PackageServiceProvider
     {
         $package
             ->name('lara-verifactu')
-            ->hasConfigFile()
+            ->hasConfigFile('verifactu')
             ->hasViews()
             ->hasTranslations()
             ->hasMigrations([

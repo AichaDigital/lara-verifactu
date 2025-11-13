@@ -40,26 +40,32 @@ Paquete Laravel para cumplimiento normativo de **Verifactu (AEAT)** con arquitec
 - ✅ **Códigos QR**: Generación automática para validación ciudadana
 - ✅ **Eventos Laravel**: Sistema completo de eventos para extensibilidad
 - ✅ **PHPStan Nivel 8**: Análisis estático estricto
-- ✅ **Laravel 11 & 12**: Compatible con versiones LTS
+- ✅ **Laravel 12**: Compatible con la última versión LTS
+
+## 🔧 Requisitos Técnicos
+
+- PHP 8.3 o superior
+- Laravel 12.x
+- Extensiones: `soap`, `openssl`, `dom`, `libxml`
 
 ## 📊 Estado del Desarrollo
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │  PROGRESO TOTAL: 92%                                    │
-│  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
+│  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━    │
 │                                                         │
-│  ✅ Fase 1: Package Skeleton & Architecture    (100%)  │
-│  ✅ Fase 2: Core Services                      (100%)  │
-│  ✅ Fase 3: Database Layer                     (100%)  │
-│  ✅ Fase 4: Service Integration                (100%)  │
-│  ✅ Fase 5: Commands & Jobs                    (100%)  │
-│  ✅ Fase 6: Events & Listeners                 (100%)  │
-│  ✅ Fase 7: AEAT API Integration               (100%)  │
-│  🚧 Fase 8: Testing & Documentation            (50%)   │
-│  ⏳ Fase 9: Production Hardening               (0%)    │
+│  ✅ Fase 1: Package Skeleton & Architecture    (100%)   │
+│  ✅ Fase 2: Core Services                      (100%)   │
+│  ✅ Fase 3: Database Layer                     (100%)   │
+│  ✅ Fase 4: Service Integration                (100%)   │
+│  ✅ Fase 5: Commands & Jobs                    (100%)   │
+│  ✅ Fase 6: Events & Listeners                 (100%)   │
+│  ✅ Fase 7: AEAT API Integration               (100%)   │
+│  🚧 Fase 8: Testing & Documentation            (50%)    │
+│  ⏳ Fase 9: Production Hardening               (0%)     │
 │                                                         │
-│  Tests: 120/120 ✅  |  PHPStan: Level 8 ✅             │
+│  Tests: 120/120 ✅  |  PHPStan: Level 8 ✅              │
 └─────────────────────────────────────────────────────────┘
 ```
 
