@@ -5,6 +5,12 @@ on:
     paths:
       - '**.php'
       - 'phpstan.neon'
+      - '.github/workflows/phpstan.yml'
+  pull_request:
+    paths:
+      - '**.php'
+      - 'phpstan.neon'
+      - '.github/workflows/phpstan.yml'
 
 jobs:
   phpstan:
