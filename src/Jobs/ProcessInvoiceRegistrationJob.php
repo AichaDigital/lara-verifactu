@@ -146,17 +146,37 @@ class ProcessInvoiceRegistrationJob implements ShouldQueue
      */
     protected function ensureSequentialOrder(Invoice $invoice): void
     {
-        // Find any previous invoices without registry
-        $previousUnregistered = Invoice::where('fiscal_year', $invoice->fiscal_year)
-            ->where('serie', $invoice->serie)
-            ->where('series_number', '<', $invoice->series_number)
+        // Extract fiscal year from issue_date
+        $fiscalYear = $invoice->issue_date->year;
+        
+        // Parse invoice number to extract sequential part
+        // Assumes format like "FAC-2025-000047" or similar
+        // TODO: Make this configurable or use a dedicated sequential field
+        $currentNumber = $this->extractSequentialNumber($invoice->number);
+        
+        if ($currentNumber === null) {
+            // If we can't extract a sequential number, skip validation
+            // This allows for non-sequential invoice numbers
+            Log::channel(config('verifactu.logging.channel', 'single'))
+                ->warning('Could not extract sequential number from invoice, skipping order validation', [
+                    'invoice_id' => $invoice->id,
+                    'invoice_number' => $invoice->number,
+                ]);
+            
+            return;
+        }
+
+        // Find any previous invoices in same serie/year without registry
+        $previousUnregistered = Invoice::where('serie', $invoice->serie)
+            ->whereYear('issue_date', $fiscalYear)
+            ->where('id', '<', $invoice->id) // Use ID as fallback for ordering
             ->whereDoesntHave('registry')
             ->exists();
 
         if ($previousUnregistered) {
             throw new \RuntimeException(
                 "Cannot register invoice {$invoice->number}. ".
-                "Previous invoices in serie {$invoice->serie} (fiscal year {$invoice->fiscal_year}) are not registered yet. ".
+                "Previous invoices in serie '{$invoice->serie}' (fiscal year {$fiscalYear}) are not registered yet. ".
                 'Sequential order must be maintained for fiscal compliance.'
             );
         }
@@ -166,9 +186,24 @@ class ProcessInvoiceRegistrationJob implements ShouldQueue
                 'invoice_id' => $invoice->id,
                 'invoice_number' => $invoice->number,
                 'serie' => $invoice->serie,
-                'series_number' => $invoice->series_number,
-                'fiscal_year' => $invoice->fiscal_year,
+                'fiscal_year' => $fiscalYear,
             ]);
+    }
+
+    /**
+     * Extract sequential number from invoice number string.
+     *
+     * Attempts to extract a numeric sequential part from invoice number.
+     * Returns null if no sequential number can be extracted.
+     */
+    protected function extractSequentialNumber(string $invoiceNumber): ?int
+    {
+        // Try to extract last numeric part (e.g., "FAC-2025-000047" -> 47)
+        if (preg_match('/(\d+)$/', $invoiceNumber, $matches)) {
+            return (int) $matches[1];
+        }
+
+        return null;
     }
 
     /**
