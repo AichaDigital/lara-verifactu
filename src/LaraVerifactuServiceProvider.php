@@ -14,7 +14,6 @@ class LaraVerifactuServiceProvider extends PackageServiceProvider
         $package
             ->name('lara-verifactu')
             ->hasConfigFile('verifactu')
-            ->hasViews()
             ->hasTranslations()
             ->hasMigrations([
                 '2025_01_01_000001_create_verifactu_invoices_table',
