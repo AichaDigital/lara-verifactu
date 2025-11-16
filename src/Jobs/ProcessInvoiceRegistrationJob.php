@@ -55,7 +55,7 @@ class ProcessInvoiceRegistrationJob implements ShouldQueue
         // v2.0: Default tries changed from 3 to 1
         $this->tries = config('verifactu.retry.max_attempts', 1);
         $this->timeout = config('verifactu.retry.timeout', 60);
-        
+
         // v2.0: Default queue changed from 'default' to 'fiscal_verification'
         $this->onQueue(config('verifactu.queue.name', 'fiscal_verification'));
     }
@@ -148,12 +148,12 @@ class ProcessInvoiceRegistrationJob implements ShouldQueue
     {
         // Extract fiscal year from issue_date
         $fiscalYear = $invoice->issue_date->year;
-        
+
         // Parse invoice number to extract sequential part
         // Assumes format like "FAC-2025-000047" or similar
         // TODO: Make this configurable or use a dedicated sequential field
         $currentNumber = $this->extractSequentialNumber($invoice->number);
-        
+
         if ($currentNumber === null) {
             // If we can't extract a sequential number, skip validation
             // This allows for non-sequential invoice numbers
@@ -162,7 +162,7 @@ class ProcessInvoiceRegistrationJob implements ShouldQueue
                     'invoice_id' => $invoice->id,
                     'invoice_number' => $invoice->number,
                 ]);
-            
+
             return;
         }
 
@@ -175,8 +175,8 @@ class ProcessInvoiceRegistrationJob implements ShouldQueue
 
         if ($previousUnregistered) {
             throw new \RuntimeException(
-                "Cannot register invoice {$invoice->number}. ".
-                "Previous invoices in serie '{$invoice->serie}' (fiscal year {$fiscalYear}) are not registered yet. ".
+                "Cannot register invoice {$invoice->number}. " .
+                "Previous invoices in serie '{$invoice->serie}' (fiscal year {$fiscalYear}) are not registered yet. " .
                 'Sequential order must be maintained for fiscal compliance.'
             );
         }
