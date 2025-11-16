@@ -95,31 +95,61 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Queue Configuration
+    | Queue Configuration (v2.0)
     |--------------------------------------------------------------------------
     |
     | Configure the queue for asynchronous processing of invoices.
+    |
+    | v2.0 Changes:
+    | - Default queue changed from 'verifactu' to 'fiscal_verification'
+    | - Dedicated queue ensures sequential processing
+    | - Recommended: Single worker for this queue
     |
     */
 
     'queue' => [
         'connection' => env('VERIFACTU_QUEUE_CONNECTION', 'redis'),
-        'name' => env('VERIFACTU_QUEUE', 'verifactu'),
+        'name' => env('VERIFACTU_QUEUE', 'fiscal_verification'), // v2.0: Changed default
     ],
 
     /*
     |--------------------------------------------------------------------------
-    | Retry Configuration
+    | Lock Configuration (v2.0 NEW)
+    |--------------------------------------------------------------------------
+    |
+    | Configure lock behavior for sequential processing.
+    |
+    | v2.0: New configuration section for unique lock management.
+    | The lock ensures only ONE invoice is processed at a time for fiscal
+    | compliance.
+    |
+    */
+
+    'lock' => [
+        'enabled' => env('VERIFACTU_LOCK_ENABLED', true),
+        'timeout' => env('VERIFACTU_LOCK_TIMEOUT', 300), // 5 minutes
+        'retry_delay' => env('VERIFACTU_LOCK_RETRY_DELAY', 10), // 10 seconds
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Retry Configuration (v2.0)
     |--------------------------------------------------------------------------
     |
     | Configure automatic retry behavior for failed submissions.
+    |
+    | v2.0 Changes:
+    | - Default max_attempts changed from 3 to 1
+    | - Manual intervention required after failure
+    | - Use verifactu:retry-failed command to retry
     |
     */
 
     'retry' => [
         'enabled' => env('VERIFACTU_RETRY_ENABLED', true),
-        'max_attempts' => env('VERIFACTU_RETRY_MAX_ATTEMPTS', 3),
-        'backoff' => [60, 300, 600],
+        'max_attempts' => env('VERIFACTU_RETRY_MAX_ATTEMPTS', 1), // v2.0: Changed default
+        'delay' => env('VERIFACTU_RETRY_DELAY', 60), // Delay between retries in seconds
+        'backoff' => [60, 120, 240], // Exponential backoff (if manual retry with >1 attempts)
     ],
 
     /*
