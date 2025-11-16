@@ -13,6 +13,143 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Nothing yet
 
+## [0.2.0-alpha] - 2025-11-16
+
+### 🚨 BREAKING CHANGES
+
+#### Configuration Changes
+- **Default queue name changed**: `verifactu` → `fiscal_verification`
+  - **Action required**: Update your queue worker configuration
+  - **Action required**: Update supervisor config to use dedicated queue
+- **Default max retry attempts changed**: `3` → `1`
+  - **Rationale**: Fiscal compliance requires manual verification of errors
+  - **Action required**: Use `php artisan verifactu:retry-failed` command for retries
+
+#### Job Behavior Changes
+- **Sequential Processing**: Invoices are now processed in strict chronological order within same serie/fiscal year
+  - **Critical**: Invoice N+1 cannot be verified before invoice N
+  - **Critical**: Failed verification BLOCKS entire queue until resolved manually
+- **Unique Lock**: Only ONE fiscal verification job can run at a time
+  - **Action required**: Use SINGLE worker for `fiscal_verification` queue
+  - **Configuration**: Supervisor should run max 1 process for this queue
+
+### Added
+
+#### New Features
+- **Sequential Verification Logic** (ADR-001)
+  - `ensureSequentialOrder()` method in `ProcessInvoiceRegistrationJob`
+  - Validates no previous invoices are pending within same serie + fiscal year
+  - Throws `RuntimeException` on sequential order violation
+- **Unique Lock System** (ADR-002)
+  - Cache-based lock prevents concurrent fiscal verification
+  - Lock timeout: 300 seconds (configurable)
+  - Retry delay: 10 seconds (configurable)
+- **Manual Retry Command** (ADR-003)
+  - New command: `php artisan verifactu:retry-failed`
+  - Options: `--serie`, `--from`, `--to`, `--all`, `--dry-run`
+  - Progress bar for batch retries
+  - Confirmation prompt for safety
+- **Configuration Section: Lock** (NEW)
+  - `lock.enabled`: Enable/disable lock (default: true)
+  - `lock.timeout`: Lock duration in seconds (default: 300)
+  - `lock.retry_delay`: Retry delay in seconds (default: 10)
+- **Test Suite for Sequential Processing**
+  - 6 new tests validating sequential logic
+  - Tests for serie/fiscal year isolation
+  - Tests for job configuration
+  - Tests for queue dispatch
+
+### Changed
+
+#### Job Configuration
+- `ProcessInvoiceRegistrationJob::$tries`: 3 → 1
+- `ProcessInvoiceRegistrationJob::onQueue()`: 'verifactu' → 'fiscal_verification'
+- **No automatic retries**: Job fails permanently on error
+- **Critical logging**: Failed jobs log as CRITICAL level
+
+#### Error Handling
+- Sequential order violations throw `RuntimeException` with descriptive message
+- Lock acquisition failures release job with delay (non-fatal)
+- All exceptions are re-thrown to fail job permanently
+- `failed()` method logs critical messages for monitoring
+
+#### Configuration Defaults
+- `config('verifactu.queue.name')`: 'verifactu' → 'fiscal_verification'
+- `config('verifactu.retry.max_attempts')`: 3 → 1
+- `config('verifactu.retry.delay')`: Added (60 seconds)
+- New config section: `lock` (enabled, timeout, retry_delay)
+
+### Fixed
+- Sequential processing prevents race conditions
+- Lock system prevents parallel job execution
+- No data corruption due to out-of-order verification
+
+### Migration Guide
+
+#### Step 1: Update Configuration
+```bash
+# Update .env
+VERIFACTU_QUEUE=fiscal_verification  # Changed from 'verifactu'
+VERIFACTU_RETRY_MAX_ATTEMPTS=1       # Changed from 3
+VERIFACTU_LOCK_ENABLED=true          # New setting
+VERIFACTU_LOCK_TIMEOUT=300           # New setting (5 minutes)
+```
+
+#### Step 2: Update Supervisor Configuration
+```ini
+; OLD Configuration (REMOVE THIS)
+[program:verifactu-worker]
+command=php artisan queue:work redis --queue=verifactu --tries=3
+
+; NEW Configuration (USE THIS)
+[program:fiscal-verification-worker]
+command=php artisan queue:work redis --queue=fiscal_verification --tries=1
+process_name=%(program_name)s
+numprocs=1                           ; ⚠️ CRITICAL: Only 1 process
+autostart=true
+autorestart=true
+```
+
+#### Step 3: Monitor for Failed Jobs
+```bash
+# Check for failed verifications
+php artisan verifactu:retry-failed --dry-run
+
+# Retry specific invoice
+php artisan verifactu:retry-failed 123
+
+# Retry all failed invoices (with confirmation)
+php artisan verifactu:retry-failed --all
+
+# Filter by serie
+php artisan verifactu:retry-failed --serie=A --from=2025-01-01
+```
+
+#### Step 4: Update Monitoring
+- Monitor queue: `fiscal_verification`
+- Alert on job failures (check logs for CRITICAL level)
+- Alert if queue is blocked (no jobs processing for extended period)
+
+### Why This Version?
+
+This release introduces **critical fiscal compliance features** required for production use with Spain's AEAT Verifactu system:
+
+1. **Sequential Processing**: Tax agencies require invoices to be registered in chronological order
+2. **Unique Lock**: Prevents race conditions and ensures data integrity
+3. **Manual Intervention**: Fiscal errors require human review, not automatic retries
+4. **Audit Trail**: Critical logging ensures all issues are traceable
+
+### Upgrade Risk
+
+⚠️ **HIGH** - This is a breaking change that requires:
+- Queue worker reconfiguration
+- Supervisor restart
+- Monitoring updates
+- Team awareness of new error handling
+
+✅ **Safe for alpha/beta users** - Existing database schema unchanged
+✅ **Backward compatible** - Can override via ENV variables
+
 ## [0.1.0] - 2025-10-12
 
 ### Added - Phase 1: Base Structure
