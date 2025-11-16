@@ -11,12 +11,19 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 /**
  * Process Invoice Registration Job
  *
  * Queue job to process complete invoice registration (create registry + submit to AEAT).
+ *
+ * v2.0 Changes:
+ * - Enforces sequential processing with unique lock
+ * - Validates invoice order before processing
+ * - No automatic retries (manual intervention required)
+ * - Dedicated 'fiscal_verification' queue
  */
 class ProcessInvoiceRegistrationJob implements ShouldQueue
 {
@@ -27,6 +34,9 @@ class ProcessInvoiceRegistrationJob implements ShouldQueue
 
     /**
      * The number of times the job may be attempted.
+     *
+     * v2.0: Changed from 3 to 1 - no automatic retries.
+     * Manual retry required via command after error resolution.
      */
     public int $tries;
 
@@ -42,9 +52,12 @@ class ProcessInvoiceRegistrationJob implements ShouldQueue
         public readonly int $invoiceId,
         public readonly bool $submitToAeat = true
     ) {
-        $this->tries = config('verifactu.retry.max_attempts', 3);
+        // v2.0: Default tries changed from 3 to 1
+        $this->tries = config('verifactu.retry.max_attempts', 1);
         $this->timeout = config('verifactu.retry.timeout', 60);
-        $this->onQueue(config('verifactu.queue.name', 'default'));
+        
+        // v2.0: Default queue changed from 'default' to 'fiscal_verification'
+        $this->onQueue(config('verifactu.queue.name', 'fiscal_verification'));
     }
 
     /**
@@ -52,29 +65,49 @@ class ProcessInvoiceRegistrationJob implements ShouldQueue
      */
     public function handle(InvoiceRegistrar $registrar): void
     {
-        $invoice = Invoice::find($this->invoiceId);
+        // v2.0: Acquire unique lock to ensure sequential processing
+        $lockTimeout = config('verifactu.lock.timeout', 300); // 5 minutes default
+        $lock = Cache::lock('fiscal_verification_queue', $lockTimeout);
 
-        if (! $invoice) {
+        if (! $lock->get()) {
+            // Another job is already processing, retry in 10 seconds
             Log::channel(config('verifactu.logging.channel', 'single'))
-                ->warning('Invoice not found for registration', [
+                ->debug('Fiscal verification lock is held, retrying...', [
                     'invoice_id' => $this->invoiceId,
                 ]);
 
-            return;
-        }
-
-        // Check if already registered
-        if ($invoice->registry()->exists()) {
-            Log::channel(config('verifactu.logging.channel', 'single'))
-                ->info('Invoice already has a registry, skipping', [
-                    'invoice_id' => $this->invoiceId,
-                    'invoice_number' => $invoice->number,
-                ]);
+            $this->release(10);
 
             return;
         }
 
         try {
+            $invoice = Invoice::find($this->invoiceId);
+
+            if (! $invoice) {
+                Log::channel(config('verifactu.logging.channel', 'single'))
+                    ->warning('Invoice not found for registration', [
+                        'invoice_id' => $this->invoiceId,
+                    ]);
+
+                return;
+            }
+
+            // Check if already registered
+            if ($invoice->registry()->exists()) {
+                Log::channel(config('verifactu.logging.channel', 'single'))
+                    ->info('Invoice already has a registry, skipping', [
+                        'invoice_id' => $this->invoiceId,
+                        'invoice_number' => $invoice->number,
+                    ]);
+
+                return;
+            }
+
+            // v2.0: Enforce sequential order - CRITICAL validation
+            $this->ensureSequentialOrder($invoice);
+
+            // Register invoice
             $registry = $registrar->register($invoice, $this->submitToAeat);
 
             Log::channel(config('verifactu.logging.channel', 'single'))
@@ -88,14 +121,54 @@ class ProcessInvoiceRegistrationJob implements ShouldQueue
                 ->error('Failed to register invoice via queue', [
                     'invoice_id' => $this->invoiceId,
                     'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
                     'attempt' => $this->attempts(),
                 ]);
 
-            // Re-throw to let Laravel handle retry logic
-            if ($this->attempts() < $this->tries) {
-                throw $e;
-            }
+            // Release lock before re-throwing
+            $lock->release();
+
+            // v2.0: No automatic retry - re-throw to fail job
+            throw $e;
+        } finally {
+            // Always release lock
+            $lock->release();
         }
+    }
+
+    /**
+     * v2.0: Ensure invoices are processed in sequential order.
+     *
+     * Validates that no previous invoices in the same serie/fiscal year
+     * are pending registration. This is CRITICAL for fiscal compliance.
+     *
+     * @throws \RuntimeException if previous invoices are not registered
+     */
+    protected function ensureSequentialOrder(Invoice $invoice): void
+    {
+        // Find any previous invoices without registry
+        $previousUnregistered = Invoice::where('fiscal_year', $invoice->fiscal_year)
+            ->where('serie', $invoice->serie)
+            ->where('series_number', '<', $invoice->series_number)
+            ->whereDoesntHave('registry')
+            ->exists();
+
+        if ($previousUnregistered) {
+            throw new \RuntimeException(
+                "Cannot register invoice {$invoice->number}. ".
+                "Previous invoices in serie {$invoice->serie} (fiscal year {$invoice->fiscal_year}) are not registered yet. ".
+                'Sequential order must be maintained for fiscal compliance.'
+            );
+        }
+
+        Log::channel(config('verifactu.logging.channel', 'single'))
+            ->debug('Sequential order validated', [
+                'invoice_id' => $invoice->id,
+                'invoice_number' => $invoice->number,
+                'serie' => $invoice->serie,
+                'series_number' => $invoice->series_number,
+                'fiscal_year' => $invoice->fiscal_year,
+            ]);
     }
 
     /**
@@ -109,10 +182,19 @@ class ProcessInvoiceRegistrationJob implements ShouldQueue
                 'error' => $exception->getMessage(),
                 'attempts' => $this->attempts(),
             ]);
+
+        // v2.0: Notify admin - system is now BLOCKED
+        Log::channel(config('verifactu.logging.channel', 'single'))
+            ->critical('Fiscal verification system BLOCKED - manual intervention required', [
+                'invoice_id' => $this->invoiceId,
+                'error' => $exception->getMessage(),
+            ]);
     }
 
     /**
      * Calculate the number of seconds to wait before retrying the job.
+     *
+     * v2.0: Kept for compatibility, but tries=1 means this won't be used.
      *
      * @return array<int, int>
      */
