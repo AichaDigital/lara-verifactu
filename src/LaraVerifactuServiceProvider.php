@@ -25,7 +25,6 @@ class LaraVerifactuServiceProvider extends PackageServiceProvider
             ->hasCommand(\AichaDigital\LaraVerifactu\Commands\VerifyBlockchainCommand::class)
             ->hasCommand(\AichaDigital\LaraVerifactu\Commands\StatusCommand::class)
             ->hasCommand(\AichaDigital\LaraVerifactu\Commands\TestAeatConnectionCommand::class)
-            ->hasCommand(\AichaDigital\LaraVerifactu\Console\VerifactuInstallCommand::class)
             ->hasInstallCommand(function (\Spatie\LaravelPackageTools\Commands\InstallCommand $command): void {
                 $command
                     ->publishConfigFile()
@@ -43,6 +42,13 @@ class LaraVerifactuServiceProvider extends PackageServiceProvider
     public function packageBooted(): void
     {
         $this->bootEvents();
+        
+        // Register install command manually
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                \AichaDigital\LaraVerifactu\Console\VerifactuInstallCommand::class,
+            ]);
+        }
     }
 
     protected function registerContracts(): void
