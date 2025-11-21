@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace AichaDigital\LaraVerifactu\Console\Commands;
+namespace AichaDigital\LaraVerifactu\Console;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;
