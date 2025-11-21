@@ -43,6 +43,13 @@ class LaraVerifactuServiceProvider extends PackageServiceProvider
     public function packageBooted(): void
     {
         $this->bootEvents();
+        
+        // Register install command manually
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                \AichaDigital\LaraVerifactu\Console\Commands\VerifactuInstallCommand::class,
+            ]);
+        }
     }
 
     protected function registerContracts(): void
