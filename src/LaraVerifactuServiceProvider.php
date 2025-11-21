@@ -20,14 +20,12 @@ class LaraVerifactuServiceProvider extends PackageServiceProvider
                 '2025_01_01_000002_create_verifactu_registries_table',
                 '2025_01_01_000003_create_verifactu_invoice_breakdowns_table',
             ])
-            ->hasCommands([
-                \AichaDigital\LaraVerifactu\Commands\RegisterInvoiceCommand::class,
-                \AichaDigital\LaraVerifactu\Commands\RetryFailedCommand::class,
-                \AichaDigital\LaraVerifactu\Commands\VerifyBlockchainCommand::class,
-                \AichaDigital\LaraVerifactu\Commands\StatusCommand::class,
-                \AichaDigital\LaraVerifactu\Commands\TestAeatConnectionCommand::class,
-                \AichaDigital\LaraVerifactu\Console\Commands\VerifactuInstallCommand::class,
-            ])
+            ->hasCommand(\AichaDigital\LaraVerifactu\Commands\RegisterInvoiceCommand::class)
+            ->hasCommand(\AichaDigital\LaraVerifactu\Commands\RetryFailedCommand::class)
+            ->hasCommand(\AichaDigital\LaraVerifactu\Commands\VerifyBlockchainCommand::class)
+            ->hasCommand(\AichaDigital\LaraVerifactu\Commands\StatusCommand::class)
+            ->hasCommand(\AichaDigital\LaraVerifactu\Commands\TestAeatConnectionCommand::class)
+            ->hasCommand(\AichaDigital\LaraVerifactu\Console\Commands\VerifactuInstallCommand::class)
             ->hasInstallCommand(function (\Spatie\LaravelPackageTools\Commands\InstallCommand $command): void {
                 $command
                     ->publishConfigFile()
