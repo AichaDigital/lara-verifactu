@@ -47,7 +47,7 @@ class VerifactuInstallCommand extends Command
         // 4. Validar configuración
         $this->newLine();
         $this->info('🔍 Validating configuration...');
-        
+
         if (! config('verifactu.enabled')) {
             $this->warn('⚠ Verifactu is DISABLED in config. Set VERIFACTU_ENABLED=true to enable.');
         }
