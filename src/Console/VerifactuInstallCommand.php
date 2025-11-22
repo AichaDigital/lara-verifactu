@@ -84,7 +84,7 @@ class VerifactuInstallCommand extends Command
 
     protected function publishMigrations(): int
     {
-        $packagePath = dirname(__DIR__, 3).'/database/migrations';
+        $packagePath = dirname(__DIR__, 3) . '/database/migrations';
         $targetPath = database_path('migrations');
         $timestamp = now();
 
@@ -114,7 +114,7 @@ class VerifactuInstallCommand extends Command
 
             // Generar timestamp incremental
             $migrationTimestamp = $timestamp->copy()->addSeconds($index + 1);
-            $targetFile = $targetPath.'/'.$migrationTimestamp->format('Y_m_d_His').'_'.$migrationName.'.php';
+            $targetFile = $targetPath . '/' . $migrationTimestamp->format('Y_m_d_His') . '_' . $migrationName . '.php';
 
             // No sobrescribir si existe y no se pasó --force
             if (File::exists($targetFile) && ! $this->option('force')) {
@@ -131,4 +131,3 @@ class VerifactuInstallCommand extends Command
         return $published;
     }
 }
-
