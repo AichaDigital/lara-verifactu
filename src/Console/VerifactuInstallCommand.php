@@ -84,7 +84,7 @@ class VerifactuInstallCommand extends Command
 
     protected function publishMigrations(): int
     {
-        $packagePath = dirname(__DIR__, 3) . '/database/migrations';
+        $packagePath = dirname(__DIR__, 2) . '/database/migrations';
         $targetPath = database_path('migrations');
         $timestamp = now();
 
