@@ -5,7 +5,6 @@
 build
 composer.lock
 coverage
-docs
 phpunit.xml
 testbench.yaml
 vendor
@@ -36,7 +35,6 @@ certificates/
 .certificates/
 
 # Internal development documentation
-docs/
 
 # Excludes
 FASE_7_COMPLETADA.md
@@ -45,3 +43,10 @@ RESUMEN_PROYECTO.md
 LICENSE.md
 .DS_Store
 .vscode/
+
+# Session/temporary documentation
+SESSION_*.md
+HOTFIX_*.md
+BUG_*.md
+docs/SESSION_*.md
+docs/HOTFIX_*.md
