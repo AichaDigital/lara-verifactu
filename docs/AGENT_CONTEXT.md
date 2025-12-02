@@ -37,6 +37,40 @@ aichadigital/
 
 **Primary staging environment**: [Larafactu](https://github.com/AichaDigital/larafactu)
 
+### Development Setup (Local)
+
+```
+/Users/abkrim/
+├── development/packages/aichadigital/  # Package SOURCE (edit here)
+│   ├── larabill/
+│   ├── lararoi/
+│   ├── lara-verifactu/                 # THIS PACKAGE
+│   └── laratickets/
+└── SitesLR12/larafactu/                # Staging APP
+    └── packages/aichadigital/          # Symlinks to source
+```
+
+**Workflow**: Edit in source → Test in Larafactu → Commit package first
+
+## 🐛 Debugging Strategy (CRITICAL)
+
+### ALWAYS Read Logs First
+
+**RULE**: Before assuming the cause of ANY error, **READ THE ACTUAL LOGS**.
+
+```bash
+# In Larafactu staging
+cd /Users/abkrim/SitesLR12/larafactu
+
+# Clear logs for clean output
+rm storage/logs/laravel.log && touch storage/logs/laravel.log
+
+# Reproduce the error, then read
+cat storage/logs/laravel.log | head -50
+```
+
+Browser error messages are often **symptoms**, not root causes. Always check logs first.
+
 ## 🏗️ Architecture
 
 ### Core Components
