@@ -19,8 +19,7 @@
 > **Progreso actual: 92%** (7 de 9 fases completadas)
 > 
 > 🔬 **Buscamos colaboradores** para testing en entornos reales antes de la release v1.0.0
-> 
-> ⚠️ **NO está disponible en Packagist** - Solo instalación local para desarrollo y testing
+
 
 ---
 
