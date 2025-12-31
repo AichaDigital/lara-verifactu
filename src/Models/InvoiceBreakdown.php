@@ -82,10 +82,8 @@ class InvoiceBreakdown extends Model implements InvoiceBreakdownContract
      */
     public function invoice(): BelongsTo
     {
-        /** @var BelongsTo<Invoice, static> $relation */
-        $relation = $this->belongsTo(Invoice::class);
-
-        return $relation;
+        /** @var BelongsTo<Invoice, static> */
+        return $this->belongsTo(Invoice::class);
     }
 
     // ========================================

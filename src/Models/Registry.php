@@ -97,10 +97,8 @@ class Registry extends Model implements RegistryContract
      */
     public function invoice(): BelongsTo
     {
-        /** @var BelongsTo<Invoice, static> $relation */
-        $relation = $this->belongsTo(Invoice::class);
-
-        return $relation;
+        /** @var BelongsTo<Invoice, static> */
+        return $this->belongsTo(Invoice::class);
     }
 
     // ========================================
@@ -213,6 +211,8 @@ class Registry extends Model implements RegistryContract
 
     /**
      * Get the AEAT response.
+     *
+     * @return array<string, mixed>|null
      */
     public function getAeatResponse(): ?array
     {

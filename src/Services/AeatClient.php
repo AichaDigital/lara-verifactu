@@ -43,7 +43,7 @@ final class AeatClient implements AeatClientContract
         if ($this->tempCertFiles !== null) {
             foreach ($this->tempCertFiles as $file) {
                 if (file_exists($file)) {
-                    @unlink($file);
+                    unlink($file);
                 }
             }
         }
@@ -332,7 +332,7 @@ final class AeatClient implements AeatClientContract
                 }
             }
 
-            if (! empty($errors)) {
+            if ($errors !== []) {
                 return AeatResponse::failure(
                     $errors,
                     'Error en el envío del registro',

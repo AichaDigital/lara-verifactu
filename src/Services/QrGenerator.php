@@ -59,25 +59,16 @@ final class QrGenerator implements QrGeneratorContract
         return $this->validationUrl . '?' . http_build_query($params);
     }
 
-    /**
-     * {@inheritDoc}
-     */
     public function generateUrl(InvoiceContract $invoice, string $hash): string
     {
         return $this->getValidationUrl($invoice, $hash);
     }
 
-    /**
-     * {@inheritDoc}
-     */
     public function generateSvg(InvoiceContract $invoice, string $hash): string
     {
         return $this->generate($invoice, $hash);
     }
 
-    /**
-     * {@inheritDoc}
-     */
     public function generatePng(InvoiceContract $invoice, string $hash): string
     {
         $url = $this->getValidationUrl($invoice, $hash);

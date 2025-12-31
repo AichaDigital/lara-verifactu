@@ -8,6 +8,7 @@ use AichaDigital\LaraVerifactu\Contracts\AeatClientContract;
 use AichaDigital\LaraVerifactu\Contracts\CertificateManagerContract;
 use AichaDigital\LaraVerifactu\Contracts\InvoiceContract;
 use AichaDigital\LaraVerifactu\Contracts\RegistryContract;
+use AichaDigital\LaraVerifactu\Enums\RegistryStatusEnum;
 use AichaDigital\LaraVerifactu\Events\BlockchainVerifiedEvent;
 use AichaDigital\LaraVerifactu\Events\InvoiceRegisteredEvent;
 use AichaDigital\LaraVerifactu\Events\RegistryFailedEvent;
@@ -93,67 +94,92 @@ final class InvoiceRegistrar
     /**
      * Submit a registry to AEAT
      *
+     * Uses a database transaction to ensure atomicity between
+     * AEAT response and registry status update.
+     *
      * @throws AeatException
      */
     public function submitToAeat(RegistryContract $registry): AeatResponse
     {
-        try {
-            Log::channel(config('verifactu.logging.channel', 'single'))
-                ->info('Submitting registry to AEAT', [
-                    'registry_number' => $registry->getRegistryNumber(),
-                ]);
-
-            // Submit to AEAT
-            $response = $this->aeatClient->sendRegistration($registry);
-
-            // Update registry based on response
-            if ($response->isSuccess()) {
-                $this->registryManager->markAsSubmitted(
-                    $registry,
-                    $response->getCsv() ?? '',
-                    $response->getMessage() ?? ''
-                );
-
+        return DB::transaction(function () use ($registry) {
+            try {
                 Log::channel(config('verifactu.logging.channel', 'single'))
-                    ->info('Registry submitted successfully', [
+                    ->info('Submitting registry to AEAT', [
                         'registry_number' => $registry->getRegistryNumber(),
-                        'csv' => $response->getCsv(),
                     ]);
 
-                // Dispatch success event
-                event(new RegistrySubmittedEvent($registry, $response));
-            } else {
-                $this->registryManager->markAsFailed(
-                    $registry,
-                    $response->getErrorMessage()
-                );
+                // Refresh registry to get latest state within transaction
+                if ($registry instanceof \AichaDigital\LaraVerifactu\Models\Registry) {
+                    $registry->refresh();
+
+                    // Idempotency check: skip if already sent
+                    if ($registry->status === RegistryStatusEnum::SENT) {
+                        Log::channel(config('verifactu.logging.channel', 'single'))
+                            ->info('Registry already sent, skipping', [
+                                'registry_number' => $registry->getRegistryNumber(),
+                                'csv' => $registry->aeat_csv,
+                            ]);
+
+                        return new AeatResponse(
+                            success: true,
+                            code: $registry->aeat_csv,
+                            message: 'Already submitted'
+                        );
+                    }
+                }
+
+                // Submit to AEAT
+                $response = $this->aeatClient->sendRegistration($registry);
+
+                // Update registry based on response
+                if ($response->isSuccess()) {
+                    $this->registryManager->markAsSubmitted(
+                        $registry,
+                        $response->getCsv() ?? '',
+                        $response->getMessage() ?? ''
+                    );
+
+                    Log::channel(config('verifactu.logging.channel', 'single'))
+                        ->info('Registry submitted successfully', [
+                            'registry_number' => $registry->getRegistryNumber(),
+                            'csv' => $response->getCsv(),
+                        ]);
+
+                    // Dispatch success event
+                    event(new RegistrySubmittedEvent($registry, $response));
+                } else {
+                    $this->registryManager->markAsFailed(
+                        $registry,
+                        $response->getErrorMessage()
+                    );
+
+                    Log::channel(config('verifactu.logging.channel', 'single'))
+                        ->error('Registry submission failed', [
+                            'registry_number' => $registry->getRegistryNumber(),
+                            'error' => $response->getErrorMessage(),
+                        ]);
+
+                    // Dispatch failure event
+                    event(new RegistryFailedEvent($registry, $response->getErrorMessage(), $registry->getSubmissionAttempts()));
+                }
+
+                return $response;
+            } catch (\Throwable $e) {
+                $this->registryManager->markAsFailed($registry, $e->getMessage());
 
                 Log::channel(config('verifactu.logging.channel', 'single'))
-                    ->error('Registry submission failed', [
+                    ->error('Exception during AEAT submission', [
                         'registry_number' => $registry->getRegistryNumber(),
-                        'error' => $response->getErrorMessage(),
+                        'error' => $e->getMessage(),
+                        'trace' => $e->getTraceAsString(),
                     ]);
 
                 // Dispatch failure event
-                event(new RegistryFailedEvent($registry, $response->getErrorMessage(), $registry->getSubmissionAttempts()));
+                event(new RegistryFailedEvent($registry, $e->getMessage(), $registry->getSubmissionAttempts()));
+
+                throw AeatException::connectionFailed($e->getMessage());
             }
-
-            return $response;
-        } catch (\Throwable $e) {
-            $this->registryManager->markAsFailed($registry, $e->getMessage());
-
-            Log::channel(config('verifactu.logging.channel', 'single'))
-                ->error('Exception during AEAT submission', [
-                    'registry_number' => $registry->getRegistryNumber(),
-                    'error' => $e->getMessage(),
-                    'trace' => $e->getTraceAsString(),
-                ]);
-
-            // Dispatch failure event
-            event(new RegistryFailedEvent($registry, $e->getMessage(), $registry->getSubmissionAttempts()));
-
-            throw AeatException::connectionFailed($e->getMessage());
-        }
+        });
     }
 
     /**

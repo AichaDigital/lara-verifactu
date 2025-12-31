@@ -29,10 +29,18 @@ class TestCase extends Orchestra
     public function getEnvironmentSetUp($app): void
     {
         config()->set('database.default', 'testing');
+        config()->set('database.connections.testing', [
+            'driver' => 'sqlite',
+            'database' => ':memory:',
+            'prefix' => '',
+        ]);
+    }
 
-        /*
-        $migration = include __DIR__.'/../database/migrations/create_verifactu_registries_table.php.stub';
-        $migration->up();
-        */
+    /**
+     * Define database migrations.
+     */
+    protected function defineDatabaseMigrations(): void
+    {
+        $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
     }
 }

@@ -173,6 +173,8 @@ final class CertificateManager implements CertificateManagerContract
 
     /**
      * Get certificate information
+     *
+     * @return array<string, mixed>
      */
     public function getCertificateInfo(): array
     {

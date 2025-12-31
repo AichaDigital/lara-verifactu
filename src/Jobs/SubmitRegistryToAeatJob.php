@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AichaDigital\LaraVerifactu\Jobs;
 
+use AichaDigital\LaraVerifactu\Enums\RegistryStatusEnum;
 use AichaDigital\LaraVerifactu\Exceptions\AeatException;
 use AichaDigital\LaraVerifactu\Models\Registry;
 use AichaDigital\LaraVerifactu\Services\InvoiceRegistrar;
@@ -49,6 +50,8 @@ class SubmitRegistryToAeatJob implements ShouldQueue
 
     /**
      * Execute the job.
+     *
+     * Includes idempotency check to prevent duplicate submissions.
      */
     public function handle(InvoiceRegistrar $registrar): void
     {
@@ -58,6 +61,18 @@ class SubmitRegistryToAeatJob implements ShouldQueue
             Log::channel(config('verifactu.logging.channel', 'single'))
                 ->warning('Registry not found for submission', [
                     'registry_id' => $this->registryId,
+                ]);
+
+            return;
+        }
+
+        // Idempotency check: skip if already sent successfully
+        if ($registry->status === RegistryStatusEnum::SENT) {
+            Log::channel(config('verifactu.logging.channel', 'single'))
+                ->info('Registry already sent, skipping job', [
+                    'registry_id' => $this->registryId,
+                    'registry_number' => $registry->registry_number,
+                    'csv' => $registry->aeat_csv,
                 ]);
 
             return;

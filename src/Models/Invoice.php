@@ -118,10 +118,8 @@ class Invoice extends Model implements InvoiceContract
      */
     public function registry(): HasOne
     {
-        /** @var HasOne<Registry, static> $relation */
-        $relation = $this->hasOne(Registry::class);
-
-        return $relation;
+        /** @var HasOne<Registry, static> */
+        return $this->hasOne(Registry::class);
     }
 
     /**
@@ -131,10 +129,8 @@ class Invoice extends Model implements InvoiceContract
      */
     public function breakdowns(): HasMany
     {
-        /** @var HasMany<InvoiceBreakdown, static> $relation */
-        $relation = $this->hasMany(InvoiceBreakdown::class);
-
-        return $relation;
+        /** @var HasMany<InvoiceBreakdown, static> */
+        return $this->hasMany(InvoiceBreakdown::class);
     }
 
     // ========================================
@@ -328,7 +324,8 @@ class Invoice extends Model implements InvoiceContract
      */
     public function hasRecipient(): bool
     {
-        return ! empty($this->recipient_nif) || ! empty($this->recipient_id);
+        return ($this->recipient_nif !== null && $this->recipient_nif !== '')
+            || ($this->recipient_id !== null && $this->recipient_id !== '');
     }
 
     /**

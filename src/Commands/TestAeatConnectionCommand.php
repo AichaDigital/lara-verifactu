@@ -182,8 +182,12 @@ final class TestAeatConnectionCommand extends Command
             }
 
             // Cleanup
-            @unlink($tempCertFile);
-            @unlink($tempKeyFile);
+            if (file_exists($tempCertFile)) {
+                unlink($tempCertFile);
+            }
+            if (file_exists($tempKeyFile)) {
+                unlink($tempKeyFile);
+            }
 
             $this->newLine();
 

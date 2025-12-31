@@ -27,7 +27,7 @@ final class RegistryManager
     public function __construct(
         private readonly HashGeneratorContract $hashGenerator,
         private readonly QrGeneratorContract $qrGenerator,
-        private readonly XmlBuilderContract $xmlBuilder
+        private readonly XmlBuilderContract $xmlBuilder,
     ) {}
 
     /**
@@ -146,13 +146,16 @@ final class RegistryManager
         }
 
         return [
-            'valid' => empty($errors),
+            'valid' => $errors === [],
             'errors' => $errors,
         ];
     }
 
     /**
      * Mark a registry as submitted to AEAT
+     *
+     * Uses atomic update with state verification to prevent
+     * overwriting a successful submission.
      */
     public function markAsSubmitted(
         RegistryContract $registry,
@@ -160,29 +163,58 @@ final class RegistryManager
         string $aeatResponse
     ): void {
         if ($registry instanceof Registry) {
-            $registry->update([
-                'status' => RegistryStatusEnum::SENT->value,
-                'submitted_at' => Carbon::now(),
-                'aeat_csv' => $aeatCsv,
-                'aeat_response' => $aeatResponse,
-                'submission_attempts' => $registry->submission_attempts + 1,
-            ]);
+            DB::transaction(function () use ($registry, $aeatCsv, $aeatResponse): void {
+                // Refresh to get latest state within transaction
+                $registry->refresh();
+
+                // Only update if not already sent (idempotency)
+                if ($registry->status === RegistryStatusEnum::SENT) {
+                    return;
+                }
+
+                // Get current attempts before update
+                $currentAttempts = $registry->submission_attempts ?? 0;
+
+                $registry->update([
+                    'status' => RegistryStatusEnum::SENT->value,
+                    'submitted_at' => Carbon::now(),
+                    'aeat_csv' => $aeatCsv,
+                    'aeat_response' => $aeatResponse,
+                    'submission_attempts' => $currentAttempts + 1,
+                ]);
+            });
         }
     }
 
     /**
      * Mark a registry as failed
+     *
+     * Uses atomic update with state verification to prevent
+     * overwriting a successful submission with an error.
      */
     public function markAsFailed(
         RegistryContract $registry,
         string $error
     ): void {
         if ($registry instanceof Registry) {
-            $registry->update([
-                'status' => RegistryStatusEnum::ERROR->value,
-                'aeat_error' => $error,
-                'submission_attempts' => $registry->submission_attempts + 1,
-            ]);
+            DB::transaction(function () use ($registry, $error): void {
+                // Refresh to get latest state within transaction
+                $registry->refresh();
+
+                // Never overwrite SENT status with ERROR (idempotency)
+                if ($registry->status === RegistryStatusEnum::SENT) {
+                    return;
+                }
+
+                // Get current attempts before update
+                $currentAttempts = $registry->submission_attempts ?? 0;
+
+                $registry->update([
+                    'status' => RegistryStatusEnum::ERROR->value,
+                    'aeat_error' => $error,
+                    'submission_attempts' => $currentAttempts + 1,
+                ]);
+            });
         }
     }
 
@@ -217,13 +249,17 @@ final class RegistryManager
      * Generate a unique registry number
      *
      * Format: REG-YYYYMMDD-NNNNNN
+     *
+     * Uses pessimistic locking to prevent race conditions
+     * when multiple registries are created concurrently.
      */
     private function generateRegistryNumber(): string
     {
         $date = Carbon::now()->format('Ymd');
 
-        // Get count of registries today
+        // Use pessimistic locking to get consistent count
         $count = Registry::whereDate('created_at', Carbon::today())
+            ->lockForUpdate()
             ->count() + 1;
 
         return sprintf('REG-%s-%06d', $date, $count);

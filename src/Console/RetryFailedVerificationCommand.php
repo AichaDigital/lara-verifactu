@@ -30,12 +30,14 @@ class RetryFailedVerificationCommand extends Command
             ->orderBy('issue_date');
 
         // Filter by specific invoice
-        if ($invoiceId = $this->argument('invoice_id')) {
+        $invoiceId = $this->argument('invoice_id');
+        if ($invoiceId !== null) {
             $query->where('id', $invoiceId);
         }
 
         // Filter by serie
-        if ($serie = $this->option('serie')) {
+        $serie = $this->option('serie');
+        if ($serie !== null) {
             $query->where('serie', $serie);
         }
 
