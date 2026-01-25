@@ -19,6 +19,7 @@ class LaraVerifactuServiceProvider extends PackageServiceProvider
                 '2025_01_01_000001_create_verifactu_invoices_table',
                 '2025_01_01_000002_create_verifactu_registries_table',
                 '2025_01_01_000003_create_verifactu_invoice_breakdowns_table',
+                '2026_01_25_000001_consolidate_issue_datetime_in_verifactu_invoices',
             ])
             ->hasCommand(\AichaDigital\LaraVerifactu\Commands\RegisterInvoiceCommand::class)
             ->hasCommand(\AichaDigital\LaraVerifactu\Commands\RetryFailedCommand::class)
