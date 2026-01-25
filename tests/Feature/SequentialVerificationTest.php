@@ -28,20 +28,20 @@ it('validates invoices must exist in same serie', function () {
     $invoice1 = Invoice::factory()->create([
         'serie' => 'A',
         'number' => 'FAC-A-001',
-        'issue_date' => now(),
+        'issue_datetime' => now(),
     ]);
 
     $invoice2 = Invoice::factory()->create([
         'serie' => 'A',
         'number' => 'FAC-A-002',
-        'issue_date' => now(),
+        'issue_datetime' => now(),
     ]);
 
     // Serie B: Invoice 1
     $invoiceB = Invoice::factory()->create([
         'serie' => 'B',
         'number' => 'FAC-B-001',
-        'issue_date' => now(),
+        'issue_datetime' => now(),
     ]);
 
     // Verify data is correct
@@ -54,19 +54,19 @@ it('validates invoices must exist in same fiscal year', function () {
     $invoice2024 = Invoice::factory()->create([
         'serie' => 'A',
         'number' => 'FAC-2024-001',
-        'issue_date' => now()->year(2024),
+        'issue_datetime' => now()->year(2024),
     ]);
 
     // 2025: Invoice 1
     $invoice2025 = Invoice::factory()->create([
         'serie' => 'A',
         'number' => 'FAC-2025-001',
-        'issue_date' => now()->year(2025),
+        'issue_datetime' => now()->year(2025),
     ]);
 
     // Verify fiscal years are different
-    expect($invoice2024->issue_date->year)->toBe(2024)
-        ->and($invoice2025->issue_date->year)->toBe(2025);
+    expect($invoice2024->issue_datetime->year)->toBe(2024)
+        ->and($invoice2025->issue_datetime->year)->toBe(2025);
 });
 
 it('can create registry for invoice', function () {

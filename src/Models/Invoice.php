@@ -28,8 +28,7 @@ use Illuminate\Support\Collection;
  * @property int $id
  * @property string|null $serie
  * @property string $number
- * @property \Carbon\Carbon $issue_date
- * @property \Carbon\Carbon $issue_time
+ * @property \Carbon\Carbon $issue_datetime
  * @property InvoiceTypeEnum $type
  * @property bool $simplified
  * @property string|null $rectification_type
@@ -72,8 +71,7 @@ class Invoice extends Model implements InvoiceContract
     protected $fillable = [
         'serie',
         'number',
-        'issue_date',
-        'issue_time',
+        'issue_datetime',
         'type',
         'simplified',
         'rectification_type',
@@ -98,8 +96,7 @@ class Invoice extends Model implements InvoiceContract
      * @var array<string, string>
      */
     protected $casts = [
-        'issue_date' => 'date',
-        'issue_time' => 'datetime:H:i:s',
+        'issue_datetime' => 'datetime',
         'simplified' => 'boolean',
         'base_amount' => 'decimal:2',
         'tax_amount' => 'decimal:2',
@@ -178,19 +175,33 @@ class Invoice extends Model implements InvoiceContract
     }
 
     /**
+     * Get the invoice issue datetime (combined date and time).
+     *
+     * This is the primary method for temporal ordering.
+     */
+    public function getIssueDatetime(): Carbon
+    {
+        return $this->issue_datetime;
+    }
+
+    /**
      * Get the invoice issue date.
+     *
+     * @deprecated Use getIssueDatetime() instead. Returns date portion only.
      */
     public function getIssueDate(): Carbon
     {
-        return $this->issue_date;
+        return $this->issue_datetime->startOfDay();
     }
 
     /**
      * Get the invoice issue time.
+     *
+     * @deprecated Use getIssueDatetime() instead. Returns time portion only.
      */
     public function getIssueTime(): Carbon
     {
-        return $this->issue_time;
+        return $this->issue_datetime;
     }
 
     /**

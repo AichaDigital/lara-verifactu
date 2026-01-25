@@ -165,7 +165,7 @@ function createMockInvoiceForXml(array $overrides = []): InvoiceContract
     $defaults = [
         'issuer_tax_id' => 'B12345678',
         'number' => 'F-2025-001',
-        'issue_date' => Carbon::parse('2025-10-11'),
+        'issue_datetime' => Carbon::parse('2025-10-11 10:30:00'),
         'type' => InvoiceTypeEnum::COMPLETE,
         'total_amount' => '121.00',
         'total_tax_amount' => '21.00',
@@ -174,6 +174,12 @@ function createMockInvoiceForXml(array $overrides = []): InvoiceContract
         'previous_invoice_id' => null,
     ];
 
+    // Support legacy 'issue_date' key for backwards compatibility
+    if (isset($overrides['issue_date']) && ! isset($overrides['issue_datetime'])) {
+        $overrides['issue_datetime'] = $overrides['issue_date'];
+        unset($overrides['issue_date']);
+    }
+
     $data = array_merge($defaults, $overrides);
 
     $invoice = Mockery::mock(InvoiceContract::class);
@@ -181,7 +187,9 @@ function createMockInvoiceForXml(array $overrides = []): InvoiceContract
     $invoice->shouldReceive('getNumber')->andReturn($data['number']);
     $invoice->shouldReceive('getIssuerTaxId')->andReturn($data['issuer_tax_id']);
     $invoice->shouldReceive('getInvoiceNumber')->andReturn($data['number']);
-    $invoice->shouldReceive('getIssueDate')->andReturn($data['issue_date']);
+    $invoice->shouldReceive('getIssueDatetime')->andReturn($data['issue_datetime']);
+    $invoice->shouldReceive('getIssueDate')->andReturn($data['issue_datetime']->startOfDay());
+    $invoice->shouldReceive('getIssueTime')->andReturn($data['issue_datetime']);
     $invoice->shouldReceive('getType')->andReturn($data['type']);
     $invoice->shouldReceive('getInvoiceType')->andReturn($data['type']);
     $invoice->shouldReceive('getTaxAmount')->andReturn(floatval($data['total_tax_amount']));

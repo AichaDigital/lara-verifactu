@@ -40,8 +40,7 @@ class InvoiceFactory extends Factory
         return [
             'serie' => $this->faker->regexify('[A-Z]{2}'),
             'number' => $this->faker->unique()->numerify('INV-####'),
-            'issue_date' => Carbon::now(),
-            'issue_time' => Carbon::now(),
+            'issue_datetime' => Carbon::now(),
             'type' => $this->faker->randomElement(InvoiceTypeEnum::cases()),
             'simplified' => false,
             'rectification_type' => null,
@@ -113,13 +112,12 @@ class InvoiceFactory extends Factory
     }
 
     /**
-     * Set a specific issue date.
+     * Set a specific issue datetime.
      */
-    public function issuedAt(Carbon $date): static
+    public function issuedAt(Carbon $datetime): static
     {
         return $this->state(fn (array $attributes) => [
-            'issue_date' => $date,
-            'issue_time' => $date,
+            'issue_datetime' => $datetime,
         ]);
     }
 }

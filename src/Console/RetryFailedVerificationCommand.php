@@ -27,7 +27,7 @@ class RetryFailedVerificationCommand extends Command
         $query = Invoice::query()
             ->whereDoesntHave('registry')
             ->orderBy('serie')
-            ->orderBy('issue_date');
+            ->orderBy('issue_datetime');
 
         // Filter by specific invoice
         $invoiceId = $this->argument('invoice_id');
@@ -44,12 +44,12 @@ class RetryFailedVerificationCommand extends Command
         // Filter by date range
         $from = $this->option('from');
         if ($from && is_string($from)) {
-            $query->whereDate('issue_date', '>=', $from);
+            $query->whereDate('issue_datetime', '>=', $from);
         }
 
         $to = $this->option('to');
         if ($to && is_string($to)) {
-            $query->whereDate('issue_date', '<=', $to);
+            $query->whereDate('issue_datetime', '<=', $to);
         }
 
         $invoices = $query->get();
@@ -61,12 +61,12 @@ class RetryFailedVerificationCommand extends Command
         }
 
         $this->table(
-            ['ID', 'Serie', 'Number', 'Issue Date', 'Amount'],
+            ['ID', 'Serie', 'Number', 'Issue Datetime', 'Amount'],
             $invoices->map(fn ($inv) => [
                 $inv->id,
                 $inv->serie,
                 $inv->number,
-                $inv->issue_date->format('Y-m-d'),
+                $inv->issue_datetime->format('Y-m-d H:i:s'),
                 number_format($inv->total_amount, 2) . ' ' . $inv->currency,
             ])
         );

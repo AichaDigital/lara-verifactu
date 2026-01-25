@@ -146,8 +146,8 @@ class ProcessInvoiceRegistrationJob implements ShouldQueue
      */
     protected function ensureSequentialOrder(Invoice $invoice): void
     {
-        // Extract fiscal year from issue_date
-        $fiscalYear = $invoice->issue_date->year;
+        // Extract fiscal year from issue_datetime
+        $fiscalYear = $invoice->issue_datetime->year;
 
         // Parse invoice number to extract sequential part
         // Assumes format like "FAC-2025-000047" or similar
@@ -168,7 +168,7 @@ class ProcessInvoiceRegistrationJob implements ShouldQueue
 
         // Find any previous invoices in same serie/year without registry
         $previousUnregistered = Invoice::where('serie', $invoice->serie)
-            ->whereYear('issue_date', $fiscalYear)
+            ->whereYear('issue_datetime', $fiscalYear)
             ->where('id', '<', $invoice->id) // Use ID as fallback for ordering
             ->whereDoesntHave('registry')
             ->exists();

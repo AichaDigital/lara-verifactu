@@ -44,12 +44,23 @@ interface InvoiceContract
     public function getInvoiceNumber(): string;
 
     /**
+     * Get the invoice issue datetime (combined date and time).
+     *
+     * This is the primary method for temporal ordering.
+     */
+    public function getIssueDatetime(): Carbon;
+
+    /**
      * Get the invoice issue date.
+     *
+     * @deprecated Use getIssueDatetime() instead. Returns date portion only.
      */
     public function getIssueDate(): Carbon;
 
     /**
      * Get the invoice issue time.
+     *
+     * @deprecated Use getIssueDatetime() instead. Returns time portion only.
      */
     public function getIssueTime(): Carbon;
 
