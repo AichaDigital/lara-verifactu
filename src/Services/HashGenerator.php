@@ -68,7 +68,7 @@ final class HashGenerator implements HashGeneratorContract
         $parts = [
             'IDEmisorFactura' => config('verifactu.company.tax_id', ''),
             'NumSerieFactura' => $this->sanitize($invoiceNumber),
-            'FechaExpedicionFactura' => $this->formatDate($invoice->getIssueDate()),
+            'FechaExpedicionFactura' => $this->formatDate($invoice->getIssueDatetime()),
             'TipoFactura' => $invoice->getType()->value,
             'CuotaTotal' => $this->formatAmount($invoice->getTaxAmount()),
             'ImporteTotal' => $this->formatAmount($invoice->getTotalAmount()),

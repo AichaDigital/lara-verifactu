@@ -187,7 +187,7 @@ final class XmlBuilder implements XmlBuilderContract
         $numero = $dom->createElement('NumSerieFactura', $invoiceNumber);
         $idFactura->appendChild($numero);
 
-        $fecha = $dom->createElement('FechaExpedicionFactura', $invoice->getIssueDate()->format('d-m-Y'));
+        $fecha = $dom->createElement('FechaExpedicionFactura', $invoice->getIssueDatetime()->format('d-m-Y'));
         $idFactura->appendChild($fecha);
 
         // Invoice data

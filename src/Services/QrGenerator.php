@@ -51,7 +51,7 @@ final class QrGenerator implements QrGeneratorContract
         $params = [
             'nif' => $invoice->getIssuerTaxId(),
             'num' => $invoice->getInvoiceNumber(),
-            'fecha' => $invoice->getIssueDate()->format('d-m-Y'),
+            'fecha' => $invoice->getIssueDatetime()->format('d-m-Y'),
             'tipo' => $invoice->getInvoiceType()->value,
             'hash' => $hash,
         ];

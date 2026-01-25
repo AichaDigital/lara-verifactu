@@ -56,7 +56,7 @@ it('encodes special characters in URL parameters', function () {
     $invoice = Mockery::mock(InvoiceContract::class);
     $invoice->shouldReceive('getIssuerTaxId')->andReturn('B12345678');
     $invoice->shouldReceive('getInvoiceNumber')->andReturn('F-2025/001');
-    $invoice->shouldReceive('getIssueDate')->andReturn(Carbon::parse('2025-10-11'));
+    $invoice->shouldReceive('getIssueDatetime')->andReturn(Carbon::parse('2025-10-11 10:30:00'));
     $invoice->shouldReceive('getInvoiceType')->andReturn(InvoiceTypeEnum::COMPLETE);
 
     $hash = 'abc123';
