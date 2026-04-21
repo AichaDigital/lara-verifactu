@@ -7,6 +7,7 @@ namespace AichaDigital\LaraVerifactu\Models;
 use AichaDigital\LaraVerifactu\Contracts\InvoiceBreakdownContract;
 use AichaDigital\LaraVerifactu\Contracts\InvoiceContract;
 use AichaDigital\LaraVerifactu\Contracts\RecipientContract;
+use AichaDigital\LaraVerifactu\Database\Factories\InvoiceFactory;
 use AichaDigital\LaraVerifactu\Enums\IdTypeEnum;
 use AichaDigital\LaraVerifactu\Enums\InvoiceTypeEnum;
 use AichaDigital\LaraVerifactu\Enums\OperationTypeEnum;
@@ -28,7 +29,7 @@ use Illuminate\Support\Collection;
  * @property int $id
  * @property string|null $serie
  * @property string $number
- * @property \Carbon\Carbon $issue_datetime
+ * @property Carbon $issue_datetime
  * @property InvoiceTypeEnum $type
  * @property bool $simplified
  * @property string|null $rectification_type
@@ -45,15 +46,15 @@ use Illuminate\Support\Collection;
  * @property OperationTypeEnum $operation_key
  * @property string|null $description
  * @property array<string, mixed>|null $metadata
- * @property \Carbon\Carbon $created_at
- * @property \Carbon\Carbon $updated_at
- * @property \Carbon\Carbon|null $deleted_at
+ * @property Carbon $created_at
+ * @property Carbon $updated_at
+ * @property Carbon|null $deleted_at
  * @property-read Registry|null $registry
  * @property-read \Illuminate\Database\Eloquent\Collection<int, InvoiceBreakdown> $breakdowns
  */
 class Invoice extends Model implements InvoiceContract
 {
-    /** @phpstan-use HasFactory<\AichaDigital\LaraVerifactu\Database\Factories\InvoiceFactory> */
+    /** @phpstan-use HasFactory<InvoiceFactory> */
     use HasFactory;
 
     use SoftDeletes;

@@ -1,6 +1,9 @@
 <?php
 
 declare(strict_types=1);
+use AichaDigital\LaraVerifactu\Models\Invoice;
+use AichaDigital\LaraVerifactu\Models\InvoiceBreakdown;
+use AichaDigital\LaraVerifactu\Models\Registry;
 
 return [
 
@@ -29,9 +32,9 @@ return [
     */
 
     'models' => [
-        'invoice' => \AichaDigital\LaraVerifactu\Models\Invoice::class,
-        'breakdown' => \AichaDigital\LaraVerifactu\Models\InvoiceBreakdown::class,
-        'registry' => \AichaDigital\LaraVerifactu\Models\Registry::class,
+        'invoice' => Invoice::class,
+        'breakdown' => InvoiceBreakdown::class,
+        'registry' => Registry::class,
         // Note: Recipient is a contract, not a model. Implement in Invoice::getRecipient()
     ],
 

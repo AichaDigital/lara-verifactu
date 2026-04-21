@@ -27,7 +27,7 @@ describe('VerifactuException', function () {
     });
 
     it('can be created with code and previous exception', function () {
-        $previous = new \Exception('Previous error');
+        $previous = new Exception('Previous error');
         $exception = new VerifactuException('Test message', 500, $previous);
 
         expect($exception->getCode())->toBe(500);

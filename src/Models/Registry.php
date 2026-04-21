@@ -6,6 +6,7 @@ namespace AichaDigital\LaraVerifactu\Models;
 
 use AichaDigital\LaraVerifactu\Contracts\InvoiceContract;
 use AichaDigital\LaraVerifactu\Contracts\RegistryContract;
+use AichaDigital\LaraVerifactu\Database\Factories\RegistryFactory;
 use AichaDigital\LaraVerifactu\Enums\RegistryStatusEnum;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -22,7 +23,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property int $id
  * @property int $invoice_id
  * @property string $registry_number
- * @property \Carbon\Carbon $registry_date
+ * @property Carbon $registry_date
  * @property string $hash
  * @property string|null $previous_hash
  * @property string|null $qr_url
@@ -31,19 +32,19 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property string|null $xml
  * @property string|null $signed_xml
  * @property RegistryStatusEnum $status
- * @property \Carbon\Carbon|null $submitted_at
+ * @property Carbon|null $submitted_at
  * @property string|null $aeat_csv
  * @property array<string, mixed>|null $aeat_response
  * @property string|null $aeat_error
  * @property int $submission_attempts
- * @property \Carbon\Carbon $created_at
- * @property \Carbon\Carbon $updated_at
- * @property \Carbon\Carbon|null $deleted_at
+ * @property Carbon $created_at
+ * @property Carbon $updated_at
+ * @property Carbon|null $deleted_at
  * @property-read Invoice $invoice
  */
 class Registry extends Model implements RegistryContract
 {
-    /** @phpstan-use HasFactory<\AichaDigital\LaraVerifactu\Database\Factories\RegistryFactory> */
+    /** @phpstan-use HasFactory<RegistryFactory> */
     use HasFactory;
 
     use SoftDeletes;

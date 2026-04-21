@@ -52,8 +52,8 @@ final class Verifactu
     /**
      * Send batch of invoices
      *
-     * @param  \Illuminate\Support\Collection<int, InvoiceContract>  $invoices
-     * @return \Illuminate\Support\Collection<int, mixed>
+     * @param  Collection<int, InvoiceContract>  $invoices
+     * @return Collection<int, mixed>
      */
     public function sendBatch(Collection $invoices): Collection
     {

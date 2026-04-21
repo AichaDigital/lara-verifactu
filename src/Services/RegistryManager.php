@@ -14,6 +14,7 @@ use AichaDigital\LaraVerifactu\Events\RegistryCreatedEvent;
 use AichaDigital\LaraVerifactu\Exceptions\VerifactuException;
 use AichaDigital\LaraVerifactu\Models\Registry;
 use Carbon\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -221,9 +222,9 @@ final class RegistryManager
     /**
      * Get pending registries for submission
      *
-     * @return \Illuminate\Support\Collection<int, Registry>
+     * @return Collection<int, Registry>
      */
-    public function getPendingRegistries(int $limit = 100): \Illuminate\Support\Collection
+    public function getPendingRegistries(int $limit = 100): Collection
     {
         return Registry::where('status', RegistryStatusEnum::PENDING->value)
             ->orderBy('created_at', 'asc')
@@ -234,9 +235,9 @@ final class RegistryManager
     /**
      * Get failed registries that can be retried
      *
-     * @return \Illuminate\Support\Collection<int, Registry>
+     * @return Collection<int, Registry>
      */
-    public function getRetryableRegistries(int $maxAttempts = 3, int $limit = 50): \Illuminate\Support\Collection
+    public function getRetryableRegistries(int $maxAttempts = 3, int $limit = 50): Collection
     {
         return Registry::where('status', RegistryStatusEnum::ERROR->value)
             ->where('submission_attempts', '<', $maxAttempts)

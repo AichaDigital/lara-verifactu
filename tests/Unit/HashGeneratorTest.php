@@ -129,7 +129,7 @@ it('includes previous hash if exists', function () {
 
 it('throws exception on invalid invoice data', function () {
     $invoice = Mockery::mock(InvoiceContract::class);
-    $invoice->shouldReceive('getIssuerTaxId')->andThrow(new \Exception('Invalid data'));
+    $invoice->shouldReceive('getIssuerTaxId')->andThrow(new Exception('Invalid data'));
 
     $this->generator->generate($invoice);
 })->throws(HashException::class);

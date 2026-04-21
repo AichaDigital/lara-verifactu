@@ -4,6 +4,34 @@ declare(strict_types=1);
 
 namespace AichaDigital\LaraVerifactu;
 
+use AichaDigital\LaraVerifactu\Commands\RegisterInvoiceCommand;
+use AichaDigital\LaraVerifactu\Commands\RetryFailedCommand;
+use AichaDigital\LaraVerifactu\Commands\StatusCommand;
+use AichaDigital\LaraVerifactu\Commands\TestAeatConnectionCommand;
+use AichaDigital\LaraVerifactu\Commands\VerifyBlockchainCommand;
+use AichaDigital\LaraVerifactu\Console\VerifactuInstallCommand;
+use AichaDigital\LaraVerifactu\Contracts\AeatClientContract;
+use AichaDigital\LaraVerifactu\Contracts\CertificateManagerContract;
+use AichaDigital\LaraVerifactu\Contracts\HashGeneratorContract;
+use AichaDigital\LaraVerifactu\Contracts\QrGeneratorContract;
+use AichaDigital\LaraVerifactu\Contracts\XmlBuilderContract;
+use AichaDigital\LaraVerifactu\Events\BlockchainVerifiedEvent;
+use AichaDigital\LaraVerifactu\Events\InvoiceRegisteredEvent;
+use AichaDigital\LaraVerifactu\Events\RegistryCreatedEvent;
+use AichaDigital\LaraVerifactu\Events\RegistryFailedEvent;
+use AichaDigital\LaraVerifactu\Events\RegistrySubmittedEvent;
+use AichaDigital\LaraVerifactu\Listeners\LogBlockchainVerification;
+use AichaDigital\LaraVerifactu\Listeners\LogInvoiceRegistration;
+use AichaDigital\LaraVerifactu\Listeners\LogRegistryCreation;
+use AichaDigital\LaraVerifactu\Listeners\LogRegistryFailure;
+use AichaDigital\LaraVerifactu\Listeners\LogRegistrySubmission;
+use AichaDigital\LaraVerifactu\Services\AeatClient;
+use AichaDigital\LaraVerifactu\Services\CertificateManager;
+use AichaDigital\LaraVerifactu\Services\HashGenerator;
+use AichaDigital\LaraVerifactu\Services\QrGenerator;
+use AichaDigital\LaraVerifactu\Services\XmlBuilder;
+use Illuminate\Events\Dispatcher;
+use Spatie\LaravelPackageTools\Commands\InstallCommand;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
 
@@ -21,12 +49,12 @@ class LaraVerifactuServiceProvider extends PackageServiceProvider
                 '2025_01_01_000003_create_verifactu_invoice_breakdowns_table',
                 '2026_01_25_000001_consolidate_issue_datetime_in_verifactu_invoices',
             ])
-            ->hasCommand(\AichaDigital\LaraVerifactu\Commands\RegisterInvoiceCommand::class)
-            ->hasCommand(\AichaDigital\LaraVerifactu\Commands\RetryFailedCommand::class)
-            ->hasCommand(\AichaDigital\LaraVerifactu\Commands\VerifyBlockchainCommand::class)
-            ->hasCommand(\AichaDigital\LaraVerifactu\Commands\StatusCommand::class)
-            ->hasCommand(\AichaDigital\LaraVerifactu\Commands\TestAeatConnectionCommand::class)
-            ->hasInstallCommand(function (\Spatie\LaravelPackageTools\Commands\InstallCommand $command): void {
+            ->hasCommand(RegisterInvoiceCommand::class)
+            ->hasCommand(RetryFailedCommand::class)
+            ->hasCommand(VerifyBlockchainCommand::class)
+            ->hasCommand(StatusCommand::class)
+            ->hasCommand(TestAeatConnectionCommand::class)
+            ->hasInstallCommand(function (InstallCommand $command): void {
                 $command
                     ->publishConfigFile()
                     ->publishMigrations()
@@ -47,7 +75,7 @@ class LaraVerifactuServiceProvider extends PackageServiceProvider
         // Register install command manually
         if ($this->app->runningInConsole()) {
             $this->commands([
-                \AichaDigital\LaraVerifactu\Console\VerifactuInstallCommand::class,
+                VerifactuInstallCommand::class,
             ]);
         }
     }
@@ -55,64 +83,64 @@ class LaraVerifactuServiceProvider extends PackageServiceProvider
     protected function registerContracts(): void
     {
         $this->app->bind(
-            \AichaDigital\LaraVerifactu\Contracts\HashGeneratorContract::class,
-            \AichaDigital\LaraVerifactu\Services\HashGenerator::class
+            HashGeneratorContract::class,
+            HashGenerator::class
         );
 
         $this->app->bind(
-            \AichaDigital\LaraVerifactu\Contracts\QrGeneratorContract::class,
-            \AichaDigital\LaraVerifactu\Services\QrGenerator::class
+            QrGeneratorContract::class,
+            QrGenerator::class
         );
 
         $this->app->bind(
-            \AichaDigital\LaraVerifactu\Contracts\XmlBuilderContract::class,
-            \AichaDigital\LaraVerifactu\Services\XmlBuilder::class
+            XmlBuilderContract::class,
+            XmlBuilder::class
         );
 
         $this->app->bind(
-            \AichaDigital\LaraVerifactu\Contracts\AeatClientContract::class,
-            \AichaDigital\LaraVerifactu\Services\AeatClient::class
+            AeatClientContract::class,
+            AeatClient::class
         );
 
         $this->app->bind(
-            \AichaDigital\LaraVerifactu\Contracts\CertificateManagerContract::class,
-            \AichaDigital\LaraVerifactu\Services\CertificateManager::class
+            CertificateManagerContract::class,
+            CertificateManager::class
         );
 
         $this->app->singleton('verifactu', function ($app) {
-            return $app->make(\AichaDigital\LaraVerifactu\Verifactu::class);
+            return $app->make(Verifactu::class);
         });
     }
 
     protected function bootEvents(): void
     {
-        /** @var \Illuminate\Events\Dispatcher $events */
+        /** @var Dispatcher $events */
         $events = $this->app->make('events');
 
         // Register event listeners
         $events->listen(
-            \AichaDigital\LaraVerifactu\Events\InvoiceRegisteredEvent::class,
-            \AichaDigital\LaraVerifactu\Listeners\LogInvoiceRegistration::class
+            InvoiceRegisteredEvent::class,
+            LogInvoiceRegistration::class
         );
 
         $events->listen(
-            \AichaDigital\LaraVerifactu\Events\RegistryCreatedEvent::class,
-            \AichaDigital\LaraVerifactu\Listeners\LogRegistryCreation::class
+            RegistryCreatedEvent::class,
+            LogRegistryCreation::class
         );
 
         $events->listen(
-            \AichaDigital\LaraVerifactu\Events\RegistrySubmittedEvent::class,
-            \AichaDigital\LaraVerifactu\Listeners\LogRegistrySubmission::class
+            RegistrySubmittedEvent::class,
+            LogRegistrySubmission::class
         );
 
         $events->listen(
-            \AichaDigital\LaraVerifactu\Events\RegistryFailedEvent::class,
-            \AichaDigital\LaraVerifactu\Listeners\LogRegistryFailure::class
+            RegistryFailedEvent::class,
+            LogRegistryFailure::class
         );
 
         $events->listen(
-            \AichaDigital\LaraVerifactu\Events\BlockchainVerifiedEvent::class,
-            \AichaDigital\LaraVerifactu\Listeners\LogBlockchainVerification::class
+            BlockchainVerifiedEvent::class,
+            LogBlockchainVerification::class
         );
     }
 }

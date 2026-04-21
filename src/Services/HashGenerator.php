@@ -7,6 +7,7 @@ namespace AichaDigital\LaraVerifactu\Services;
 use AichaDigital\LaraVerifactu\Contracts\HashGeneratorContract;
 use AichaDigital\LaraVerifactu\Contracts\InvoiceContract;
 use AichaDigital\LaraVerifactu\Exceptions\HashException;
+use Carbon\Carbon;
 
 final class HashGenerator implements HashGeneratorContract
 {
@@ -113,7 +114,7 @@ final class HashGenerator implements HashGeneratorContract
     /**
      * Format date for hash generation (dd-mm-yyyy format)
      */
-    private function formatDate(\Carbon\Carbon $date): string
+    private function formatDate(Carbon $date): string
     {
         return $date->format('d-m-Y');
     }
