@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace AichaDigital\LaraVerifactu\Models;
 
 use AichaDigital\LaraVerifactu\Contracts\InvoiceBreakdownContract;
+use AichaDigital\LaraVerifactu\Database\Factories\InvoiceBreakdownFactory;
 use AichaDigital\LaraVerifactu\Enums\TaxTypeEnum;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -27,13 +29,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property bool $exempt
  * @property string|null $exemption_reason
  * @property array<string, mixed>|null $metadata
- * @property \Carbon\Carbon $created_at
- * @property \Carbon\Carbon $updated_at
+ * @property Carbon $created_at
+ * @property Carbon $updated_at
  * @property-read Invoice $invoice
  */
 class InvoiceBreakdown extends Model implements InvoiceBreakdownContract
 {
-    /** @phpstan-use HasFactory<\AichaDigital\LaraVerifactu\Database\Factories\InvoiceBreakdownFactory> */
+    /** @phpstan-use HasFactory<InvoiceBreakdownFactory> */
     use HasFactory;
 
     /**

@@ -2,6 +2,9 @@
 
 declare(strict_types=1);
 
+use AichaDigital\LaraVerifactu\Contracts\HashGeneratorContract;
+use AichaDigital\LaraVerifactu\Contracts\QrGeneratorContract;
+use AichaDigital\LaraVerifactu\Contracts\XmlBuilderContract;
 use AichaDigital\LaraVerifactu\Enums\RegistryStatusEnum;
 use AichaDigital\LaraVerifactu\Jobs\SubmitRegistryToAeatJob;
 use AichaDigital\LaraVerifactu\Models\Registry;
@@ -21,9 +24,9 @@ describe('RegistryManager idempotency', function () {
         ]);
 
         // Get fresh instance of RegistryManager with mocked dependencies
-        $hashGenerator = Mockery::mock(\AichaDigital\LaraVerifactu\Contracts\HashGeneratorContract::class);
-        $qrGenerator = Mockery::mock(\AichaDigital\LaraVerifactu\Contracts\QrGeneratorContract::class);
-        $xmlBuilder = Mockery::mock(\AichaDigital\LaraVerifactu\Contracts\XmlBuilderContract::class);
+        $hashGenerator = Mockery::mock(HashGeneratorContract::class);
+        $qrGenerator = Mockery::mock(QrGeneratorContract::class);
+        $xmlBuilder = Mockery::mock(XmlBuilderContract::class);
 
         $registryManager = new RegistryManager($hashGenerator, $qrGenerator, $xmlBuilder);
 
@@ -44,9 +47,9 @@ describe('RegistryManager idempotency', function () {
             'status' => RegistryStatusEnum::SENT->value,
         ]);
 
-        $hashGenerator = Mockery::mock(\AichaDigital\LaraVerifactu\Contracts\HashGeneratorContract::class);
-        $qrGenerator = Mockery::mock(\AichaDigital\LaraVerifactu\Contracts\QrGeneratorContract::class);
-        $xmlBuilder = Mockery::mock(\AichaDigital\LaraVerifactu\Contracts\XmlBuilderContract::class);
+        $hashGenerator = Mockery::mock(HashGeneratorContract::class);
+        $qrGenerator = Mockery::mock(QrGeneratorContract::class);
+        $xmlBuilder = Mockery::mock(XmlBuilderContract::class);
 
         $registryManager = new RegistryManager($hashGenerator, $qrGenerator, $xmlBuilder);
 
@@ -66,9 +69,9 @@ describe('RegistryManager idempotency', function () {
             'status' => RegistryStatusEnum::PENDING->value,
         ]);
 
-        $hashGenerator = Mockery::mock(\AichaDigital\LaraVerifactu\Contracts\HashGeneratorContract::class);
-        $qrGenerator = Mockery::mock(\AichaDigital\LaraVerifactu\Contracts\QrGeneratorContract::class);
-        $xmlBuilder = Mockery::mock(\AichaDigital\LaraVerifactu\Contracts\XmlBuilderContract::class);
+        $hashGenerator = Mockery::mock(HashGeneratorContract::class);
+        $qrGenerator = Mockery::mock(QrGeneratorContract::class);
+        $xmlBuilder = Mockery::mock(XmlBuilderContract::class);
 
         $registryManager = new RegistryManager($hashGenerator, $qrGenerator, $xmlBuilder);
         $registryManager->markAsFailed($registry, 'Connection timeout');
@@ -84,9 +87,9 @@ describe('RegistryManager idempotency', function () {
             'status' => RegistryStatusEnum::PENDING->value,
         ]);
 
-        $hashGenerator = Mockery::mock(\AichaDigital\LaraVerifactu\Contracts\HashGeneratorContract::class);
-        $qrGenerator = Mockery::mock(\AichaDigital\LaraVerifactu\Contracts\QrGeneratorContract::class);
-        $xmlBuilder = Mockery::mock(\AichaDigital\LaraVerifactu\Contracts\XmlBuilderContract::class);
+        $hashGenerator = Mockery::mock(HashGeneratorContract::class);
+        $qrGenerator = Mockery::mock(QrGeneratorContract::class);
+        $xmlBuilder = Mockery::mock(XmlBuilderContract::class);
 
         $registryManager = new RegistryManager($hashGenerator, $qrGenerator, $xmlBuilder);
         $registryManager->markAsSubmitted($registry, 'CSV-SUCCESS-001', 'Accepted');
@@ -103,9 +106,9 @@ describe('RegistryManager idempotency', function () {
             'aeat_error' => 'Previous error',
         ]);
 
-        $hashGenerator = Mockery::mock(\AichaDigital\LaraVerifactu\Contracts\HashGeneratorContract::class);
-        $qrGenerator = Mockery::mock(\AichaDigital\LaraVerifactu\Contracts\QrGeneratorContract::class);
-        $xmlBuilder = Mockery::mock(\AichaDigital\LaraVerifactu\Contracts\XmlBuilderContract::class);
+        $hashGenerator = Mockery::mock(HashGeneratorContract::class);
+        $qrGenerator = Mockery::mock(QrGeneratorContract::class);
+        $xmlBuilder = Mockery::mock(XmlBuilderContract::class);
 
         $registryManager = new RegistryManager($hashGenerator, $qrGenerator, $xmlBuilder);
         $registryManager->markAsSubmitted($registry, 'CSV-RETRY-001', 'Accepted on retry');
@@ -144,9 +147,9 @@ describe('Transaction atomicity', function () {
             'submission_attempts' => 5,
         ]);
 
-        $hashGenerator = Mockery::mock(\AichaDigital\LaraVerifactu\Contracts\HashGeneratorContract::class);
-        $qrGenerator = Mockery::mock(\AichaDigital\LaraVerifactu\Contracts\QrGeneratorContract::class);
-        $xmlBuilder = Mockery::mock(\AichaDigital\LaraVerifactu\Contracts\XmlBuilderContract::class);
+        $hashGenerator = Mockery::mock(HashGeneratorContract::class);
+        $qrGenerator = Mockery::mock(QrGeneratorContract::class);
+        $xmlBuilder = Mockery::mock(XmlBuilderContract::class);
 
         $registryManager = new RegistryManager($hashGenerator, $qrGenerator, $xmlBuilder);
         $registryManager->markAsSubmitted($registry, 'CSV-001', 'Success');
@@ -163,9 +166,9 @@ describe('Transaction atomicity', function () {
             'submission_attempts' => 2,
         ]);
 
-        $hashGenerator = Mockery::mock(\AichaDigital\LaraVerifactu\Contracts\HashGeneratorContract::class);
-        $qrGenerator = Mockery::mock(\AichaDigital\LaraVerifactu\Contracts\QrGeneratorContract::class);
-        $xmlBuilder = Mockery::mock(\AichaDigital\LaraVerifactu\Contracts\XmlBuilderContract::class);
+        $hashGenerator = Mockery::mock(HashGeneratorContract::class);
+        $qrGenerator = Mockery::mock(QrGeneratorContract::class);
+        $xmlBuilder = Mockery::mock(XmlBuilderContract::class);
 
         $registryManager = new RegistryManager($hashGenerator, $qrGenerator, $xmlBuilder);
         $registryManager->markAsFailed($registry, 'Connection error');
@@ -205,9 +208,9 @@ describe('Status transitions protection', function () {
             'aeat_csv' => 'PROTECTED-CSV',
         ]);
 
-        $hashGenerator = Mockery::mock(\AichaDigital\LaraVerifactu\Contracts\HashGeneratorContract::class);
-        $qrGenerator = Mockery::mock(\AichaDigital\LaraVerifactu\Contracts\QrGeneratorContract::class);
-        $xmlBuilder = Mockery::mock(\AichaDigital\LaraVerifactu\Contracts\XmlBuilderContract::class);
+        $hashGenerator = Mockery::mock(HashGeneratorContract::class);
+        $qrGenerator = Mockery::mock(QrGeneratorContract::class);
+        $xmlBuilder = Mockery::mock(XmlBuilderContract::class);
 
         $registryManager = new RegistryManager($hashGenerator, $qrGenerator, $xmlBuilder);
 
@@ -231,9 +234,9 @@ describe('Status transitions protection', function () {
             'submission_attempts' => 1,
         ]);
 
-        $hashGenerator = Mockery::mock(\AichaDigital\LaraVerifactu\Contracts\HashGeneratorContract::class);
-        $qrGenerator = Mockery::mock(\AichaDigital\LaraVerifactu\Contracts\QrGeneratorContract::class);
-        $xmlBuilder = Mockery::mock(\AichaDigital\LaraVerifactu\Contracts\XmlBuilderContract::class);
+        $hashGenerator = Mockery::mock(HashGeneratorContract::class);
+        $qrGenerator = Mockery::mock(QrGeneratorContract::class);
+        $xmlBuilder = Mockery::mock(XmlBuilderContract::class);
 
         $registryManager = new RegistryManager($hashGenerator, $qrGenerator, $xmlBuilder);
 
@@ -252,9 +255,9 @@ describe('Status transitions protection', function () {
             'status' => RegistryStatusEnum::PENDING->value,
         ]);
 
-        $hashGenerator = Mockery::mock(\AichaDigital\LaraVerifactu\Contracts\HashGeneratorContract::class);
-        $qrGenerator = Mockery::mock(\AichaDigital\LaraVerifactu\Contracts\QrGeneratorContract::class);
-        $xmlBuilder = Mockery::mock(\AichaDigital\LaraVerifactu\Contracts\XmlBuilderContract::class);
+        $hashGenerator = Mockery::mock(HashGeneratorContract::class);
+        $qrGenerator = Mockery::mock(QrGeneratorContract::class);
+        $xmlBuilder = Mockery::mock(XmlBuilderContract::class);
 
         $registryManager = new RegistryManager($hashGenerator, $qrGenerator, $xmlBuilder);
         $registryManager->markAsSubmitted($registry, 'SUCCESS-CSV', 'Accepted');
@@ -269,9 +272,9 @@ describe('Status transitions protection', function () {
             'status' => RegistryStatusEnum::PENDING->value,
         ]);
 
-        $hashGenerator = Mockery::mock(\AichaDigital\LaraVerifactu\Contracts\HashGeneratorContract::class);
-        $qrGenerator = Mockery::mock(\AichaDigital\LaraVerifactu\Contracts\QrGeneratorContract::class);
-        $xmlBuilder = Mockery::mock(\AichaDigital\LaraVerifactu\Contracts\XmlBuilderContract::class);
+        $hashGenerator = Mockery::mock(HashGeneratorContract::class);
+        $qrGenerator = Mockery::mock(QrGeneratorContract::class);
+        $xmlBuilder = Mockery::mock(XmlBuilderContract::class);
 
         $registryManager = new RegistryManager($hashGenerator, $qrGenerator, $xmlBuilder);
         $registryManager->markAsFailed($registry, 'Connection timeout');
@@ -287,9 +290,9 @@ describe('Status transitions protection', function () {
             'aeat_error' => 'Previous failure',
         ]);
 
-        $hashGenerator = Mockery::mock(\AichaDigital\LaraVerifactu\Contracts\HashGeneratorContract::class);
-        $qrGenerator = Mockery::mock(\AichaDigital\LaraVerifactu\Contracts\QrGeneratorContract::class);
-        $xmlBuilder = Mockery::mock(\AichaDigital\LaraVerifactu\Contracts\XmlBuilderContract::class);
+        $hashGenerator = Mockery::mock(HashGeneratorContract::class);
+        $qrGenerator = Mockery::mock(QrGeneratorContract::class);
+        $xmlBuilder = Mockery::mock(XmlBuilderContract::class);
 
         $registryManager = new RegistryManager($hashGenerator, $qrGenerator, $xmlBuilder);
         $registryManager->markAsSubmitted($registry, 'RETRY-SUCCESS-CSV', 'Accepted on retry');

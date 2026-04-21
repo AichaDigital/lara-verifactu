@@ -16,6 +16,7 @@ use AichaDigital\LaraVerifactu\Events\RegistrySubmittedEvent;
 use AichaDigital\LaraVerifactu\Exceptions\AeatException;
 use AichaDigital\LaraVerifactu\Exceptions\ValidationException;
 use AichaDigital\LaraVerifactu\Exceptions\VerifactuException;
+use AichaDigital\LaraVerifactu\Models\Registry;
 use AichaDigital\LaraVerifactu\Support\AeatResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -67,7 +68,7 @@ final class InvoiceRegistrar
 
                 $signedXml = $this->signXml($xml);
 
-                if ($registry instanceof \AichaDigital\LaraVerifactu\Models\Registry) {
+                if ($registry instanceof Registry) {
                     $registry->update(['signed_xml' => $signedXml]);
                 }
             } catch (\Throwable $e) {
@@ -109,7 +110,7 @@ final class InvoiceRegistrar
                     ]);
 
                 // Refresh registry to get latest state within transaction
-                if ($registry instanceof \AichaDigital\LaraVerifactu\Models\Registry) {
+                if ($registry instanceof Registry) {
                     $registry->refresh();
 
                     // Idempotency check: skip if already sent

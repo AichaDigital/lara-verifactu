@@ -106,35 +106,35 @@ describe('Non-Fake Mode', function () {
         $invoice = Mockery::mock(InvoiceContract::class);
 
         $this->verifactu->register($invoice);
-    })->throws(\RuntimeException::class, 'Not implemented yet');
+    })->throws(RuntimeException::class, 'Not implemented yet');
 
     it('throws not implemented for cancel when not in fake mode', function () {
         $this->verifactu->cancel('REG-001');
-    })->throws(\RuntimeException::class, 'Not implemented yet');
+    })->throws(RuntimeException::class, 'Not implemented yet');
 
     it('throws not implemented for sendBatch when not in fake mode', function () {
         $invoices = collect([Mockery::mock(InvoiceContract::class)]);
 
         $this->verifactu->sendBatch($invoices);
-    })->throws(\RuntimeException::class, 'Not implemented yet');
+    })->throws(RuntimeException::class, 'Not implemented yet');
 
     it('throws not implemented for status when not in fake mode', function () {
         $invoice = Mockery::mock(InvoiceContract::class);
 
         $this->verifactu->status($invoice);
-    })->throws(\RuntimeException::class, 'Not implemented yet');
+    })->throws(RuntimeException::class, 'Not implemented yet');
 
     it('throws not implemented for qr when not in fake mode', function () {
         $invoice = Mockery::mock(InvoiceContract::class);
 
         $this->verifactu->qr($invoice);
-    })->throws(\RuntimeException::class, 'Not implemented yet');
+    })->throws(RuntimeException::class, 'Not implemented yet');
 
     it('throws not implemented for validateChain when not in fake mode', function () {
         $invoice = Mockery::mock(InvoiceContract::class);
 
         $this->verifactu->validateChain($invoice);
-    })->throws(\RuntimeException::class, 'Not implemented yet');
+    })->throws(RuntimeException::class, 'Not implemented yet');
 });
 
 // ========================================
@@ -146,13 +146,13 @@ describe('Test Assertions', function () {
         $invoice = Mockery::mock(InvoiceContract::class);
 
         $this->verifactu->assertRegistered($invoice);
-    })->throws(\RuntimeException::class, 'Cannot assert when not in fake mode');
+    })->throws(RuntimeException::class, 'Cannot assert when not in fake mode');
 
     it('throws exception for assertNotSent when not in fake mode', function () {
         $invoice = Mockery::mock(InvoiceContract::class);
 
         $this->verifactu->assertNotSent($invoice);
-    })->throws(\RuntimeException::class, 'Cannot assert when not in fake mode');
+    })->throws(RuntimeException::class, 'Cannot assert when not in fake mode');
 
     it('can call assertRegistered in fake mode without exception', function () {
         $this->verifactu->fake();

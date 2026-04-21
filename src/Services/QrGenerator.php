@@ -6,6 +6,7 @@ namespace AichaDigital\LaraVerifactu\Services;
 
 use AichaDigital\LaraVerifactu\Contracts\InvoiceContract;
 use AichaDigital\LaraVerifactu\Contracts\QrGeneratorContract;
+use BaconQrCode\Renderer\Image\ImagickImageBackEnd;
 use BaconQrCode\Renderer\Image\SvgImageBackEnd;
 use BaconQrCode\Renderer\ImageRenderer;
 use BaconQrCode\Renderer\RendererStyle\RendererStyle;
@@ -75,7 +76,7 @@ final class QrGenerator implements QrGeneratorContract
 
         $renderer = new ImageRenderer(
             new RendererStyle(self::QR_SIZE, self::QR_MARGIN),
-            new \BaconQrCode\Renderer\Image\ImagickImageBackEnd
+            new ImagickImageBackEnd
         );
 
         $writer = new Writer($renderer);
@@ -117,7 +118,7 @@ final class QrGenerator implements QrGeneratorContract
     {
         $renderer = new ImageRenderer(
             new RendererStyle($this->size, self::QR_MARGIN),
-            new \BaconQrCode\Renderer\Image\ImagickImageBackEnd
+            new ImagickImageBackEnd
         );
 
         $writer = new Writer($renderer);

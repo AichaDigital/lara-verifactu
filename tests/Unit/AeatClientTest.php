@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use AichaDigital\LaraVerifactu\Contracts\AeatClientContract;
 use AichaDigital\LaraVerifactu\Contracts\CertificateManagerContract;
 use AichaDigital\LaraVerifactu\Contracts\RegistryContract;
 use AichaDigital\LaraVerifactu\Services\AeatClient;
@@ -21,7 +22,7 @@ beforeEach(function () {
 });
 
 it('implements AeatClientContract', function () {
-    expect($this->client)->toBeInstanceOf(\AichaDigital\LaraVerifactu\Contracts\AeatClientContract::class);
+    expect($this->client)->toBeInstanceOf(AeatClientContract::class);
 });
 
 it('has all required methods', function () {

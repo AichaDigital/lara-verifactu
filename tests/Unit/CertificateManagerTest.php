@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use AichaDigital\LaraVerifactu\Contracts\CertificateManagerContract;
 use AichaDigital\LaraVerifactu\Exceptions\CertificateException;
 use AichaDigital\LaraVerifactu\Services\CertificateManager;
 
@@ -54,5 +55,5 @@ it('has all required methods', function () {
 });
 
 it('implements CertificateManagerContract', function () {
-    expect($this->manager)->toBeInstanceOf(\AichaDigital\LaraVerifactu\Contracts\CertificateManagerContract::class);
+    expect($this->manager)->toBeInstanceOf(CertificateManagerContract::class);
 });

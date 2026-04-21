@@ -128,8 +128,8 @@ final class AeatClient implements AeatClientContract
     /**
      * Send batch of registrations to AEAT
      *
-     * @param  \Illuminate\Support\Collection<int, RegistryContract>  $registries
-     * @return \Illuminate\Support\Collection<int, AeatResponse>
+     * @param  Collection<int, RegistryContract>  $registries
+     * @return Collection<int, AeatResponse>
      *
      * @throws AeatConnectionException|AeatAuthenticationException
      */
