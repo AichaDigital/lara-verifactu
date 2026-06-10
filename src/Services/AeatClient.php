@@ -138,7 +138,13 @@ final class AeatClient implements AeatClientContract
 
         try {
             $environment = config('verifactu.aeat.environment', 'production');
-            $wsdl = config("verifactu.aeat.wsdl.{$environment}");
+
+            // Default to the bundled official WSDL (offline, no network
+            // dependency). The endpoint is forced via 'location' below —
+            // the WSDL declares 8 ports and SoapClient would otherwise
+            // pick the first one regardless of environment.
+            $wsdl = config("verifactu.aeat.wsdl.{$environment}")
+                ?? __DIR__ . '/../../resources/wsdl/SistemaFacturacion.wsdl';
 
             // Get certificate configuration
             $certPath = config('verifactu.certificate.path');
@@ -185,6 +191,7 @@ final class AeatClient implements AeatClientContract
             $this->client = new SoapClient(
                 $wsdl,
                 [
+                    'location' => $this->endpoint,
                     'connection_timeout' => $this->timeout,
                     'cache_wsdl' => WSDL_CACHE_NONE,
                     'trace' => true,

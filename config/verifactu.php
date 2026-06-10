@@ -89,14 +89,33 @@ return [
     'aeat' => [
         'environment' => env('VERIFACTU_ENVIRONMENT', 'production'), // production|sandbox
 
+        /*
+        | SOAP endpoints from the official AEAT WSDL port bindings
+        | (docs/verifactu/WSDL_servicios_web.xml, verified live against
+        | prewww2.aeat.es/static_files/.../SistemaFacturacion.wsdl).
+        | The host depends on the certificate type: seal certificates
+        | (sello) use www10/prewww10, citizen and representative
+        | certificates use www1/prewww1.
+        */
         'endpoints' => [
-            'production' => env('VERIFACTU_PRODUCTION_ENDPOINT', 'https://www2.agenciatributaria.gob.es/wlpl/TIKE-CONT/ws/SistemaFacturacion'),
-            'sandbox' => env('VERIFACTU_SANDBOX_ENDPOINT', 'https://prewww2.aeat.es/wlpl/TIKE-CONT/ws/SistemaFacturacion'),
+            'production' => [
+                'ciudadano' => 'https://www1.agenciatributaria.gob.es/wlpl/TIKE-CONT/ws/SistemaFacturacion/VerifactuSOAP',
+                'representante' => 'https://www1.agenciatributaria.gob.es/wlpl/TIKE-CONT/ws/SistemaFacturacion/VerifactuSOAP',
+                'sello' => 'https://www10.agenciatributaria.gob.es/wlpl/TIKE-CONT/ws/SistemaFacturacion/VerifactuSOAP',
+            ],
+            'sandbox' => [
+                'ciudadano' => 'https://prewww1.aeat.es/wlpl/TIKE-CONT/ws/SistemaFacturacion/VerifactuSOAP',
+                'representante' => 'https://prewww1.aeat.es/wlpl/TIKE-CONT/ws/SistemaFacturacion/VerifactuSOAP',
+                'sello' => 'https://prewww10.aeat.es/wlpl/TIKE-CONT/ws/SistemaFacturacion/VerifactuSOAP',
+            ],
         ],
 
+        // WSDL override per environment. When null (default) the bundled
+        // official WSDL (resources/wsdl/SistemaFacturacion.wsdl) is used —
+        // offline, with the endpoint forced from the resolved location.
         'wsdl' => [
-            'production' => env('VERIFACTU_PRODUCTION_WSDL', 'https://www2.agenciatributaria.gob.es/wlpl/TIKE-CONT/ws/SistemaFacturacion?wsdl'),
-            'sandbox' => env('VERIFACTU_SANDBOX_WSDL', 'https://prewww2.aeat.es/wlpl/TIKE-CONT/ws/SistemaFacturacion?wsdl'),
+            'production' => env('VERIFACTU_PRODUCTION_WSDL'),
+            'sandbox' => env('VERIFACTU_SANDBOX_WSDL'),
         ],
 
         'timeout' => env('VERIFACTU_TIMEOUT', 30),
@@ -117,7 +136,8 @@ return [
     'certificate' => [
         'path' => env('VERIFACTU_CERT_PATH'),
         'password' => env('VERIFACTU_CERT_PASSWORD'),
-        'type' => env('VERIFACTU_CERT_TYPE', 'certificate'),
+        // ciudadano | representante | sello — determines the SOAP endpoint host
+        'type' => env('VERIFACTU_CERT_TYPE', 'representante'),
     ],
 
     /*

@@ -12,6 +12,7 @@ use AichaDigital\LaraVerifactu\Commands\VerifyBlockchainCommand;
 use AichaDigital\LaraVerifactu\Console\VerifactuInstallCommand;
 use AichaDigital\LaraVerifactu\Contracts\AeatClientContract;
 use AichaDigital\LaraVerifactu\Contracts\CertificateManagerContract;
+use AichaDigital\LaraVerifactu\Contracts\EndpointResolverContract;
 use AichaDigital\LaraVerifactu\Contracts\HashGeneratorContract;
 use AichaDigital\LaraVerifactu\Contracts\QrGeneratorContract;
 use AichaDigital\LaraVerifactu\Contracts\XmlBuilderContract;
@@ -27,6 +28,7 @@ use AichaDigital\LaraVerifactu\Listeners\LogRegistryFailure;
 use AichaDigital\LaraVerifactu\Listeners\LogRegistrySubmission;
 use AichaDigital\LaraVerifactu\Services\AeatClient;
 use AichaDigital\LaraVerifactu\Services\CertificateManager;
+use AichaDigital\LaraVerifactu\Services\ConfigEndpointResolver;
 use AichaDigital\LaraVerifactu\Services\HashGenerator;
 use AichaDigital\LaraVerifactu\Services\QrGenerator;
 use AichaDigital\LaraVerifactu\Services\XmlBuilder;
@@ -111,11 +113,17 @@ class LaraVerifactuServiceProvider extends PackageServiceProvider
             XmlBuilder::class
         );
 
-        $this->app->bind(AeatClientContract::class, function (): AeatClient {
+        $this->app->singleton(EndpointResolverContract::class, ConfigEndpointResolver::class);
+
+        $this->app->bind(AeatClientContract::class, function ($app): AeatClient {
             $environment = (string) config('verifactu.aeat.environment', 'production');
+            $certificateType = (string) config('verifactu.certificate.type', 'representante');
+
+            /** @var EndpointResolverContract $endpointResolver */
+            $endpointResolver = $app->make(EndpointResolverContract::class);
 
             return new AeatClient(
-                endpoint: (string) config("verifactu.aeat.endpoints.{$environment}", ''),
+                endpoint: $endpointResolver->resolve($environment, $certificateType),
                 timeout: (int) config('verifactu.aeat.timeout', 30),
                 verifySSL: (bool) config('verifactu.aeat.verify_ssl', true),
             );

@@ -30,4 +30,12 @@ final class ConfigurationException extends VerifactuException
     {
         return self::make("Model '{$model}' does not implement '{$contract}'.");
     }
+
+    public static function unknownEndpoint(string $environment, string $certificateType): self
+    {
+        return self::make(
+            "No AEAT endpoint configured for environment '{$environment}' and certificate type '{$certificateType}'. "
+            . 'Valid environments: production, sandbox. Valid certificate types: ciudadano, representante, sello.'
+        );
+    }
 }

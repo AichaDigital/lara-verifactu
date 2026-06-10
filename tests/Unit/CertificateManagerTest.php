@@ -26,26 +26,8 @@ it('throws exception when certificate not loaded before getting info', function 
     $this->manager->getCertificateInfo();
 })->throws(CertificateException::class, 'not loaded');
 
-it('returns certificate information after loading', function () {
-    // Note: This test would need a real certificate file to work
-    // For now, we test the interface exists
-    expect($this->manager)->toBeInstanceOf(CertificateManager::class);
-})->skip('Requires real certificate file for testing');
-
-it('can sign content after loading certificate', function () {
-    // Note: This test would need a real certificate file to work
-    expect($this->manager)->toBeInstanceOf(CertificateManager::class);
-})->skip('Requires real certificate file for testing');
-
-it('can verify signed content', function () {
-    // Note: This test would need a real certificate file to work
-    expect($this->manager)->toBeInstanceOf(CertificateManager::class);
-})->skip('Requires real certificate file for testing');
-
-it('validates certificate dates', function () {
-    // Note: This test would need a real certificate file to work
-    expect($this->manager)->toBeInstanceOf(CertificateManager::class);
-})->skip('Requires real certificate file for testing');
+// Loading, signing and certificate info against a real generated PKCS#12
+// fixture are covered in CertificateLoadingTest.
 
 it('has all required methods', function () {
     expect(method_exists($this->manager, 'load'))->toBeTrue();
