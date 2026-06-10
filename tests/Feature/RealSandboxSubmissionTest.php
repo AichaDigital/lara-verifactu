@@ -1,0 +1,105 @@
+<?php
+
+declare(strict_types=1);
+
+use AichaDigital\LaraVerifactu\Contracts\QrGeneratorContract;
+use AichaDigital\LaraVerifactu\Enums\InvoiceTypeEnum;
+use AichaDigital\LaraVerifactu\Enums\RegistryStatusEnum;
+use AichaDigital\LaraVerifactu\Models\Invoice;
+use AichaDigital\LaraVerifactu\Models\InvoiceBreakdown;
+use AichaDigital\LaraVerifactu\Services\InvoiceRegistrar;
+
+/**
+ * REAL submission against the AEAT external testing environment (sandbox).
+ *
+ * Requires a real representative/seal certificate exported locally and the
+ * VERIFACTU_* environment variables set — automatically skipped otherwise
+ * (CI never runs this). Submissions go exclusively to prewww1/prewww10
+ * (Pruebas Externas): they have no fiscal effect.
+ */
+$certificateAvailable = is_string(getenv('VERIFACTU_CERT_PATH'))
+    && getenv('VERIFACTU_CERT_PATH') !== ''
+    && file_exists((string) getenv('VERIFACTU_CERT_PATH'));
+
+beforeEach(function () {
+    // Environment is FORCED to sandbox: this test must never hit production
+    config()->set('verifactu.aeat.environment', 'sandbox');
+    config()->set('verifactu.certificate.path', getenv('VERIFACTU_CERT_PATH'));
+    config()->set('verifactu.certificate.password', getenv('VERIFACTU_CERT_PASSWORD'));
+    config()->set('verifactu.certificate.type', getenv('VERIFACTU_CERT_TYPE') ?: 'representante');
+    config()->set('verifactu.company.tax_id', getenv('VERIFACTU_COMPANY_TAX_ID'));
+    config()->set('verifactu.company.name', getenv('VERIFACTU_COMPANY_NAME'));
+    config()->set('verifactu.system.vendor_name', getenv('VERIFACTU_COMPANY_NAME'));
+    config()->set('verifactu.system.vendor_nif', getenv('VERIFACTU_COMPANY_TAX_ID'));
+
+    // QR generation is not part of the SOAP submission — keep the test focused
+    $qrGenerator = Mockery::mock(QrGeneratorContract::class);
+    $qrGenerator->shouldReceive('generateUrl')->andReturn('https://prewww2.aeat.es/wlpl/TIKE-CONT/ValidarQR?stub');
+    $qrGenerator->shouldReceive('generateSvg')->andReturn('<svg/>');
+    $qrGenerator->shouldReceive('generatePng')->andReturn('png');
+    $this->app->instance(QrGeneratorContract::class, $qrGenerator);
+});
+
+function createSandboxInvoice(): Invoice
+{
+    $invoice = Invoice::factory()->create([
+        'serie' => null,
+        'number' => 'TEST-' . now()->format('YmdHis') . '-' . strtoupper(substr(uniqid(), -5)),
+        'type' => InvoiceTypeEnum::SIMPLIFIED, // F2: no recipient validation
+        'simplified' => true,
+        'recipient_nif' => null,
+        'recipient_id_type' => null,
+        'recipient_id' => null,
+        'recipient_name' => null,
+        'recipient_country' => null,
+        'base_amount' => 10.00,
+        'tax_amount' => 2.10,
+        'total_amount' => 12.10,
+        'description' => 'Prueba de integracion lara-verifactu',
+    ]);
+
+    InvoiceBreakdown::factory()->create([
+        'invoice_id' => $invoice->id,
+        'tax_rate' => 21.00,
+        'base_amount' => 10.00,
+        'tax_amount' => 2.10,
+        'exempt' => false,
+    ]);
+
+    return $invoice->refresh();
+}
+
+it('submits a real registration to the AEAT sandbox and receives a CSV', function () {
+    $registry = app(InvoiceRegistrar::class)->register(createSandboxInvoice(), submitToAeat: true);
+
+    $registry->refresh();
+
+    dump([
+        'status' => $registry->status->value,
+        'csv' => $registry->aeat_csv,
+        'error' => $registry->aeat_error,
+    ]);
+
+    expect($registry->status)->toBe(RegistryStatusEnum::SENT)
+        ->and($registry->aeat_csv)->not->toBeNull();
+})->skip(! $certificateAvailable, 'Real AEAT sandbox certificate not available');
+
+it('submits a real cancellation to the AEAT sandbox', function () {
+    $invoice = createSandboxInvoice();
+    $registrar = app(InvoiceRegistrar::class);
+
+    $registration = $registrar->register($invoice, submitToAeat: true);
+    expect($registration->refresh()->status)->toBe(RegistryStatusEnum::SENT);
+
+    $cancellation = $registrar->cancel($invoice, submitToAeat: true);
+    $cancellation->refresh();
+
+    dump([
+        'status' => $cancellation->status->value,
+        'csv' => $cancellation->aeat_csv,
+        'error' => $cancellation->aeat_error,
+    ]);
+
+    expect($cancellation->status)->toBe(RegistryStatusEnum::SENT)
+        ->and($cancellation->aeat_csv)->not->toBeNull();
+})->skip(! $certificateAvailable, 'Real AEAT sandbox certificate not available');
