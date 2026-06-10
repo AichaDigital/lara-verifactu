@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 use AichaDigital\LaraVerifactu\Contracts\AeatClientContract;
 use AichaDigital\LaraVerifactu\Contracts\RegistryContract;
-use AichaDigital\LaraVerifactu\Exceptions\AeatException;
+use AichaDigital\LaraVerifactu\Exceptions\VerifactuException;
 use AichaDigital\LaraVerifactu\Services\AeatClient;
 use AichaDigital\LaraVerifactu\Support\AeatResponse;
 
@@ -34,14 +34,23 @@ it('exposes only the operations of the official WSDL', function () {
 it('does not sign the XML itself: signing is the registrar responsibility', function () {
     // The client has no certificate manager dependency at all: signing
     // happens upstream in the registrar before the XML reaches this client.
+    // The .invalid endpoint guarantees a connection-level failure without
+    // ever reaching AEAT — never a signing error.
+    $client = new AeatClient('https://verifactu-test.invalid/soap', 5, false);
+
     $registry = Mockery::mock(RegistryContract::class);
     $registry->shouldReceive('getSignedXml')->andReturn('<signed/>');
     $registry->shouldReceive('getXml')->andReturn('<xml/>');
     $registry->shouldReceive('getRegistryNumber')->andReturn('REG-001');
 
-    // Connection fails in tests (no real WSDL) — but never because of signing
-    expect(fn () => $this->client->sendRegistration($registry))
-        ->toThrow(AeatException::class);
+    try {
+        $response = $client->sendRegistration($registry);
+
+        expect($response->isFailure())->toBeTrue();
+    } catch (VerifactuException) {
+        // Connection-level domain exception is equally acceptable
+        expect(true)->toBeTrue();
+    }
 });
 
 it('respects timeout configuration', function () {

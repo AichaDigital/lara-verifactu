@@ -6,6 +6,7 @@ namespace AichaDigital\LaraVerifactu\Services;
 
 use AichaDigital\LaraVerifactu\Contracts\CertificateManagerContract;
 use AichaDigital\LaraVerifactu\Exceptions\CertificateException;
+use AichaDigital\LaraVerifactu\Support\LoadedCertificate;
 use DOMDocument;
 use RobRichards\XMLSecLibs\XMLSecurityDSig;
 use RobRichards\XMLSecLibs\XMLSecurityKey;
@@ -39,7 +40,7 @@ final class CertificateManager implements CertificateManagerContract
      *
      * @throws CertificateException
      */
-    public function load(string $path, string $password): void
+    public function load(string $path, string $password): LoadedCertificate
     {
         if (! file_exists($path)) {
             throw CertificateException::fileNotFound($path);
@@ -48,6 +49,12 @@ final class CertificateManager implements CertificateManagerContract
         $content = file_get_contents($path);
         if ($content === false) {
             throw CertificateException::fileNotFound($path);
+        }
+
+        // A PKCS#12 file is a DER-encoded ASN.1 SEQUENCE (first byte 0x30):
+        // anything else cannot be a password problem.
+        if ($content === '' || $content[0] !== "\x30") {
+            throw CertificateException::invalidFormat();
         }
 
         $result = openssl_pkcs12_read($content, $certs, $password);
@@ -85,6 +92,15 @@ final class CertificateManager implements CertificateManagerContract
         }
 
         $this->privateKey = $pkeyDetails;
+
+        return new LoadedCertificate(
+            privateKey: $certs['pkey'],
+            certificate: $certs['cert'],
+            chain: array_values($certs['extracerts'] ?? []),
+            commonName: (string) ($certData['subject']['CN'] ?? ''),
+            validFrom: (new \DateTimeImmutable)->setTimestamp((int) ($certData['validFrom_time_t'] ?? 0)),
+            validTo: (new \DateTimeImmutable)->setTimestamp((int) ($certData['validTo_time_t'] ?? 0)),
+        );
     }
 
     /**
