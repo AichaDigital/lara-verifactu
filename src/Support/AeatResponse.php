@@ -45,7 +45,13 @@ class AeatResponse
 
     public function getErrorMessage(): string
     {
-        return $this->message ?? 'Unknown error';
+        $message = $this->message ?? 'Unknown error';
+
+        if ($this->errors !== null && $this->errors !== []) {
+            $message .= ' — ' . implode(' | ', $this->errors);
+        }
+
+        return $message;
     }
 
     /**

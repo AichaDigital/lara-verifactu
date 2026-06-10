@@ -79,8 +79,10 @@ final class AeatClient implements AeatClientContract
             }
 
             // Inject the document literally: the registry XML is already a
-            // complete RegFactuSistemaFacturacion element.
-            $payload = new SoapVar($xml, XSD_ANYXML);
+            // complete RegFactuSistemaFacturacion element. The XML declaration
+            // must be stripped — embedded inside the SOAP Body it would make
+            // the envelope invalid.
+            $payload = new SoapVar($this->stripXmlDeclaration($xml), XSD_ANYXML);
 
             $response = $this->client->__soapCall(self::SOAP_OPERATION, [$payload]);
 
@@ -205,6 +207,14 @@ final class AeatClient implements AeatClientContract
         } catch (\Throwable $e) {
             throw AeatConnectionException::cannotConnect($this->endpoint);
         }
+    }
+
+    /**
+     * Strip the XML declaration so the document can be embedded in a SOAP Body
+     */
+    private function stripXmlDeclaration(string $xml): string
+    {
+        return (string) preg_replace('/^<\?xml[^>]*\?>\s*/', '', $xml);
     }
 
     /**

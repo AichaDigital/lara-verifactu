@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AichaDigital\LaraVerifactu\Commands;
 
+use AichaDigital\LaraVerifactu\Contracts\EndpointResolverContract;
 use AichaDigital\LaraVerifactu\Services\CertificateManager;
 use Illuminate\Console\Command;
 
@@ -89,20 +90,18 @@ final class TestAeatConnectionCommand extends Command
         $this->line('🔑 <fg=yellow>Testing certificate...</>');
 
         try {
-            $certPath = config('verifactu.certificate.path');
-            $certPassword = config('verifactu.certificate.password');
+            $certPath = (string) config('verifactu.certificate.path');
+            $certPassword = (string) config('verifactu.certificate.password');
 
             /** @var CertificateManager $manager */
             $manager = app(CertificateManager::class);
-            $manager->load($certPath, $certPassword);
-
-            $info = $manager->getCertificateInfo();
+            $loaded = $manager->load($certPath, $certPassword);
 
             $this->info('   ✓ Certificate loaded successfully');
-            $this->line("   • Subject: <fg=cyan>{$info['subject']}</>");
-            $this->line("   • Issuer:  <fg=cyan>{$info['issuer']}</>");
-            $this->line("   • Valid From: <fg=cyan>{$info['valid_from']}</>");
-            $this->line("   • Valid To:   <fg=cyan>{$info['valid_to']}</>");
+            $this->line("   • Subject CN: <fg=cyan>{$loaded->commonName}</>");
+            $this->line('   • Valid From: <fg=cyan>' . $loaded->validFrom->format('Y-m-d H:i:s') . '</>');
+            $this->line('   • Valid To:   <fg=cyan>' . $loaded->validTo->format('Y-m-d H:i:s') . '</>');
+            $this->line('   • Chain certificates: <fg=cyan>' . count($loaded->chain) . '</>');
             $this->newLine();
 
             return true;
@@ -121,18 +120,23 @@ final class TestAeatConnectionCommand extends Command
         $this->line('🌐 <fg=yellow>Testing AEAT SOAP connection...</>');
 
         try {
-            $environment = config('verifactu.aeat.environment');
-            $wsdl = config("verifactu.aeat.wsdl.{$environment}");
-            $endpoint = config("verifactu.aeat.endpoints.{$environment}");
+            $environment = (string) config('verifactu.aeat.environment');
+            $certificateType = (string) config('verifactu.certificate.type', 'representante');
+
+            /** @var EndpointResolverContract $endpointResolver */
+            $endpointResolver = app(EndpointResolverContract::class);
+            $endpoint = $endpointResolver->resolve($environment, $certificateType);
+
+            $wsdl = config("verifactu.aeat.wsdl.{$environment}")
+                ?? dirname(__DIR__, 2) . '/resources/wsdl/SistemaFacturacion.wsdl';
 
             $this->info("   ✓ WSDL: <fg=cyan>{$wsdl}</>");
-            $this->info("   ✓ Endpoint: <fg=cyan>{$endpoint}</>");
+            $this->info("   ✓ Endpoint ({$certificateType}): <fg=cyan>{$endpoint}</>");
 
-            // Try to create SOAP client
-            $certPath = config('verifactu.certificate.path');
-            $certPassword = config('verifactu.certificate.password');
+            $certPath = (string) config('verifactu.certificate.path');
+            $certPassword = (string) config('verifactu.certificate.password');
 
-            // Extract certificate to temp files
+            // Extract certificate to temp files for the TLS context
             $pkcs12 = file_get_contents($certPath);
 
             if ($pkcs12 === false) {
@@ -144,49 +148,61 @@ final class TestAeatConnectionCommand extends Command
                 throw new \RuntimeException('Cannot read certificate (invalid password?)');
             }
 
-            $tempCertFile = tempnam(sys_get_temp_dir(), 'verifactu_cert_');
-            $tempKeyFile = tempnam(sys_get_temp_dir(), 'verifactu_key_');
+            $tempCertFile = (string) tempnam(sys_get_temp_dir(), 'verifactu_cert_');
+            $tempKeyFile = (string) tempnam(sys_get_temp_dir(), 'verifactu_key_');
 
             file_put_contents($tempCertFile, $certs['cert']);
             file_put_contents($tempKeyFile, $certs['pkey']);
 
-            $soapClient = new \SoapClient($wsdl, [
-                'connection_timeout' => 10,
-                'cache_wsdl' => WSDL_CACHE_NONE,
-                'trace' => true,
-                'exceptions' => true,
-                'soap_version' => SOAP_1_1,
-                'stream_context' => stream_context_create([
-                    'ssl' => [
-                        'verify_peer' => config('verifactu.aeat.verify_ssl', true),
-                        'verify_peer_name' => config('verifactu.aeat.verify_ssl', true),
-                        'local_cert' => $tempCertFile,
-                        'local_pk' => $tempKeyFile,
-                        'passphrase' => $certPassword,
-                    ],
-                ]),
-            ]);
+            try {
+                $sslContext = [
+                    'verify_peer' => (bool) config('verifactu.aeat.verify_ssl', true),
+                    'verify_peer_name' => (bool) config('verifactu.aeat.verify_ssl', true),
+                    'local_cert' => $tempCertFile,
+                    'local_pk' => $tempKeyFile,
+                    'passphrase' => $certPassword,
+                ];
 
-            $this->info('   ✓ SOAP client created successfully');
+                $soapClient = new \SoapClient($wsdl, [
+                    'location' => $endpoint,
+                    'connection_timeout' => 10,
+                    'cache_wsdl' => WSDL_CACHE_NONE,
+                    'trace' => true,
+                    'exceptions' => true,
+                    'soap_version' => SOAP_1_1,
+                    'stream_context' => stream_context_create(['ssl' => $sslContext]),
+                ]);
 
-            // Get available methods
-            $functions = $soapClient->__getFunctions();
-            if ($functions !== null) {
-                $this->info('   ✓ Available SOAP methods:');
-                foreach (array_slice($functions, 0, 5) as $function) {
-                    $this->line("     • <fg=gray>{$function}</>");
+                $this->info('   ✓ SOAP client built from WSDL');
+
+                $functions = array_map('strval', $soapClient->__getFunctions() ?? []);
+                $this->info('   ✓ Operations: <fg=gray>' . implode(', ', array_unique($functions)) . '</>');
+
+                // Probe the endpoint with mutual TLS: any HTTP response means
+                // the transport-level certificate authentication succeeded.
+                $probeContext = stream_context_create([
+                    'ssl' => $sslContext,
+                    'http' => ['method' => 'GET', 'timeout' => 10, 'ignore_errors' => true],
+                ]);
+
+                $probe = @file_get_contents($endpoint, false, $probeContext);
+                /** @var array<int, string> $http_response_header */
+                $statusLine = $http_response_header[0] ?? null;
+
+                if ($probe === false && $statusLine === null) {
+                    $this->error('❌ TLS probe failed: could not establish a mutual-TLS connection to the endpoint');
+
+                    return false;
                 }
-                if (count($functions) > 5) {
-                    $this->line('     • <fg=gray>... and ' . (count($functions) - 5) . ' more</>');
-                }
-            }
 
-            // Cleanup
-            if (file_exists($tempCertFile)) {
-                unlink($tempCertFile);
-            }
-            if (file_exists($tempKeyFile)) {
-                unlink($tempKeyFile);
+                $this->info("   ✓ Mutual-TLS probe response: <fg=cyan>{$statusLine}</>");
+            } finally {
+                if (file_exists($tempCertFile)) {
+                    unlink($tempCertFile);
+                }
+                if (file_exists($tempKeyFile)) {
+                    unlink($tempKeyFile);
+                }
             }
 
             $this->newLine();

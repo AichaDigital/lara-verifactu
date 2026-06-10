@@ -142,6 +142,22 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Registry XML Signing
+    |--------------------------------------------------------------------------
+    |
+    | In VERI*FACTU mode registry records are NOT signed: the chained
+    | fingerprint (huella) replaces the signature. XAdES signing only
+    | applies to the non-Verifactu modality — keep disabled unless you
+    | know you need it.
+    |
+    */
+
+    'signing' => [
+        'enabled' => env('VERIFACTU_SIGNING_ENABLED', false),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Certificate Storage
     |--------------------------------------------------------------------------
     |

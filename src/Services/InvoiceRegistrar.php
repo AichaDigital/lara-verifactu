@@ -58,27 +58,9 @@ final class InvoiceRegistrar
 
             $registry = $this->registryManager->createRegistry($invoice);
 
-            // Step 2: Sign XML
-            try {
-                $xml = $registry->getXml();
-
-                if ($xml === null || $xml === '') {
-                    throw ValidationException::invalidXml('Registry XML content is missing.');
-                }
-
-                $signedXml = $this->signXml($xml);
-
-                if ($registry instanceof Registry) {
-                    $registry->update(['signed_xml' => $signedXml]);
-                }
-            } catch (\Throwable $e) {
-                Log::channel(config('verifactu.logging.channel', 'single'))
-                    ->warning('Failed to sign XML', [
-                        'registry_number' => $registry->getRegistryNumber(),
-                        'error' => $e->getMessage(),
-                    ]);
-                // Continue without signed XML (optional feature)
-            }
+            // Step 2: Sign XML (opt-in: VERI*FACTU records are not signed,
+            // the chained fingerprint replaces the signature)
+            $this->signRegistryXml($registry);
 
             // Step 3: Submit to AEAT if requested
             if ($submitToAeat) {
@@ -111,26 +93,7 @@ final class InvoiceRegistrar
 
             $registry = $this->registryManager->createCancellationRegistry($invoice);
 
-            try {
-                $xml = $registry->getXml();
-
-                if ($xml === null || $xml === '') {
-                    throw ValidationException::invalidXml('Registry XML content is missing.');
-                }
-
-                $signedXml = $this->signXml($xml);
-
-                if ($registry instanceof Registry) {
-                    $registry->update(['signed_xml' => $signedXml]);
-                }
-            } catch (\Throwable $e) {
-                Log::channel(config('verifactu.logging.channel', 'single'))
-                    ->warning('Failed to sign XML', [
-                        'registry_number' => $registry->getRegistryNumber(),
-                        'error' => $e->getMessage(),
-                    ]);
-                // Continue without signed XML (optional feature)
-            }
+            $this->signRegistryXml($registry);
 
             if ($submitToAeat) {
                 $this->submitToAeat($registry);
@@ -316,6 +279,41 @@ final class InvoiceRegistrar
         event(new BlockchainVerifiedEvent($result));
 
         return $result;
+    }
+
+    /**
+     * Sign the registry XML when signing is enabled.
+     *
+     * Signing is opt-in (verifactu.signing.enabled, default false): in
+     * VERI*FACTU mode records are not signed — the chained fingerprint
+     * replaces the signature. Failures are logged and never abort the flow.
+     */
+    private function signRegistryXml(RegistryContract $registry): void
+    {
+        if (! (bool) config('verifactu.signing.enabled', false)) {
+            return;
+        }
+
+        try {
+            $xml = $registry->getXml();
+
+            if ($xml === null || $xml === '') {
+                throw ValidationException::invalidXml('Registry XML content is missing.');
+            }
+
+            $signedXml = $this->signXml($xml);
+
+            if ($registry instanceof Registry) {
+                $registry->update(['signed_xml' => $signedXml]);
+            }
+        } catch (\Throwable $e) {
+            Log::channel(config('verifactu.logging.channel', 'single'))
+                ->warning('Failed to sign XML', [
+                    'registry_number' => $registry->getRegistryNumber(),
+                    'error' => $e->getMessage(),
+                ]);
+            // Continue without signed XML (optional feature)
+        }
     }
 
     /**
