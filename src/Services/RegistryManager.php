@@ -49,8 +49,11 @@ final class RegistryManager
             // Get previous hash for blockchain
             $previousHash = $this->getPreviousHash();
 
-            // Generate hash for this invoice
-            $hash = $this->hashGenerator->generate($invoice, $previousHash);
+            // Generate hash for this invoice. The generation timestamp is part
+            // of the hashed chain (FechaHoraHusoGenRegistro) and must be
+            // persisted so the hash can be verified later.
+            $generatedAt = Carbon::now();
+            $hash = $this->hashGenerator->generate($invoice, $previousHash, $generatedAt);
 
             // Generate registry number
             $registryNumber = $this->generateRegistryNumber();
@@ -58,10 +61,10 @@ final class RegistryManager
             // Build XML
             $xml = $this->xmlBuilder->buildRegistrationXml($invoice);
 
-            // Generate QR codes
-            $qrUrl = $this->qrGenerator->generateUrl($invoice, $hash);
-            $qrSvg = $this->qrGenerator->generateSvg($invoice, $hash);
-            $qrPng = $this->qrGenerator->generatePng($invoice, $hash);
+            // Generate QR codes (AEAT cotejo URL: nif, numserie, fecha, importe)
+            $qrUrl = $this->qrGenerator->generateUrl($invoice);
+            $qrSvg = $this->qrGenerator->generateSvg($invoice);
+            $qrPng = $this->qrGenerator->generatePng($invoice);
 
             // Create registry
             $registry = Registry::create([
@@ -70,6 +73,7 @@ final class RegistryManager
                 'registry_date' => Carbon::now(),
                 'hash' => $hash,
                 'previous_hash' => $previousHash,
+                'hash_generated_at' => $generatedAt->format('c'),
                 'qr_url' => $qrUrl,
                 'qr_svg' => $qrSvg,
                 'qr_png' => $qrPng,
@@ -126,9 +130,14 @@ final class RegistryManager
                 );
             }
 
-            // Verify hash with invoice
+            // Verify hash by rebuilding the chain with the persisted data
             try {
-                $isValid = $this->hashGenerator->verify($registry->hash, $registry->invoice);
+                $isValid = $this->hashGenerator->verify(
+                    $registry->hash,
+                    $registry->invoice,
+                    $registry->previous_hash,
+                    $registry->hash_generated_at !== null ? Carbon::parse($registry->hash_generated_at) : null,
+                );
                 if (! $isValid) {
                     $errors[] = sprintf(
                         'Registry %s has invalid hash',

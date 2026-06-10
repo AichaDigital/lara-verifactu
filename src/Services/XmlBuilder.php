@@ -105,19 +105,25 @@ final class XmlBuilder implements XmlBuilderContract
     }
 
     /**
-     * Validate XML against XSD schema
+     * Validate XML against the bundled official AEAT XSD schema
      */
     public function validate(string $xml): bool
     {
+        $previousUseErrors = libxml_use_internal_errors(true);
+
         try {
             $dom = new DOMDocument;
-            $dom->loadXML($xml);
 
-            // XSD validation would go here
-            // For now, just check if XML is well-formed
-            return $dom->schemaValidate(__DIR__ . '/../../documentacion_verifactu/SuministroLR.xsd.xml') !== false;
-        } catch (\Throwable $e) {
+            if (! $dom->loadXML($xml)) {
+                return false;
+            }
+
+            return $dom->schemaValidate(__DIR__ . '/../../resources/xsd/SuministroLR.xsd');
+        } catch (\Throwable) {
             return false;
+        } finally {
+            libxml_clear_errors();
+            libxml_use_internal_errors($previousUseErrors);
         }
     }
 
@@ -145,7 +151,7 @@ final class XmlBuilder implements XmlBuilderContract
         $obligado = $dom->createElement('Obligado');
         $cabecera->appendChild($obligado);
 
-        $nif = $dom->createElement('NIF', config('verifactu.company.tax_id', ''));
+        $nif = $dom->createElement('NIF', (string) (config('verifactu.company.tax_id') ?? ''));
         $obligado->appendChild($nif);
 
         // System information
@@ -178,7 +184,7 @@ final class XmlBuilder implements XmlBuilderContract
         $idFactura = $dom->createElement('IDFactura');
         $alta->appendChild($idFactura);
 
-        $emisor = $dom->createElement('IDEmisorFactura', config('verifactu.company.tax_id', ''));
+        $emisor = $dom->createElement('IDEmisorFactura', (string) (config('verifactu.company.tax_id') ?? ''));
         $idFactura->appendChild($emisor);
 
         $invoiceNumber = $invoice->getSerie()

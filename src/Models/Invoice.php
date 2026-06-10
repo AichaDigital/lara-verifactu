@@ -148,7 +148,7 @@ class Invoice extends Model implements InvoiceContract
      */
     public function getIssuerTaxId(): string
     {
-        return config('verifactu.company.tax_id', '');
+        return (string) (config('verifactu.company.tax_id') ?? '');
     }
 
     /**

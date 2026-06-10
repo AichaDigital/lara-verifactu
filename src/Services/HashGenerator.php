@@ -7,121 +7,121 @@ namespace AichaDigital\LaraVerifactu\Services;
 use AichaDigital\LaraVerifactu\Contracts\HashGeneratorContract;
 use AichaDigital\LaraVerifactu\Contracts\InvoiceContract;
 use AichaDigital\LaraVerifactu\Exceptions\HashException;
-use Carbon\Carbon;
+use DateTimeInterface;
 
 final class HashGenerator implements HashGeneratorContract
 {
     /**
-     * Generate SHA-256 hash for an invoice according to AEAT specifications
+     * Generate the fingerprint for a registration record (RegistroAlta).
      *
-     * The hash is calculated from a concatenation of specific invoice fields
-     * separated by ampersands (&) and then hashed with SHA-256.
+     * Chain format per AEAT spec v0.1.2 (field order is mandatory):
+     * IDEmisorFactura=...&NumSerieFactura=...&FechaExpedicionFactura=dd-mm-yyyy
+     * &TipoFactura=...&CuotaTotal=...&ImporteTotal=...&Huella=...
+     * &FechaHoraHusoGenRegistro=ISO8601-with-offset
      *
-     * According to AEAT specs, the fields are:
-     * - IDEmisorFactura (Issuer Tax ID)
-     * - NumSerieFactura (Invoice Number)
-     * - FechaExpedicion (Issue Date in dd-mm-yyyy format)
-     * - TipoFactura (Invoice Type)
-     * - CuotaTotal (Total Tax Amount in decimal format)
-     * - ImporteTotal (Total Amount in decimal format)
-     * - Huella (Previous Hash, if exists)
-     * - FechaHoraHusoGenRegistro (Registry generation timestamp)
+     * Every field name is always present; an absent value renders as "name=".
+     * Output is SHA-256 in uppercase hexadecimal (64 chars).
      *
      * @throws HashException If hash cannot be generated
      */
-    public function generate(InvoiceContract $invoice, ?string $previousHash = null): string
-    {
+    public function generate(
+        InvoiceContract $invoice,
+        ?string $previousHash = null,
+        ?DateTimeInterface $generatedAt = null,
+    ): string {
         try {
-            $data = $this->prepareDataForHash($invoice, $previousHash);
+            $invoiceNumber = $invoice->getSerie()
+                ? $invoice->getSerie() . $invoice->getNumber()
+                : $invoice->getNumber();
 
-            return hash('sha256', $data);
+            $chain = $this->buildChain([
+                'IDEmisorFactura' => $invoice->getIssuerTaxId(),
+                'NumSerieFactura' => $invoiceNumber,
+                'FechaExpedicionFactura' => $invoice->getIssueDatetime()->format('d-m-Y'),
+                'TipoFactura' => $invoice->getType()->value,
+                'CuotaTotal' => $this->formatAmount($invoice->getTaxAmount()),
+                'ImporteTotal' => $this->formatAmount($invoice->getTotalAmount()),
+                'Huella' => $previousHash,
+                'FechaHoraHusoGenRegistro' => $this->formatTimestamp($generatedAt ?? now()),
+            ]);
+
+            return strtoupper(hash('sha256', $chain));
         } catch (\Throwable $e) {
             throw HashException::cannotGenerateHash($e->getMessage());
         }
     }
 
     /**
-     * Verify if a hash matches an invoice
+     * Generate the fingerprint for a cancellation record (RegistroAnulacion).
+     *
+     * Chain format per AEAT spec v0.1.2:
+     * IDEmisorFacturaAnulada=...&NumSerieFacturaAnulada=...
+     * &FechaExpedicionFacturaAnulada=dd-mm-yyyy&Huella=...
+     * &FechaHoraHusoGenRegistro=ISO8601-with-offset
+     *
+     * @throws HashException If hash cannot be generated
+     */
+    public function generateCancellation(
+        string $issuerTaxId,
+        string $invoiceNumber,
+        DateTimeInterface $issueDate,
+        ?string $previousHash = null,
+        ?DateTimeInterface $generatedAt = null,
+    ): string {
+        try {
+            $chain = $this->buildChain([
+                'IDEmisorFacturaAnulada' => $issuerTaxId,
+                'NumSerieFacturaAnulada' => $invoiceNumber,
+                'FechaExpedicionFacturaAnulada' => $issueDate->format('d-m-Y'),
+                'Huella' => $previousHash,
+                'FechaHoraHusoGenRegistro' => $this->formatTimestamp($generatedAt ?? now()),
+            ]);
+
+            return strtoupper(hash('sha256', $chain));
+        } catch (\Throwable $e) {
+            throw HashException::cannotGenerateHash($e->getMessage());
+        }
+    }
+
+    /**
+     * Verify a stored hash by rebuilding the chain with persisted data.
      *
      * @throws HashException If verification fails
      */
-    public function verify(string $hash, InvoiceContract $invoice): bool
-    {
+    public function verify(
+        string $hash,
+        InvoiceContract $invoice,
+        ?string $previousHash = null,
+        ?DateTimeInterface $generatedAt = null,
+    ): bool {
         try {
-            $calculatedHash = $this->generate($invoice);
+            $calculatedHash = $this->generate($invoice, $previousHash, $generatedAt);
 
-            return hash_equals($hash, $calculatedHash);
+            return hash_equals($calculatedHash, strtoupper($hash));
         } catch (\Throwable $e) {
             throw HashException::hashMismatch();
         }
     }
 
     /**
-     * Prepare invoice data for hash generation according to AEAT specs
-     */
-    private function prepareDataForHash(InvoiceContract $invoice, ?string $previousHash = null): string
-    {
-        // Build invoice number (Serie + Number)
-        $invoiceNumber = $invoice->getSerie()
-            ? $invoice->getSerie() . $invoice->getNumber()
-            : $invoice->getNumber();
-
-        $parts = [
-            'IDEmisorFactura' => config('verifactu.company.tax_id', ''),
-            'NumSerieFactura' => $this->sanitize($invoiceNumber),
-            'FechaExpedicionFactura' => $this->formatDate($invoice->getIssueDatetime()),
-            'TipoFactura' => $invoice->getType()->value,
-            'CuotaTotal' => $this->formatAmount($invoice->getTaxAmount()),
-            'ImporteTotal' => $this->formatAmount($invoice->getTotalAmount()),
-        ];
-
-        // Add previous hash if exists (for blockchain)
-        if ($previousHash) {
-            $parts['Huella'] = $previousHash;
-        }
-
-        // Add timestamp (current time in ISO 8601 format with timezone)
-        $parts['FechaHoraHusoGenRegistro'] = $this->getCurrentTimestamp();
-
-        return $this->buildHashString($parts);
-    }
-
-    /**
-     * Build hash string from parts according to AEAT format
+     * Build the input chain: every field is always present, values are
+     * trimmed, and an absent value renders as "name=" (AEAT spec v0.1.2).
      *
-     * @param  array<string, string>  $parts
+     * @param  array<string, string|null>  $parts
      */
-    private function buildHashString(array $parts): string
+    private function buildChain(array $parts): string
     {
         $segments = [];
 
         foreach ($parts as $key => $value) {
-            $segments[] = sprintf('%s=%s', $key, $value);
+            $segments[] = sprintf('%s=%s', $key, trim($value ?? ''));
         }
 
         return implode('&', $segments);
     }
 
     /**
-     * Sanitize string value for hash generation
-     */
-    private function sanitize(string $value): string
-    {
-        // Remove special characters and trim
-        return trim($value);
-    }
-
-    /**
-     * Format date for hash generation (dd-mm-yyyy format)
-     */
-    private function formatDate(Carbon $date): string
-    {
-        return $date->format('d-m-Y');
-    }
-
-    /**
-     * Format amount for hash generation
-     * According to AEAT specs: decimal with 2 decimals, dot as separator
+     * Format amount as decimal with 2 positions and dot separator.
      */
     private function formatAmount(float $amount): string
     {
@@ -129,11 +129,11 @@ final class HashGenerator implements HashGeneratorContract
     }
 
     /**
-     * Get current timestamp in ISO 8601 format with timezone
-     * Format: YYYY-MM-DDThh:mm:ssTZD (e.g., 2024-10-11T10:30:00+02:00)
+     * Format FechaHoraHusoGenRegistro as ISO 8601 with timezone offset
+     * (e.g. 2024-01-01T19:20:30+01:00).
      */
-    private function getCurrentTimestamp(): string
+    private function formatTimestamp(DateTimeInterface $generatedAt): string
     {
-        return now()->format('c');
+        return $generatedAt->format('c');
     }
 }
