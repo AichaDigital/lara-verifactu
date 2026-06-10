@@ -2,161 +2,120 @@
 
 declare(strict_types=1);
 
-use AichaDigital\LaraVerifactu\Contracts\InvoiceBreakdownContract;
 use AichaDigital\LaraVerifactu\Contracts\InvoiceContract;
 use AichaDigital\LaraVerifactu\Enums\InvoiceTypeEnum;
-use AichaDigital\LaraVerifactu\Enums\OperationTypeEnum;
-use AichaDigital\LaraVerifactu\Enums\TaxTypeEnum;
+use AichaDigital\LaraVerifactu\Enums\RegimeTypeEnum;
 use AichaDigital\LaraVerifactu\Services\XmlBuilder;
+use AichaDigital\LaraVerifactu\Support\PreviousRegistry;
+use AichaDigital\LaraVerifactu\Support\RegistryChain;
 use Carbon\Carbon;
 
 beforeEach(function () {
     config()->set('verifactu.company.tax_id', 'B12345678');
+    config()->set('verifactu.company.name', 'Empresa Test SL');
+
     $this->builder = new XmlBuilder;
+    $this->chain = new RegistryChain(
+        hash: str_repeat('A', 64),
+        generatedAt: Carbon::parse('2025-10-11T10:30:30+02:00'),
+    );
 });
 
-it('builds valid registration XML', function () {
+it('builds registration XML with the invoice identification block', function () {
     $invoice = createMockInvoiceForXml();
 
-    $xml = $this->builder->buildRegistrationXml($invoice);
+    $xml = $this->builder->buildRegistrationXml($invoice, $this->chain);
 
     expect($xml)
-        ->toBeString()
-        ->toContain('<?xml version="1.0" encoding="UTF-8"?>')
-        ->toContain('RegFactuSistemaFacturacion')
-        ->toContain('Cabecera')
-        ->toContain('RegistroFactura');
+        ->toContain('<sf:IDEmisorFactura>B12345678</sf:IDEmisorFactura>')
+        ->toContain('<sf:NumSerieFactura>F-2025-001</sf:NumSerieFactura>')
+        ->toContain('<sf:FechaExpedicionFactura>11-10-2025</sf:FechaExpedicionFactura>');
 });
 
-it('includes issuer tax ID in XML', function () {
-    $invoice = createMockInvoiceForXml(['issuer_tax_id' => 'B12345678']);
-
-    $xml = $this->builder->buildRegistrationXml($invoice);
-
-    expect($xml)
-        ->toContain('<NIF>B12345678</NIF>')
-        ->toContain('<IDEmisorFactura>B12345678</IDEmisorFactura>');
-});
-
-it('includes invoice number in XML', function () {
-    $invoice = createMockInvoiceForXml(['number' => 'F-2025-001']);
-
-    $xml = $this->builder->buildRegistrationXml($invoice);
-
-    expect($xml)->toContain('<NumSerieFactura>F-2025-001</NumSerieFactura>');
-});
-
-it('includes issue date in correct format', function () {
-    $invoice = createMockInvoiceForXml(['issue_date' => Carbon::parse('2025-10-11')]);
-
-    $xml = $this->builder->buildRegistrationXml($invoice);
-
-    expect($xml)->toContain('<FechaExpedicionFactura>11-10-2025</FechaExpedicionFactura>');
-});
-
-it('includes invoice type in XML', function () {
-    $invoice = createMockInvoiceForXml(['type' => InvoiceTypeEnum::COMPLETE]);
-
-    $xml = $this->builder->buildRegistrationXml($invoice);
-
-    expect($xml)->toContain('<TipoFactura>F1</TipoFactura>');
-});
-
-it('includes total amount formatted correctly', function () {
-    $invoice = createMockInvoiceForXml(['total_amount' => '121.50']);
-
-    $xml = $this->builder->buildRegistrationXml($invoice);
-
-    expect($xml)->toContain('<ImporteTotal>121.50</ImporteTotal>');
-});
-
-it('includes tax breakdowns when present', function () {
-    $breakdown = Mockery::mock(InvoiceBreakdownContract::class);
-    $breakdown->shouldReceive('getTaxType')->andReturn(TaxTypeEnum::IVA);
-    $breakdown->shouldReceive('getBaseAmount')->andReturn('100.00');
-    $breakdown->shouldReceive('getTaxAmount')->andReturn('21.00');
-    $breakdown->shouldReceive('getOperationType')->andReturn(OperationTypeEnum::NORMAL);
-
-    $invoice = createMockInvoiceForXml(['breakdowns' => collect([$breakdown])]);
-
-    $xml = $this->builder->buildRegistrationXml($invoice);
-
-    expect($xml)
-        ->toContain('<Desgloses>')
-        ->toContain('<TipoImpuesto>01</TipoImpuesto>')
-        ->toContain('<BaseImponible>100.00</BaseImponible>')
-        ->toContain('<Cuota>21.00</Cuota>');
-});
-
-it('includes blockchain data when previous hash exists', function () {
-    $invoice = createMockInvoiceForXml([
-        'previous_hash' => hash('sha256', 'previous'),
-        'previous_invoice_id' => 'PREV-001',
-    ]);
-
-    $xml = $this->builder->buildRegistrationXml($invoice);
-
-    expect($xml)
-        ->toContain('<Encadenamiento>')
-        ->toContain('<RegistroAnterior>')
-        ->toContain('<IDRegistroAnterior>PREV-001</IDRegistroAnterior>')
-        ->toContain('<HuellaAnterior>');
-});
-
-it('omits blockchain data when no previous hash', function () {
-    $invoice = createMockInvoiceForXml(['previous_hash' => null]);
-
-    $xml = $this->builder->buildRegistrationXml($invoice);
-
-    expect($xml)->not->toContain('<Encadenamiento>');
-});
-
-it('includes system information in header', function () {
+it('includes invoice type and amounts', function () {
     $invoice = createMockInvoiceForXml();
 
-    $xml = $this->builder->buildRegistrationXml($invoice);
+    $xml = $this->builder->buildRegistrationXml($invoice, $this->chain);
 
     expect($xml)
-        ->toContain('<SistemaInformatico>')
-        ->toContain('<NombreSistema>LaraVerifactu</NombreSistema>')
-        ->toContain('<Version>1.0</Version>');
+        ->toContain('<sf:TipoFactura>F1</sf:TipoFactura>')
+        ->toContain('<sf:CuotaTotal>21.00</sf:CuotaTotal>')
+        ->toContain('<sf:ImporteTotal>121.00</sf:ImporteTotal>');
 });
 
-it('builds valid cancellation XML', function () {
-    $xml = $this->builder->buildCancellationXml('REG-001');
+it('includes the issuer name from config as NombreRazonEmisor', function () {
+    $invoice = createMockInvoiceForXml();
 
-    expect($xml)
-        ->toBeString()
-        ->toContain('<RegistroAnulacion>')
-        ->toContain('<IDRegistro>REG-001</IDRegistro>');
+    $xml = $this->builder->buildRegistrationXml($invoice, $this->chain);
+
+    expect($xml)->toContain('<sf:NombreRazonEmisor>Empresa Test SL</sf:NombreRazonEmisor>');
 });
 
-it('builds valid batch XML with multiple invoices', function () {
-    $invoice1 = createMockInvoiceForXml(['number' => 'F-001']);
-    $invoice2 = createMockInvoiceForXml(['number' => 'F-002']);
+it('marks the first record of the chain with PrimerRegistro', function () {
+    $invoice = createMockInvoiceForXml();
 
-    $xml = $this->builder->buildBatchXml(collect([$invoice1, $invoice2]));
+    $xml = $this->builder->buildRegistrationXml($invoice, $this->chain);
 
     expect($xml)
-        ->toContain('<NumSerieFactura>F-001</NumSerieFactura>')
-        ->toContain('<NumSerieFactura>F-002</NumSerieFactura>');
+        ->toContain('<sf:PrimerRegistro>S</sf:PrimerRegistro>')
+        ->not->toContain('<sf:RegistroAnterior>');
+});
+
+it('chains to the previous registry with RegistroAnterior', function () {
+    $invoice = createMockInvoiceForXml();
+    $chain = new RegistryChain(
+        hash: str_repeat('B', 64),
+        generatedAt: Carbon::parse('2025-10-11T11:00:00+02:00'),
+        previous: new PreviousRegistry('B12345678', 'F-2025-000', Carbon::parse('2025-10-10'), str_repeat('A', 64)),
+    );
+
+    $xml = $this->builder->buildRegistrationXml($invoice, $chain);
+
+    expect($xml)
+        ->toContain('<sf:RegistroAnterior>')
+        ->toContain('<sf:Huella>' . str_repeat('A', 64) . '</sf:Huella>')
+        ->not->toContain('<sf:PrimerRegistro>');
+});
+
+it('carries the chain hash, hash type and generation timestamp', function () {
+    $invoice = createMockInvoiceForXml();
+
+    $xml = $this->builder->buildRegistrationXml($invoice, $this->chain);
+
+    expect($xml)
+        ->toContain('<sf:TipoHuella>01</sf:TipoHuella>')
+        ->toContain('<sf:Huella>' . str_repeat('A', 64) . '</sf:Huella>')
+        ->toContain('<sf:FechaHoraHusoGenRegistro>2025-10-11T10:30:30+02:00</sf:FechaHoraHusoGenRegistro>');
 });
 
 it('generates well-formed XML', function () {
     $invoice = createMockInvoiceForXml();
-    $xml = $this->builder->buildRegistrationXml($invoice);
+
+    $xml = $this->builder->buildRegistrationXml($invoice, $this->chain);
 
     $dom = new DOMDocument;
-    $result = $dom->loadXML($xml);
 
-    expect($result)->toBeTrue();
+    expect($dom->loadXML($xml))->toBeTrue();
 });
 
-it('uses proper XML namespaces', function () {
+it('uses the official AEAT namespaces', function () {
     $invoice = createMockInvoiceForXml();
-    $xml = $this->builder->buildRegistrationXml($invoice);
 
-    expect($xml)->toContain('xmlns:sflr');
+    $xml = $this->builder->buildRegistrationXml($invoice, $this->chain);
+
+    expect($xml)
+        ->toContain('xmlns:sfLR="https://www2.agenciatributaria.gob.es/static_files/common/internet/dep/aplicaciones/es/aeat/tike/cont/ws/SuministroLR.xsd"')
+        ->toContain('xmlns:sf="https://www2.agenciatributaria.gob.es/static_files/common/internet/dep/aplicaciones/es/aeat/tike/cont/ws/SuministroInformacion.xsd"');
+});
+
+it('escapes XML special characters in text values', function () {
+    $invoice = createMockInvoiceForXml(['description' => 'Servicios <hosting> & "dominios"']);
+
+    $xml = $this->builder->buildRegistrationXml($invoice, $this->chain);
+
+    expect($xml)
+        ->toContain('Servicios &lt;hosting&gt; &amp; "dominios"')
+        ->not->toContain('<hosting>');
 });
 
 // Helper function to create mock invoice for XML tests
@@ -167,18 +126,11 @@ function createMockInvoiceForXml(array $overrides = []): InvoiceContract
         'number' => 'F-2025-001',
         'issue_datetime' => Carbon::parse('2025-10-11 10:30:00'),
         'type' => InvoiceTypeEnum::COMPLETE,
+        'description' => 'Servicios profesionales',
         'total_amount' => '121.00',
         'total_tax_amount' => '21.00',
         'breakdowns' => collect([]),
-        'previous_hash' => null,
-        'previous_invoice_id' => null,
     ];
-
-    // Support legacy 'issue_date' key for backwards compatibility
-    if (isset($overrides['issue_date']) && ! isset($overrides['issue_datetime'])) {
-        $overrides['issue_datetime'] = $overrides['issue_date'];
-        unset($overrides['issue_date']);
-    }
 
     $data = array_merge($defaults, $overrides);
 
@@ -192,11 +144,13 @@ function createMockInvoiceForXml(array $overrides = []): InvoiceContract
     $invoice->shouldReceive('getIssueTime')->andReturn($data['issue_datetime']);
     $invoice->shouldReceive('getType')->andReturn($data['type']);
     $invoice->shouldReceive('getInvoiceType')->andReturn($data['type']);
+    $invoice->shouldReceive('getDescription')->andReturn($data['description']);
+    $invoice->shouldReceive('getRegimeType')->andReturn(RegimeTypeEnum::GENERAL);
     $invoice->shouldReceive('getTaxAmount')->andReturn(floatval($data['total_tax_amount']));
     $invoice->shouldReceive('getTotalAmount')->andReturn(floatval($data['total_amount']));
+    $invoice->shouldReceive('hasRecipient')->andReturn(false);
+    $invoice->shouldReceive('getRecipient')->andReturn(null);
     $invoice->shouldReceive('getBreakdowns')->andReturn($data['breakdowns']);
-    $invoice->shouldReceive('getPreviousHash')->andReturn($data['previous_hash']);
-    $invoice->shouldReceive('getPreviousInvoiceId')->andReturn($data['previous_invoice_id']);
 
     return $invoice;
 }

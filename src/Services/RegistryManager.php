@@ -10,9 +10,13 @@ use AichaDigital\LaraVerifactu\Contracts\QrGeneratorContract;
 use AichaDigital\LaraVerifactu\Contracts\RegistryContract;
 use AichaDigital\LaraVerifactu\Contracts\XmlBuilderContract;
 use AichaDigital\LaraVerifactu\Enums\RegistryStatusEnum;
+use AichaDigital\LaraVerifactu\Enums\RegistryTypeEnum;
 use AichaDigital\LaraVerifactu\Events\RegistryCreatedEvent;
 use AichaDigital\LaraVerifactu\Exceptions\VerifactuException;
 use AichaDigital\LaraVerifactu\Models\Registry;
+use AichaDigital\LaraVerifactu\Support\CancellationRecord;
+use AichaDigital\LaraVerifactu\Support\PreviousRegistry;
+use AichaDigital\LaraVerifactu\Support\RegistryChain;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -46,8 +50,9 @@ final class RegistryManager
     public function createRegistry(InvoiceContract $invoice): RegistryContract
     {
         return DB::transaction(function () use ($invoice) {
-            // Get previous hash for blockchain
-            $previousHash = $this->getPreviousHash();
+            // Get previous registry for blockchain chaining
+            $previousRegistry = $this->getPreviousRegistry();
+            $previousHash = $previousRegistry?->hash;
 
             // Generate hash for this invoice. The generation timestamp is part
             // of the hashed chain (FechaHoraHusoGenRegistro) and must be
@@ -58,8 +63,19 @@ final class RegistryManager
             // Generate registry number
             $registryNumber = $this->generateRegistryNumber();
 
-            // Build XML
-            $xml = $this->xmlBuilder->buildRegistrationXml($invoice);
+            // Build AEAT-conformant XML carrying the chain data
+            $chain = new RegistryChain(
+                hash: $hash,
+                generatedAt: $generatedAt,
+                previous: $previousRegistry !== null ? new PreviousRegistry(
+                    issuerTaxId: $previousRegistry->invoice->getIssuerTaxId(),
+                    invoiceNumber: $previousRegistry->invoice->getInvoiceNumber(),
+                    issueDate: $previousRegistry->invoice->getIssueDatetime(),
+                    hash: $previousRegistry->hash,
+                ) : null,
+            );
+
+            $xml = $this->xmlBuilder->buildRegistrationXml($invoice, $chain);
 
             // Generate QR codes (AEAT cotejo URL: nif, numserie, fecha, importe)
             $qrUrl = $this->qrGenerator->generateUrl($invoice);
@@ -71,6 +87,7 @@ final class RegistryManager
                 'invoice_id' => $invoice->id ?? null,
                 'registry_number' => $registryNumber,
                 'registry_date' => Carbon::now(),
+                'registry_type' => RegistryTypeEnum::REGISTRATION->value,
                 'hash' => $hash,
                 'previous_hash' => $previousHash,
                 'hash_generated_at' => $generatedAt->format('c'),
@@ -90,17 +107,87 @@ final class RegistryManager
     }
 
     /**
+     * Create a cancellation registry (RegistroAnulacion) for an invoice.
+     *
+     * The cancellation is a link of the fingerprint chain in its own right:
+     * it gets its own hash chained to the previous registry and is persisted
+     * with registry_type=cancellation.
+     *
+     * @throws VerifactuException
+     */
+    public function createCancellationRegistry(InvoiceContract $invoice): RegistryContract
+    {
+        return DB::transaction(function () use ($invoice) {
+            $previousRegistry = $this->getPreviousRegistry();
+            $previousHash = $previousRegistry?->hash;
+
+            $generatedAt = Carbon::now();
+            $hash = $this->hashGenerator->generateCancellation(
+                $invoice->getIssuerTaxId(),
+                $invoice->getInvoiceNumber(),
+                $invoice->getIssueDatetime(),
+                $previousHash,
+                $generatedAt,
+            );
+
+            $registryNumber = $this->generateRegistryNumber();
+
+            $record = new CancellationRecord(
+                issuerTaxId: $invoice->getIssuerTaxId(),
+                invoiceNumber: $invoice->getInvoiceNumber(),
+                issueDate: $invoice->getIssueDatetime(),
+            );
+
+            $chain = new RegistryChain(
+                hash: $hash,
+                generatedAt: $generatedAt,
+                previous: $previousRegistry !== null ? new PreviousRegistry(
+                    issuerTaxId: $previousRegistry->invoice->getIssuerTaxId(),
+                    invoiceNumber: $previousRegistry->invoice->getInvoiceNumber(),
+                    issueDate: $previousRegistry->invoice->getIssueDatetime(),
+                    hash: $previousRegistry->hash,
+                ) : null,
+            );
+
+            $xml = $this->xmlBuilder->buildCancellationXml($record, $chain);
+
+            $registry = Registry::create([
+                'invoice_id' => $invoice->id ?? null,
+                'registry_number' => $registryNumber,
+                'registry_date' => Carbon::now(),
+                'registry_type' => RegistryTypeEnum::CANCELLATION->value,
+                'hash' => $hash,
+                'previous_hash' => $previousHash,
+                'hash_generated_at' => $generatedAt->format('c'),
+                'xml' => $xml,
+                'status' => RegistryStatusEnum::PENDING->value,
+                'submission_attempts' => 0,
+            ]);
+
+            event(new RegistryCreatedEvent($registry, $invoice));
+
+            return $registry;
+        });
+    }
+
+    /**
+     * Get the previous registry in the chain, or null if this is the first.
+     */
+    public function getPreviousRegistry(): ?Registry
+    {
+        return Registry::orderBy('registry_date', 'desc')
+            ->orderBy('id', 'desc')
+            ->first();
+    }
+
+    /**
      * Get the previous hash from the blockchain
      *
      * Returns the hash of the last registry in the chain, or null if this is the first.
      */
     public function getPreviousHash(): ?string
     {
-        $lastRegistry = Registry::orderBy('registry_date', 'desc')
-            ->orderBy('id', 'desc')
-            ->first();
-
-        return $lastRegistry?->hash;
+        return $this->getPreviousRegistry()?->hash;
     }
 
     /**
@@ -130,14 +217,10 @@ final class RegistryManager
                 );
             }
 
-            // Verify hash by rebuilding the chain with the persisted data
+            // Verify hash by rebuilding the chain with the persisted data,
+            // using the algorithm matching the registry type
             try {
-                $isValid = $this->hashGenerator->verify(
-                    $registry->hash,
-                    $registry->invoice,
-                    $registry->previous_hash,
-                    $registry->hash_generated_at !== null ? Carbon::parse($registry->hash_generated_at) : null,
-                );
+                $isValid = $this->verifyRegistryHash($registry);
                 if (! $isValid) {
                     $errors[] = sprintf(
                         'Registry %s has invalid hash',
@@ -159,6 +242,35 @@ final class RegistryManager
             'valid' => $errors === [],
             'errors' => $errors,
         ];
+    }
+
+    /**
+     * Rebuild and compare the hash of a registry using its persisted chain data
+     */
+    private function verifyRegistryHash(Registry $registry): bool
+    {
+        $generatedAt = $registry->hash_generated_at !== null
+            ? Carbon::parse($registry->hash_generated_at)
+            : null;
+
+        if ($registry->registry_type === RegistryTypeEnum::CANCELLATION) {
+            $expected = $this->hashGenerator->generateCancellation(
+                $registry->invoice->getIssuerTaxId(),
+                $registry->invoice->getInvoiceNumber(),
+                $registry->invoice->getIssueDatetime(),
+                $registry->previous_hash,
+                $generatedAt,
+            );
+
+            return hash_equals($expected, strtoupper($registry->hash));
+        }
+
+        return $this->hashGenerator->verify(
+            $registry->hash,
+            $registry->invoice,
+            $registry->previous_hash,
+            $generatedAt,
+        );
     }
 
     /**

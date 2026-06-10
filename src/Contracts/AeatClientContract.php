@@ -10,30 +10,18 @@ use Illuminate\Support\Collection;
 interface AeatClientContract
 {
     /**
-     * Send registration to AEAT
+     * Send a registry record (registration or cancellation) to AEAT via the
+     * RegFactuSistemaFacturacion operation — the only one exposed by the
+     * official WSDL. The registry XML must be a complete, already-signed
+     * RegFactuSistemaFacturacion document; this client does not sign.
      */
     public function sendRegistration(RegistryContract $registry): AeatResponse;
 
     /**
-     * Send cancellation to AEAT
-     */
-    public function sendCancellation(string $registryId): AeatResponse;
-
-    /**
-     * Send batch of registrations to AEAT
+     * Send a batch of registry records to AEAT, one submission each.
      *
      * @param  Collection<int, RegistryContract>  $registries
      * @return Collection<int, AeatResponse>
      */
     public function sendBatch(Collection $registries): Collection;
-
-    /**
-     * Query registry status from AEAT
-     */
-    public function queryRegistry(string $registryId): AeatResponse;
-
-    /**
-     * Validate QR code with AEAT
-     */
-    public function validateQr(string $qrCode): AeatResponse;
 }

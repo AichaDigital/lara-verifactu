@@ -4,82 +4,115 @@ declare(strict_types=1);
 
 namespace AichaDigital\LaraVerifactu;
 
-use AichaDigital\LaraVerifactu\Contracts\AeatClientContract;
-use AichaDigital\LaraVerifactu\Contracts\HashGeneratorContract;
 use AichaDigital\LaraVerifactu\Contracts\InvoiceContract;
 use AichaDigital\LaraVerifactu\Contracts\QrGeneratorContract;
-use AichaDigital\LaraVerifactu\Contracts\XmlBuilderContract;
-use AichaDigital\LaraVerifactu\Support\AeatResponse;
-use Illuminate\Support\Collection;
+use AichaDigital\LaraVerifactu\Contracts\RegistryContract;
+use AichaDigital\LaraVerifactu\Enums\RegistryStatusEnum;
+use AichaDigital\LaraVerifactu\Enums\RegistryTypeEnum;
+use AichaDigital\LaraVerifactu\Models\Registry;
+use AichaDigital\LaraVerifactu\Services\InvoiceRegistrar;
+use Carbon\Carbon;
+use PHPUnit\Framework\Assert;
 
+/**
+ * Public entry point of the package (facade root).
+ *
+ * Delegates to the orchestrating services and offers a fake mode that
+ * intercepts calls in-memory so consumer tests can assert on them without
+ * touching the database or AEAT.
+ */
 final class Verifactu
 {
-    protected bool $fakeMode = false;
+    private bool $fakeMode = false;
+
+    /**
+     * @var array<string, InvoiceContract>
+     */
+    private array $fakeRegistered = [];
+
+    /**
+     * @var array<string, InvoiceContract>
+     */
+    private array $fakeCancelled = [];
 
     public function __construct(
-        protected HashGeneratorContract $hashGenerator,
-        protected QrGeneratorContract $qrGenerator,
-        protected XmlBuilderContract $xmlBuilder,
-        protected AeatClientContract $aeatClient,
+        private readonly InvoiceRegistrar $registrar,
+        private readonly QrGeneratorContract $qrGenerator,
     ) {}
 
     /**
-     * Register an invoice with Verifactu
+     * Register an invoice (RegistroAlta) in the Verifactu chain
      */
-    public function register(InvoiceContract $invoice): AeatResponse
+    public function register(InvoiceContract $invoice, bool $submitToAeat = true): RegistryContract
     {
         if ($this->fakeMode) {
-            return AeatResponse::success();
+            $this->fakeRegistered[$invoice->getInvoiceNumber()] = $invoice;
+
+            return $this->fakeRegistry($invoice, RegistryTypeEnum::REGISTRATION);
         }
 
-        // Implementation will be added in next phase
-        throw new \RuntimeException('Not implemented yet');
+        return $this->registrar->register($invoice, $submitToAeat);
     }
 
     /**
-     * Cancel a registry
+     * Cancel an invoice (RegistroAnulacion) in the Verifactu chain
      */
-    public function cancel(string $registryId): AeatResponse
+    public function cancel(InvoiceContract $invoice, bool $submitToAeat = true): RegistryContract
     {
         if ($this->fakeMode) {
-            return AeatResponse::success();
+            $this->fakeCancelled[$invoice->getInvoiceNumber()] = $invoice;
+
+            return $this->fakeRegistry($invoice, RegistryTypeEnum::CANCELLATION);
         }
 
-        // Implementation will be added in next phase
-        throw new \RuntimeException('Not implemented yet');
+        return $this->registrar->cancel($invoice, $submitToAeat);
     }
 
     /**
-     * Send batch of invoices
+     * Register a batch of invoices
      *
-     * @param  Collection<int, InvoiceContract>  $invoices
-     * @return Collection<int, mixed>
+     * @param  iterable<InvoiceContract>  $invoices
+     * @return array{success: int, failed: int, registries: array<RegistryContract>}
      */
-    public function sendBatch(Collection $invoices): Collection
+    public function sendBatch(iterable $invoices, bool $submitToAeat = true): array
     {
         if ($this->fakeMode) {
-            return collect([]);
+            $registries = [];
+
+            foreach ($invoices as $invoice) {
+                $registries[] = $this->register($invoice);
+            }
+
+            return ['success' => count($registries), 'failed' => 0, 'registries' => $registries];
         }
 
-        // Implementation will be added in next phase
-        throw new \RuntimeException('Not implemented yet');
+        return $this->registrar->batchRegister(
+            is_array($invoices) ? $invoices : iterator_to_array($invoices),
+            $submitToAeat,
+        );
     }
 
     /**
-     * Get status of an invoice
+     * Get the latest registry of an invoice, or null if never registered
      */
-    public function status(InvoiceContract $invoice): AeatResponse
+    public function status(InvoiceContract $invoice): ?RegistryContract
     {
         if ($this->fakeMode) {
-            return AeatResponse::success();
+            $number = $invoice->getInvoiceNumber();
+
+            return isset($this->fakeRegistered[$number])
+                ? $this->fakeRegistry($invoice, RegistryTypeEnum::REGISTRATION)
+                : null;
         }
 
-        // Implementation will be added in next phase
-        throw new \RuntimeException('Not implemented yet');
+        return Registry::query()
+            ->where('invoice_id', $invoice->getId())
+            ->orderByDesc('id')
+            ->first();
     }
 
     /**
-     * Get QR code for an invoice
+     * Generate the AEAT QR for an invoice in the configured format
      */
     public function qr(InvoiceContract $invoice): string
     {
@@ -87,52 +120,102 @@ final class Verifactu
             return 'fake-qr-code';
         }
 
-        // Implementation will be added in next phase
-        throw new \RuntimeException('Not implemented yet');
+        return $this->qrGenerator->generate($invoice);
     }
 
     /**
-     * Validate blockchain chain
+     * Verify the integrity of the whole registry chain
+     *
+     * @return array{valid: bool, errors: array<string>}
      */
-    public function validateChain(InvoiceContract $invoice): bool
+    public function validateChain(): array
     {
         if ($this->fakeMode) {
-            return true;
+            return ['valid' => true, 'errors' => []];
         }
 
-        // Implementation will be added in next phase
-        throw new \RuntimeException('Not implemented yet');
+        return $this->registrar->verifyBlockchain();
     }
 
     /**
-     * Enable fake mode for testing
+     * Enable fake mode: calls are intercepted in-memory for assertions
      */
     public function fake(): void
     {
         $this->fakeMode = true;
+        $this->fakeRegistered = [];
+        $this->fakeCancelled = [];
     }
 
     /**
-     * Assert invoice was registered
+     * Assert an invoice was registered while in fake mode
      */
     public function assertRegistered(InvoiceContract $invoice): void
     {
-        if (! $this->fakeMode) {
-            throw new \RuntimeException('Cannot assert when not in fake mode');
-        }
+        $this->ensureFakeMode();
 
-        // Implementation will be added in next phase
+        Assert::assertArrayHasKey(
+            $invoice->getInvoiceNumber(),
+            $this->fakeRegistered,
+            sprintf('Invoice [%s] was not registered.', $invoice->getInvoiceNumber()),
+        );
     }
 
     /**
-     * Assert invoice was not sent
+     * Assert an invoice was cancelled while in fake mode
+     */
+    public function assertCancelled(InvoiceContract $invoice): void
+    {
+        $this->ensureFakeMode();
+
+        Assert::assertArrayHasKey(
+            $invoice->getInvoiceNumber(),
+            $this->fakeCancelled,
+            sprintf('Invoice [%s] was not cancelled.', $invoice->getInvoiceNumber()),
+        );
+    }
+
+    /**
+     * Assert an invoice was neither registered nor cancelled while in fake mode
      */
     public function assertNotSent(InvoiceContract $invoice): void
     {
-        if (! $this->fakeMode) {
-            throw new \RuntimeException('Cannot assert when not in fake mode');
-        }
+        $this->ensureFakeMode();
 
-        // Implementation will be added in next phase
+        $number = $invoice->getInvoiceNumber();
+
+        Assert::assertArrayNotHasKey(
+            $number,
+            $this->fakeRegistered,
+            sprintf('Invoice [%s] was unexpectedly registered.', $number),
+        );
+        Assert::assertArrayNotHasKey(
+            $number,
+            $this->fakeCancelled,
+            sprintf('Invoice [%s] was unexpectedly cancelled.', $number),
+        );
+    }
+
+    /**
+     * Build a non-persisted registry stub for fake mode returns
+     */
+    private function fakeRegistry(InvoiceContract $invoice, RegistryTypeEnum $type): Registry
+    {
+        return new Registry([
+            'registry_number' => 'FAKE-' . $invoice->getInvoiceNumber(),
+            'registry_date' => Carbon::now(),
+            'registry_type' => $type->value,
+            'hash' => strtoupper(hash('sha256', 'fake-' . $invoice->getInvoiceNumber())),
+            'hash_generated_at' => Carbon::now()->format('c'),
+            'status' => RegistryStatusEnum::PENDING->value,
+            'submission_attempts' => 0,
+        ]);
+    }
+
+    private function ensureFakeMode(): void
+    {
+        if (! $this->fakeMode) {
+            throw new \RuntimeException('Cannot assert when not in fake mode. Call Verifactu::fake() first.');
+        }
     }
 }
