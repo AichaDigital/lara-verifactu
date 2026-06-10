@@ -3,36 +3,32 @@
 declare(strict_types=1);
 
 use AichaDigital\LaraVerifactu\Contracts\InvoiceContract;
-use AichaDigital\LaraVerifactu\Enums\InvoiceTypeEnum;
 use AichaDigital\LaraVerifactu\Services\QrGenerator;
 use Carbon\Carbon;
 
 beforeEach(function () {
-    $this->validationUrl = 'https://www.aeat.es/verifactu/qr';
+    $this->validationUrl = 'https://prewww2.aeat.es/wlpl/TIKE-CONT/ValidarQR';
     $this->generator = new QrGenerator($this->validationUrl, 'svg');
 });
 
-it('generates validation URL with correct parameters', function () {
+it('generates validation URL with the official parameters', function () {
     $invoice = createMockInvoiceForQr();
-    $hash = hash('sha256', 'test');
 
-    $url = $this->generator->getValidationUrl($invoice, $hash);
+    $url = $this->generator->getValidationUrl($invoice);
 
     expect($url)
-        ->toStartWith('https://www.aeat.es/verifactu/qr?')
+        ->toStartWith('https://prewww2.aeat.es/wlpl/TIKE-CONT/ValidarQR?')
         ->toContain('nif=B12345678')
-        ->toContain('num=F-2025-001')
+        ->toContain('numserie=F-2025-001')
         ->toContain('fecha=11-10-2025')
-        ->toContain('tipo=F1')
-        ->toContain('hash=' . $hash);
+        ->toContain('importe=121.00');
 });
 
 it('generates SVG QR code', function () {
     $generator = new QrGenerator($this->validationUrl, 'svg');
     $invoice = createMockInvoiceForQr();
-    $hash = hash('sha256', 'test');
 
-    $qr = $generator->generate($invoice, $hash);
+    $qr = $generator->generate($invoice);
 
     expect($qr)
         ->toBeString()
@@ -43,9 +39,8 @@ it('generates SVG QR code', function () {
 it('generates PNG QR code as base64', function () {
     $generator = new QrGenerator($this->validationUrl, 'png');
     $invoice = createMockInvoiceForQr();
-    $hash = hash('sha256', 'test');
 
-    $qr = $generator->generate($invoice, $hash);
+    $qr = $generator->generate($invoice);
 
     expect($qr)
         ->toBeString()
@@ -53,14 +48,9 @@ it('generates PNG QR code as base64', function () {
 })->skip(! extension_loaded('imagick'), 'Imagick extension not available');
 
 it('encodes special characters in URL parameters', function () {
-    $invoice = Mockery::mock(InvoiceContract::class);
-    $invoice->shouldReceive('getIssuerTaxId')->andReturn('B12345678');
-    $invoice->shouldReceive('getInvoiceNumber')->andReturn('F-2025/001');
-    $invoice->shouldReceive('getIssueDatetime')->andReturn(Carbon::parse('2025-10-11 10:30:00'));
-    $invoice->shouldReceive('getInvoiceType')->andReturn(InvoiceTypeEnum::COMPLETE);
+    $invoice = createMockInvoiceForQr(['number' => 'F-2025/001']);
 
-    $hash = 'abc123';
-    $url = $this->generator->getValidationUrl($invoice, $hash);
+    $url = $this->generator->getValidationUrl($invoice);
 
     expect($url)
         ->toContain('F-2025%2F001'); // URL encoded slash
@@ -68,40 +58,26 @@ it('encodes special characters in URL parameters', function () {
 
 it('formats date correctly in URL', function () {
     $invoice = createMockInvoiceForQr(['issue_date' => Carbon::parse('2025-01-05')]);
-    $hash = hash('sha256', 'test');
 
-    $url = $this->generator->getValidationUrl($invoice, $hash);
+    $url = $this->generator->getValidationUrl($invoice);
 
     expect($url)->toContain('fecha=05-01-2025');
 });
 
-it('includes invoice type in URL', function () {
-    $invoice = createMockInvoiceForQr(['type' => InvoiceTypeEnum::SIMPLIFIED]);
-    $hash = hash('sha256', 'test');
+it('includes the invoice total amount in URL', function () {
+    $invoice = createMockInvoiceForQr(['total_amount' => 241.4]);
 
-    $url = $this->generator->getValidationUrl($invoice, $hash);
+    $url = $this->generator->getValidationUrl($invoice);
 
-    expect($url)->toContain('tipo=F2');
+    expect($url)->toContain('importe=241.40');
 });
 
 it('generates different QR codes for different invoices', function () {
     $invoice1 = createMockInvoiceForQr(['number' => 'F-001']);
     $invoice2 = createMockInvoiceForQr(['number' => 'F-002']);
-    $hash = hash('sha256', 'test');
 
-    $qr1 = $this->generator->generate($invoice1, $hash);
-    $qr2 = $this->generator->generate($invoice2, $hash);
-
-    expect($qr1)->not->toBe($qr2);
-});
-
-it('generates different QR codes for different hashes', function () {
-    $invoice = createMockInvoiceForQr();
-    $hash1 = hash('sha256', 'test1');
-    $hash2 = hash('sha256', 'test2');
-
-    $qr1 = $this->generator->generate($invoice, $hash1);
-    $qr2 = $this->generator->generate($invoice, $hash2);
+    $qr1 = $this->generator->generate($invoice1);
+    $qr2 = $this->generator->generate($invoice2);
 
     expect($qr1)->not->toBe($qr2);
 });
@@ -110,9 +86,8 @@ it('uses custom validation URL', function () {
     $customUrl = 'https://custom.example.com/validate';
     $generator = new QrGenerator($customUrl, 'svg');
     $invoice = createMockInvoiceForQr();
-    $hash = hash('sha256', 'test');
 
-    $url = $generator->getValidationUrl($invoice, $hash);
+    $url = $generator->getValidationUrl($invoice);
 
     expect($url)->toStartWith($customUrl);
 });
@@ -120,9 +95,8 @@ it('uses custom validation URL', function () {
 it('respects custom QR size', function () {
     $generator = new QrGenerator($this->validationUrl, 'svg', 200);
     $invoice = createMockInvoiceForQr();
-    $hash = hash('sha256', 'test');
 
-    $qr = $generator->generate($invoice, $hash);
+    $qr = $generator->generate($invoice);
 
     expect($qr)
         ->toBeString()
@@ -136,7 +110,7 @@ function createMockInvoiceForQr(array $overrides = []): InvoiceContract
         'issuer_tax_id' => 'B12345678',
         'number' => 'F-2025-001',
         'issue_datetime' => Carbon::parse('2025-10-11 10:30:00'),
-        'type' => InvoiceTypeEnum::COMPLETE,
+        'total_amount' => 121.00,
     ];
 
     // Support legacy 'issue_date' key for backwards compatibility
@@ -153,7 +127,7 @@ function createMockInvoiceForQr(array $overrides = []): InvoiceContract
     $invoice->shouldReceive('getIssueDatetime')->andReturn($data['issue_datetime']);
     $invoice->shouldReceive('getIssueDate')->andReturn($data['issue_datetime']->startOfDay());
     $invoice->shouldReceive('getIssueTime')->andReturn($data['issue_datetime']);
-    $invoice->shouldReceive('getInvoiceType')->andReturn($data['type']);
+    $invoice->shouldReceive('getTotalAmount')->andReturn((float) $data['total_amount']);
 
     return $invoice;
 }

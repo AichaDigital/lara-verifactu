@@ -22,6 +22,33 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Company (Obligado a expedir factura)
+    |--------------------------------------------------------------------------
+    |
+    | Issuer identification used in the registry hash (IDEmisorFactura),
+    | the registration XML and the QR cotejo URL. The tax_id is REQUIRED
+    | for AEAT-conformant output.
+    |
+    */
+
+    'company' => [
+        'tax_id' => env('VERIFACTU_COMPANY_TAX_ID'),
+        'name' => env('VERIFACTU_COMPANY_NAME'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | System Identification (SistemaInformatico)
+    |--------------------------------------------------------------------------
+    |
+    | Identifier of the invoicing software reported to AEAT.
+    |
+    */
+
+    'system_id' => env('VERIFACTU_SYSTEM_ID', 'LARA-VERIFACTU-001'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Models Configuration
     |--------------------------------------------------------------------------
     |
@@ -167,7 +194,14 @@ return [
     'qr' => [
         'format' => env('VERIFACTU_QR_FORMAT', 'png'),
         'size' => env('VERIFACTU_QR_SIZE', 300),
-        'validation_url' => env('VERIFACTU_QR_VALIDATION_URL', 'https://www.aeat.es/verifactu/qr'),
+
+        // Official AEAT cotejo service URLs. The active one is picked from
+        // aeat.environment; set validation_url to override explicitly.
+        'validation_url' => env('VERIFACTU_QR_VALIDATION_URL'),
+        'validation_urls' => [
+            'production' => 'https://www2.agenciatributaria.gob.es/wlpl/TIKE-CONT/ValidarQR',
+            'sandbox' => 'https://prewww2.aeat.es/wlpl/TIKE-CONT/ValidarQR',
+        ],
     ],
 
     /*

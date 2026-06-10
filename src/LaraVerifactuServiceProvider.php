@@ -48,6 +48,7 @@ class LaraVerifactuServiceProvider extends PackageServiceProvider
                 '2025_01_01_000002_create_verifactu_registries_table',
                 '2025_01_01_000003_create_verifactu_invoice_breakdowns_table',
                 '2026_01_25_000001_consolidate_issue_datetime_in_verifactu_invoices',
+                '2026_06_10_000001_add_hash_generated_at_to_verifactu_registries_table',
             ])
             ->hasCommand(RegisterInvoiceCommand::class)
             ->hasCommand(RetryFailedCommand::class)
@@ -87,20 +88,38 @@ class LaraVerifactuServiceProvider extends PackageServiceProvider
             HashGenerator::class
         );
 
-        $this->app->bind(
-            QrGeneratorContract::class,
-            QrGenerator::class
-        );
+        $this->app->bind(QrGeneratorContract::class, function (): QrGenerator {
+            $environment = (string) config('verifactu.aeat.environment', 'production');
+
+            /** @var string $validationUrl */
+            $validationUrl = config('verifactu.qr.validation_url')
+                ?? config(
+                    "verifactu.qr.validation_urls.{$environment}",
+                    'https://www2.agenciatributaria.gob.es/wlpl/TIKE-CONT/ValidarQR',
+                );
+
+            return new QrGenerator(
+                validationUrl: $validationUrl,
+                format: (string) config('verifactu.qr.format', 'png'),
+                size: (int) config('verifactu.qr.size', 300),
+            );
+        });
 
         $this->app->bind(
             XmlBuilderContract::class,
             XmlBuilder::class
         );
 
-        $this->app->bind(
-            AeatClientContract::class,
-            AeatClient::class
-        );
+        $this->app->bind(AeatClientContract::class, function ($app): AeatClient {
+            $environment = (string) config('verifactu.aeat.environment', 'production');
+
+            return new AeatClient(
+                endpoint: (string) config("verifactu.aeat.endpoints.{$environment}", ''),
+                certificateManager: $app->make(CertificateManagerContract::class),
+                timeout: (int) config('verifactu.aeat.timeout', 30),
+                verifySSL: (bool) config('verifactu.aeat.verify_ssl', true),
+            );
+        });
 
         $this->app->bind(
             CertificateManagerContract::class,

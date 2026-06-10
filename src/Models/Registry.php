@@ -26,6 +26,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property Carbon $registry_date
  * @property string $hash
  * @property string|null $previous_hash
+ * @property string|null $hash_generated_at
  * @property string|null $qr_url
  * @property string|null $qr_svg
  * @property string|null $qr_png
@@ -65,6 +66,7 @@ class Registry extends Model implements RegistryContract
         'registry_date',
         'hash',
         'previous_hash',
+        'hash_generated_at',
         'qr_url',
         'qr_svg',
         'qr_png',

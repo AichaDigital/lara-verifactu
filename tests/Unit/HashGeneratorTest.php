@@ -20,7 +20,7 @@ it('generates a valid SHA-256 hash', function () {
     expect($hash)
         ->toBeString()
         ->toHaveLength(64)
-        ->toMatch('/^[a-f0-9]{64}$/');
+        ->toMatch('/^[A-F0-9]{64}$/');
 });
 
 it('generates consistent hashes for same invoice data', function () {
