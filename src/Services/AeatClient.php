@@ -5,22 +5,31 @@ declare(strict_types=1);
 namespace AichaDigital\LaraVerifactu\Services;
 
 use AichaDigital\LaraVerifactu\Contracts\AeatClientContract;
-use AichaDigital\LaraVerifactu\Contracts\CertificateManagerContract;
 use AichaDigital\LaraVerifactu\Contracts\RegistryContract;
 use AichaDigital\LaraVerifactu\Exceptions\AeatAuthenticationException;
 use AichaDigital\LaraVerifactu\Exceptions\AeatConnectionException;
 use AichaDigital\LaraVerifactu\Exceptions\AeatException;
-use AichaDigital\LaraVerifactu\Exceptions\AeatRejectionException;
 use AichaDigital\LaraVerifactu\Exceptions\ValidationException;
 use AichaDigital\LaraVerifactu\Support\AeatResponse;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
-use SimpleXMLElement;
 use SoapClient;
 use SoapFault;
+use SoapVar;
 
+/**
+ * SOAP client for the AEAT Verifactu web service.
+ *
+ * The official WSDL exposes a single operation, RegFactuSistemaFacturacion,
+ * which carries both registration (RegistroAlta) and cancellation
+ * (RegistroAnulacion) records. Authentication uses a client certificate
+ * (mutual TLS); the registry XML must arrive already signed — signing is
+ * the registrar's responsibility, not this client's.
+ */
 final class AeatClient implements AeatClientContract
 {
+    private const SOAP_OPERATION = 'RegFactuSistemaFacturacion';
+
     private ?SoapClient $client = null;
 
     /**
@@ -30,9 +39,9 @@ final class AeatClient implements AeatClientContract
 
     public function __construct(
         private readonly string $endpoint,
-        private readonly CertificateManagerContract $certificateManager,
         private readonly int $timeout = 30,
         private readonly bool $verifySSL = true,
+        private readonly AeatResponseParser $responseParser = new AeatResponseParser,
     ) {}
 
     /**
@@ -50,9 +59,9 @@ final class AeatClient implements AeatClientContract
     }
 
     /**
-     * Send registration to AEAT
+     * Send a registry record (registration or cancellation) to AEAT
      *
-     * @throws AeatConnectionException|AeatAuthenticationException|AeatRejectionException
+     * @throws AeatConnectionException|AeatAuthenticationException
      */
     public function sendRegistration(RegistryContract $registry): AeatResponse
     {
@@ -65,29 +74,24 @@ final class AeatClient implements AeatClientContract
                 throw ValidationException::invalidXml('Registry XML content is missing.');
             }
 
-            // Sign XML with certificate
-            $signedXml = $this->signXml($xml);
-
-            // Send to AEAT
             if ($this->client === null) {
                 throw AeatConnectionException::cannotConnect($this->endpoint);
             }
 
-            // Parse XML to use correct SOAP structure
-            $xmlElement = new SimpleXMLElement($signedXml);
+            // Inject the document literally: the registry XML is already a
+            // complete RegFactuSistemaFacturacion element.
+            $payload = new SoapVar($xml, XSD_ANYXML);
 
-            // Call AEAT web service with the correct operation name from WSDL
-            $response = $this->client->__soapCall('RegFactuSistemaFacturacion', [
-                'RegFactuSistemaFacturacion' => $xmlElement,
-            ]);
+            $response = $this->client->__soapCall(self::SOAP_OPERATION, [$payload]);
 
             Log::channel(config('verifactu.logging.channel', 'verifactu'))
                 ->info('Registry sent to AEAT', [
                     'registry_number' => $registry->getRegistryNumber(),
-                    'response' => $response,
                 ]);
 
-            return $this->parseResponse($response);
+            $this->logSoapExchange();
+
+            return $this->responseParser->parse($response);
         } catch (SoapFault $e) {
             return $this->handleSoapFault($e);
         } catch (\Exception $e) {
@@ -96,42 +100,10 @@ final class AeatClient implements AeatClientContract
     }
 
     /**
-     * Send cancellation to AEAT
-     *
-     * @throws AeatConnectionException|AeatAuthenticationException|AeatRejectionException
-     */
-    public function sendCancellation(string $registryId): AeatResponse
-    {
-        try {
-            $this->ensureClientInitialized();
-
-            if ($this->client === null) {
-                throw AeatConnectionException::cannotConnect($this->endpoint);
-            }
-
-            $response = $this->client->anularRegistro([
-                'registryId' => $registryId,
-            ]);
-
-            Log::channel(config('verifactu.logging.channel', 'verifactu'))
-                ->info('Cancellation sent to AEAT', [
-                    'registry_id' => $registryId,
-                    'response' => $response,
-                ]);
-
-            return $this->parseResponse($response);
-        } catch (SoapFault $e) {
-            return $this->handleSoapFault($e);
-        }
-    }
-
-    /**
-     * Send batch of registrations to AEAT
+     * Send batch of registry records to AEAT
      *
      * @param  Collection<int, RegistryContract>  $registries
      * @return Collection<int, AeatResponse>
-     *
-     * @throws AeatConnectionException|AeatAuthenticationException
      */
     public function sendBatch(Collection $registries): Collection
     {
@@ -154,55 +126,7 @@ final class AeatClient implements AeatClientContract
     }
 
     /**
-     * Query registry status from AEAT
-     *
-     * @throws AeatConnectionException|AeatAuthenticationException
-     */
-    public function queryRegistry(string $registryId): AeatResponse
-    {
-        try {
-            $this->ensureClientInitialized();
-
-            if ($this->client === null) {
-                throw AeatConnectionException::cannotConnect($this->endpoint);
-            }
-
-            $response = $this->client->consultarRegistro([
-                'registryId' => $registryId,
-            ]);
-
-            return $this->parseResponse($response);
-        } catch (SoapFault $e) {
-            return $this->handleSoapFault($e);
-        }
-    }
-
-    /**
-     * Validate QR code with AEAT
-     *
-     * @throws AeatConnectionException|AeatAuthenticationException
-     */
-    public function validateQr(string $qrCode): AeatResponse
-    {
-        try {
-            $this->ensureClientInitialized();
-
-            if ($this->client === null) {
-                throw AeatConnectionException::cannotConnect($this->endpoint);
-            }
-
-            $response = $this->client->validarQR([
-                'qrCode' => $qrCode,
-            ]);
-
-            return $this->parseResponse($response);
-        } catch (SoapFault $e) {
-            return $this->handleSoapFault($e);
-        }
-    }
-
-    /**
-     * Ensure SOAP client is initialized
+     * Ensure SOAP client is initialized with mutual TLS authentication
      *
      * @throws AeatConnectionException
      */
@@ -277,101 +201,26 @@ final class AeatClient implements AeatClientContract
     }
 
     /**
-     * Sign XML with certificate
+     * Log raw SOAP exchange for debugging
      */
-    private function signXml(string $xml): string
+    private function logSoapExchange(): void
     {
-        return $this->certificateManager->sign($xml);
-    }
-
-    /**
-     * Parse AEAT response
-     */
-    private function parseResponse(mixed $response): AeatResponse
-    {
-        // Log raw response for debugging
-        if ($this->client !== null) {
-            Log::debug('AEAT SOAP Request', [
-                'request' => $this->client->__getLastRequest(),
-            ]);
-            Log::debug('AEAT SOAP Response', [
-                'response' => $this->client->__getLastResponse(),
-            ]);
+        if ($this->client === null) {
+            return;
         }
 
-        // Parse response based on AEAT structure
-        if (is_object($response)) {
-            // Check for success indicators (CSV = Código Seguro de Verificación)
-            $success = property_exists($response, 'CSV') ||
-                       (property_exists($response, 'EstadoEnvio') && $response->EstadoEnvio === 'Correcto');
-
-            if ($success) {
-                $data = [
-                    'csv' => $response->CSV ?? null,
-                    'estado' => $response->EstadoEnvio ?? null,
-                    'codigo_seguro' => $response->CodigoSeguro ?? null,
-                    'timestamp' => $response->TimestampPresentacion ?? null,
-                ];
-
-                return AeatResponse::success(
-                    $data,
-                    'Registro enviado correctamente'
-                );
-            }
-
-            // Handle errors
-            $errors = [];
-            if (property_exists($response, 'RegistroDuplicado')) {
-                $errors[] = 'Registro duplicado';
-            }
-            if (property_exists($response, 'RespuestaLinea')) {
-                foreach ((array) $response->RespuestaLinea as $linea) {
-                    if (isset($linea->CodigoErrorRegistro)) {
-                        $errors[] = $linea->DescripcionErrorRegistro ?? $linea->CodigoErrorRegistro;
-                    }
-                }
-            }
-
-            if ($errors !== []) {
-                return AeatResponse::failure(
-                    $errors,
-                    'Error en el envío del registro',
-                    $response->CodigoErrorRegistro ?? null
-                );
-            }
-
-            // Check for old-style response format
-            if (isset($response->resultado)) {
-                if ($response->resultado === 'ACEPTADO') {
-                    return AeatResponse::success(
-                        data: (array) $response,
-                        message: 'Registry accepted by AEAT'
-                    );
-                }
-
-                if ($response->resultado === 'RECHAZADO') {
-                    $errorList = isset($response->errores) ? (array) $response->errores : [];
-                    $errorMessages = array_map(fn ($e) => is_object($e) ? ($e->descripcion ?? 'Unknown error') : (string) $e, $errorList);
-
-                    return AeatResponse::failure(
-                        errors: $errorMessages,
-                        message: 'Registry rejected by AEAT',
-                        code: $response->codigo ?? null
-                    );
-                }
-            }
-        }
-
-        return AeatResponse::failure(
-            ['Respuesta inválida del servidor AEAT'],
-            'Error desconocido'
-        );
+        Log::debug('AEAT SOAP Request', [
+            'request' => $this->client->__getLastRequest(),
+        ]);
+        Log::debug('AEAT SOAP Response', [
+            'response' => $this->client->__getLastResponse(),
+        ]);
     }
 
     /**
      * Handle SOAP fault exceptions
      *
-     * @throws AeatConnectionException|AeatAuthenticationException|AeatRejectionException
+     * @throws AeatConnectionException|AeatAuthenticationException
      */
     private function handleSoapFault(SoapFault $e): AeatResponse
     {

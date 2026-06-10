@@ -4,29 +4,25 @@ declare(strict_types=1);
 
 namespace AichaDigital\LaraVerifactu\Contracts;
 
-use Illuminate\Support\Collection;
+use AichaDigital\LaraVerifactu\Support\CancellationRecord;
+use AichaDigital\LaraVerifactu\Support\RegistryChain;
 
 interface XmlBuilderContract
 {
     /**
-     * Build XML for invoice registration
+     * Build the RegFactuSistemaFacturacion XML for a registration record
+     * (RegistroAlta) conformant with the official AEAT SuministroLR schema.
      */
-    public function buildRegistrationXml(InvoiceContract $invoice): string;
+    public function buildRegistrationXml(InvoiceContract $invoice, RegistryChain $chain): string;
 
     /**
-     * Build XML for invoice cancellation
+     * Build the RegFactuSistemaFacturacion XML for a cancellation record
+     * (RegistroAnulacion) conformant with the official AEAT SuministroLR schema.
      */
-    public function buildCancellationXml(string $registryId): string;
+    public function buildCancellationXml(CancellationRecord $record, RegistryChain $chain): string;
 
     /**
-     * Build XML for batch submission
-     *
-     * @param  Collection<int, InvoiceContract>  $invoices
-     */
-    public function buildBatchXml(Collection $invoices): string;
-
-    /**
-     * Validate XML against XSD schema
+     * Validate XML against the bundled official AEAT XSD schema
      */
     public function validate(string $xml): bool;
 }

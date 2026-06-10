@@ -49,6 +49,7 @@ class LaraVerifactuServiceProvider extends PackageServiceProvider
                 '2025_01_01_000003_create_verifactu_invoice_breakdowns_table',
                 '2026_01_25_000001_consolidate_issue_datetime_in_verifactu_invoices',
                 '2026_06_10_000001_add_hash_generated_at_to_verifactu_registries_table',
+                '2026_06_10_000002_add_registry_type_to_verifactu_registries_table',
             ])
             ->hasCommand(RegisterInvoiceCommand::class)
             ->hasCommand(RetryFailedCommand::class)
@@ -110,12 +111,11 @@ class LaraVerifactuServiceProvider extends PackageServiceProvider
             XmlBuilder::class
         );
 
-        $this->app->bind(AeatClientContract::class, function ($app): AeatClient {
+        $this->app->bind(AeatClientContract::class, function (): AeatClient {
             $environment = (string) config('verifactu.aeat.environment', 'production');
 
             return new AeatClient(
                 endpoint: (string) config("verifactu.aeat.endpoints.{$environment}", ''),
-                certificateManager: $app->make(CertificateManagerContract::class),
                 timeout: (int) config('verifactu.aeat.timeout', 30),
                 verifySSL: (bool) config('verifactu.aeat.verify_ssl', true),
             );

@@ -41,11 +41,23 @@ return [
     | System Identification (SistemaInformatico)
     |--------------------------------------------------------------------------
     |
-    | Identifier of the invoicing software reported to AEAT.
+    | Invoicing software identification reported to AEAT inside every
+    | registry record (SistemaInformaticoType). vendor_* identify the
+    | software producer; id is limited to 2 characters by the XSD.
     |
     */
 
-    'system_id' => env('VERIFACTU_SYSTEM_ID', 'LARA-VERIFACTU-001'),
+    'system' => [
+        'vendor_name' => env('VERIFACTU_SYSTEM_VENDOR_NAME'),
+        'vendor_nif' => env('VERIFACTU_SYSTEM_VENDOR_NIF'),
+        'name' => env('VERIFACTU_SYSTEM_NAME', 'LaraVerifactu'),
+        'id' => env('VERIFACTU_SYSTEM_ID', 'LV'),
+        'version' => env('VERIFACTU_SYSTEM_VERSION', '1.0'),
+        'installation_number' => env('VERIFACTU_INSTALLATION_NUMBER', '1'),
+        'only_verifactu' => env('VERIFACTU_SYSTEM_ONLY_VERIFACTU', 'S'),
+        'multi_ot' => env('VERIFACTU_SYSTEM_MULTI_OT', 'N'),
+        'multiple_ot' => env('VERIFACTU_SYSTEM_MULTIPLE_OT', 'N'),
+    ],
 
     /*
     |--------------------------------------------------------------------------

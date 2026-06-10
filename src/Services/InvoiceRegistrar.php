@@ -93,6 +93,54 @@ final class InvoiceRegistrar
     }
 
     /**
+     * Cancel an invoice in the Verifactu system
+     *
+     * Creates a cancellation registry (RegistroAnulacion) chained to the
+     * previous record, signs its XML and optionally submits it to AEAT.
+     *
+     * @throws VerifactuException
+     */
+    public function cancel(InvoiceContract $invoice, bool $submitToAeat = true): RegistryContract
+    {
+        return DB::transaction(function () use ($invoice, $submitToAeat) {
+            Log::channel(config('verifactu.logging.channel', 'single'))
+                ->info('Creating cancellation registry for invoice', [
+                    'invoice_number' => $invoice->getNumber(),
+                    'serie' => $invoice->getSerie(),
+                ]);
+
+            $registry = $this->registryManager->createCancellationRegistry($invoice);
+
+            try {
+                $xml = $registry->getXml();
+
+                if ($xml === null || $xml === '') {
+                    throw ValidationException::invalidXml('Registry XML content is missing.');
+                }
+
+                $signedXml = $this->signXml($xml);
+
+                if ($registry instanceof Registry) {
+                    $registry->update(['signed_xml' => $signedXml]);
+                }
+            } catch (\Throwable $e) {
+                Log::channel(config('verifactu.logging.channel', 'single'))
+                    ->warning('Failed to sign XML', [
+                        'registry_number' => $registry->getRegistryNumber(),
+                        'error' => $e->getMessage(),
+                    ]);
+                // Continue without signed XML (optional feature)
+            }
+
+            if ($submitToAeat) {
+                $this->submitToAeat($registry);
+            }
+
+            return $registry;
+        });
+    }
+
+    /**
      * Submit a registry to AEAT
      *
      * Uses a database transaction to ensure atomicity between

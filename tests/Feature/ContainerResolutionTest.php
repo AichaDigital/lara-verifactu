@@ -17,7 +17,7 @@ use AichaDigital\LaraVerifactu\Verifactu;
  */
 it('defines company and system identification keys in the config file', function () {
     expect(config('verifactu.company'))->toBeArray()->toHaveKeys(['tax_id', 'name'])
-        ->and(config()->has('verifactu.system_id'))->toBeTrue();
+        ->and(config('verifactu.system'))->toBeArray()->toHaveKeys(['vendor_name', 'vendor_nif', 'name', 'id', 'version', 'installation_number']);
 });
 
 it('resolves the QR generator from the container', function () {

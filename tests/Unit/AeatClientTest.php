@@ -3,19 +3,16 @@
 declare(strict_types=1);
 
 use AichaDigital\LaraVerifactu\Contracts\AeatClientContract;
-use AichaDigital\LaraVerifactu\Contracts\CertificateManagerContract;
 use AichaDigital\LaraVerifactu\Contracts\RegistryContract;
+use AichaDigital\LaraVerifactu\Exceptions\AeatException;
 use AichaDigital\LaraVerifactu\Services\AeatClient;
 use AichaDigital\LaraVerifactu\Support\AeatResponse;
 
 beforeEach(function () {
-    $this->endpoint = 'https://prewww7.aeat.es/verifactu/ws';
-    $this->certificateManager = Mockery::mock(CertificateManagerContract::class);
-    $this->certificateManager->shouldReceive('sign')->andReturn('signed_xml');
+    $this->endpoint = 'https://prewww2.aeat.es/wlpl/TIKE-CONT/ws/SistemaFacturacion';
 
     $this->client = new AeatClient(
         $this->endpoint,
-        $this->certificateManager,
         30,
         false // Don't verify SSL in tests
     );
@@ -25,63 +22,41 @@ it('implements AeatClientContract', function () {
     expect($this->client)->toBeInstanceOf(AeatClientContract::class);
 });
 
-it('has all required methods', function () {
-    expect(method_exists($this->client, 'sendRegistration'))->toBeTrue();
-    expect(method_exists($this->client, 'sendCancellation'))->toBeTrue();
-    expect(method_exists($this->client, 'sendBatch'))->toBeTrue();
-    expect(method_exists($this->client, 'queryRegistry'))->toBeTrue();
-    expect(method_exists($this->client, 'validateQr'))->toBeTrue();
+it('exposes only the operations of the official WSDL', function () {
+    expect(method_exists($this->client, 'sendRegistration'))->toBeTrue()
+        ->and(method_exists($this->client, 'sendBatch'))->toBeTrue()
+        // Operations that do not exist in the official WSDL must be gone
+        ->and(method_exists($this->client, 'sendCancellation'))->toBeFalse()
+        ->and(method_exists($this->client, 'queryRegistry'))->toBeFalse()
+        ->and(method_exists($this->client, 'validateQr'))->toBeFalse();
 });
 
-it('sends registration to AEAT', function () {
+it('does not sign the XML itself: signing is the registrar responsibility', function () {
+    // The client has no certificate manager dependency at all: signing
+    // happens upstream in the registrar before the XML reaches this client.
     $registry = Mockery::mock(RegistryContract::class);
-    $registry->shouldReceive('getXmlContent')->andReturn('<xml>test</xml>');
-    $registry->shouldReceive('getRegistryId')->andReturn('REG-001');
+    $registry->shouldReceive('getSignedXml')->andReturn('<signed/>');
+    $registry->shouldReceive('getXml')->andReturn('<xml/>');
+    $registry->shouldReceive('getRegistryNumber')->andReturn('REG-001');
 
-    // Note: This test would need SOAP mocking to work fully
-    expect($this->client)->toBeInstanceOf(AeatClient::class);
-})->skip('Requires SOAP mocking for full implementation');
-
-it('sends cancellation to AEAT', function () {
-    expect($this->client)->toBeInstanceOf(AeatClient::class);
-})->skip('Requires SOAP mocking for full implementation');
-
-it('sends batch of registrations', function () {
-    expect($this->client)->toBeInstanceOf(AeatClient::class);
-})->skip('Requires SOAP mocking for full implementation');
-
-it('queries registry status', function () {
-    expect($this->client)->toBeInstanceOf(AeatClient::class);
-})->skip('Requires SOAP mocking for full implementation');
-
-it('validates QR code', function () {
-    expect($this->client)->toBeInstanceOf(AeatClient::class);
-})->skip('Requires SOAP mocking for full implementation');
-
-it('uses certificate manager to sign XML', function () {
-    $certificateManager = Mockery::mock(CertificateManagerContract::class);
-    $certificateManager->shouldReceive('sign')
-        ->andReturn('signed_xml');
-
-    $client = new AeatClient($this->endpoint, $certificateManager, 30, false);
-
-    expect($client)->toBeInstanceOf(AeatClient::class);
+    // Connection fails in tests (no real WSDL) — but never because of signing
+    expect(fn () => $this->client->sendRegistration($registry))
+        ->toThrow(AeatException::class);
 });
 
 it('respects timeout configuration', function () {
-    $client = new AeatClient($this->endpoint, $this->certificateManager, 60, false);
+    $client = new AeatClient($this->endpoint, 60, false);
 
     expect($client)->toBeInstanceOf(AeatClient::class);
 });
 
 it('can be configured with SSL verification', function () {
-    $client = new AeatClient($this->endpoint, $this->certificateManager, 30, true);
+    $client = new AeatClient($this->endpoint, 30, true);
 
     expect($client)->toBeInstanceOf(AeatClient::class);
 });
 
-it('parses successful AEAT responses', function () {
-    // Test AeatResponse creation
+it('builds successful AeatResponse objects', function () {
     $response = AeatResponse::success(['test' => 'data'], 'Success message');
 
     expect($response->isSuccess())->toBeTrue();
@@ -89,8 +64,7 @@ it('parses successful AEAT responses', function () {
     expect($response->getData())->toBe(['test' => 'data']);
 });
 
-it('parses failed AEAT responses', function () {
-    // Test AeatResponse creation
+it('builds failed AeatResponse objects', function () {
     $response = AeatResponse::failure(['error' => 'test'], 'Failure message', 'ERR001');
 
     expect($response->isFailure())->toBeTrue();
@@ -99,8 +73,14 @@ it('parses failed AEAT responses', function () {
     expect($response->getCode())->toBe('ERR001');
 });
 
-it('handles batch operations correctly', function () {
-    $registries = collect();
+it('returns per-registry failure responses when batch sending fails', function () {
+    $registry = Mockery::mock(RegistryContract::class);
+    $registry->shouldReceive('getSignedXml')->andReturn('<signed/>');
+    $registry->shouldReceive('getXml')->andReturn('<xml/>');
+    $registry->shouldReceive('getRegistryNumber')->andReturn('REG-001');
 
-    expect($this->client)->toBeInstanceOf(AeatClient::class);
+    $responses = $this->client->sendBatch(collect([$registry]));
+
+    expect($responses)->toHaveCount(1)
+        ->and($responses->first()->isFailure())->toBeTrue();
 });

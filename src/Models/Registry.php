@@ -8,6 +8,7 @@ use AichaDigital\LaraVerifactu\Contracts\InvoiceContract;
 use AichaDigital\LaraVerifactu\Contracts\RegistryContract;
 use AichaDigital\LaraVerifactu\Database\Factories\RegistryFactory;
 use AichaDigital\LaraVerifactu\Enums\RegistryStatusEnum;
+use AichaDigital\LaraVerifactu\Enums\RegistryTypeEnum;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -24,6 +25,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property int $invoice_id
  * @property string $registry_number
  * @property Carbon $registry_date
+ * @property RegistryTypeEnum $registry_type
  * @property string $hash
  * @property string|null $previous_hash
  * @property string|null $hash_generated_at
@@ -64,6 +66,7 @@ class Registry extends Model implements RegistryContract
         'invoice_id',
         'registry_number',
         'registry_date',
+        'registry_type',
         'hash',
         'previous_hash',
         'hash_generated_at',
@@ -87,6 +90,7 @@ class Registry extends Model implements RegistryContract
      */
     protected $casts = [
         'registry_date' => 'datetime',
+        'registry_type' => RegistryTypeEnum::class,
         'submitted_at' => 'datetime',
         'submission_attempts' => 'integer',
         'status' => RegistryStatusEnum::class,
