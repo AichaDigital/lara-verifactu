@@ -162,3 +162,97 @@ it('includes the recipient as Destinatarios when the invoice has one', function 
         ->and($xml)->toContain('<sf:Destinatarios>')
         ->and($xml)->toContain('<sf:NIF>12345678Z</sf:NIF>');
 });
+
+describe('rectificative registration XML (AID-135)', function () {
+    function rectificativeInvoice(?string $rectificationType = 'I', array $rectifiedInvoices = []): InvoiceContract
+    {
+        $invoice = Mockery::mock(InvoiceContract::class);
+        $invoice->shouldReceive('getIssuerTaxId')->andReturn('89890001K');
+        $invoice->shouldReceive('getSerie')->andReturn(null);
+        $invoice->shouldReceive('getNumber')->andReturn('FAC-2026-RECT-1');
+        $invoice->shouldReceive('getInvoiceNumber')->andReturn('FAC-2026-RECT-1');
+        $invoice->shouldReceive('getIssueDatetime')->andReturn(Carbon::parse('2026-06-05 09:00:00'));
+        $invoice->shouldReceive('getType')->andReturn(InvoiceTypeEnum::RECTIFICATIVE);
+        $invoice->shouldReceive('getInvoiceType')->andReturn(InvoiceTypeEnum::RECTIFICATIVE);
+        $invoice->shouldReceive('getRectificationType')->andReturn($rectificationType);
+        $invoice->shouldReceive('getRectifiedInvoices')->andReturn($rectifiedInvoices);
+        $invoice->shouldReceive('getDescription')->andReturn('Rectificación por diferencias');
+        $invoice->shouldReceive('getRegimeType')->andReturn(RegimeTypeEnum::GENERAL);
+        $invoice->shouldReceive('getTaxAmount')->andReturn(-21.0);
+        $invoice->shouldReceive('getTotalAmount')->andReturn(-121.0);
+        $invoice->shouldReceive('hasRecipient')->andReturn(false);
+        $invoice->shouldReceive('getRecipient')->andReturn(null);
+        $invoice->shouldReceive('getBreakdowns')->andReturn(collect([conformanceBreakdown()]));
+
+        return $invoice;
+    }
+
+    it('emits TipoRectificativa and FacturasRectificadas and validates against the XSD', function () {
+        $chain = new RegistryChain(
+            hash: str_repeat('D', 64),
+            generatedAt: Carbon::parse('2026-06-05T09:00:30+02:00'),
+            previous: null,
+        );
+
+        $invoice = rectificativeInvoice('I', [
+            ['number' => 'FAC-2026-001', 'issue_date' => Carbon::parse('2026-06-01')],
+        ]);
+
+        $xml = $this->builder->buildRegistrationXml($invoice, $chain);
+
+        expect($this->builder->validate($xml))->toBeTrue()
+            ->and($xml)->toContain('<sf:TipoFactura>R1</sf:TipoFactura>')
+            ->and($xml)->toContain('<sf:TipoRectificativa>I</sf:TipoRectificativa>')
+            ->and($xml)->toContain('<sf:FacturasRectificadas>')
+            ->and($xml)->toContain('<sf:IDFacturaRectificada>')
+            ->and($xml)->toContain('<sf:IDEmisorFactura>89890001K</sf:IDEmisorFactura>')
+            ->and($xml)->toContain('<sf:NumSerieFactura>FAC-2026-001</sf:NumSerieFactura>')
+            ->and($xml)->toContain('<sf:FechaExpedicionFactura>01-06-2026</sf:FechaExpedicionFactura>');
+    });
+
+    it('emits an explicit substitution rectification type', function () {
+        $chain = new RegistryChain(
+            hash: str_repeat('E', 64),
+            generatedAt: Carbon::parse('2026-06-05T10:00:00+02:00'),
+            previous: null,
+        );
+
+        $invoice = rectificativeInvoice('S', [
+            ['number' => 'FAC-2026-002', 'issue_date' => Carbon::parse('2026-06-02')],
+        ]);
+
+        $xml = $this->builder->buildRegistrationXml($invoice, $chain);
+
+        expect($this->builder->validate($xml))->toBeTrue()
+            ->and($xml)->toContain('<sf:TipoRectificativa>S</sf:TipoRectificativa>');
+    });
+
+    it('normalizes legacy non-S codes (R1 from older adapters) to I', function () {
+        $chain = new RegistryChain(
+            hash: str_repeat('F', 64),
+            generatedAt: Carbon::parse('2026-06-05T11:00:00+02:00'),
+            previous: null,
+        );
+
+        $invoice = rectificativeInvoice('R1', []);
+
+        $xml = $this->builder->buildRegistrationXml($invoice, $chain);
+
+        expect($this->builder->validate($xml))->toBeTrue()
+            ->and($xml)->toContain('<sf:TipoRectificativa>I</sf:TipoRectificativa>')
+            ->and($xml)->not->toContain('<sf:FacturasRectificadas>');
+    });
+
+    it('does not emit rectification elements for non-rectificative invoices', function () {
+        $chain = new RegistryChain(
+            hash: str_repeat('G', 64),
+            generatedAt: Carbon::parse('2026-06-05T12:00:00+02:00'),
+            previous: null,
+        );
+
+        $xml = $this->builder->buildRegistrationXml(conformanceInvoice(), $chain);
+
+        expect($xml)->not->toContain('TipoRectificativa')
+            ->and($xml)->not->toContain('FacturasRectificadas');
+    });
+});

@@ -238,6 +238,34 @@ class Invoice extends Model implements InvoiceContract
     }
 
     /**
+     * Get the invoices rectified by this one (AEAT FacturasRectificadas).
+     *
+     * Native mode reads them from metadata['rectified_invoices'], an array
+     * of ['number' => string, 'issue_date' => string|Carbon] entries.
+     *
+     * @return array<int, array{number: string, issue_date: Carbon}>
+     */
+    public function getRectifiedInvoices(): array
+    {
+        $entries = $this->metadata['rectified_invoices'] ?? [];
+
+        $rectified = [];
+
+        foreach ($entries as $entry) {
+            if (empty($entry['number']) || empty($entry['issue_date'])) {
+                continue;
+            }
+
+            $rectified[] = [
+                'number' => (string) $entry['number'],
+                'issue_date' => Carbon::parse($entry['issue_date']),
+            ];
+        }
+
+        return $rectified;
+    }
+
+    /**
      * Get previous invoice ID for rectifications
      */
     public function getPreviousInvoiceId(): ?string
