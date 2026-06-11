@@ -13,6 +13,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Nothing yet
 
+## [0.10.0] - 2026-06-11
+
+### Added
+
+- Rectificative invoices in the registration XML (AID-135): `RegistroAlta`
+  now emits `TipoRectificativa` and, when the rectified invoices are
+  identified, `FacturasRectificadas` with one `IDFacturaRectificada`
+  (issuer NIF + serie/number + issue date) per entry. Fixes AEAT sandbox
+  rejection 1114 ("Si la factura es de tipo rectificativa, el campo
+  TipoRectificativa debe estar cumplimentado").
+- `InvoiceContract::getRectifiedInvoices()` — returns the invoices
+  rectified by this one as `[['number' => string, 'issue_date' => Carbon]]`.
+  The native `Invoice` model reads them from
+  `metadata['rectified_invoices']`.
+
+### Changed
+
+- **BREAKING (custom invoice models)**: `InvoiceContract` gained
+  `getRectifiedInvoices(): array`. Custom implementations must add it
+  (return `[]` when not applicable). Native mode is unaffected.
+- `getRectificationType()` values are normalized when building the XML:
+  `'S'` maps to AEAT substitution; anything else (including legacy adapter
+  codes like `'R1'` or null) maps to `'I'` (incremental, por diferencias).
+
+### Known limitations
+
+- `ImporteRectificacion` (required by AEAT business rules when
+  `TipoRectificativa` is `S`) is not emitted yet — substitution
+  rectifications will need it before production use. Incremental (`I`)
+  rectifications, the common modality, are fully supported.
+
 ## [0.2.0-alpha] - 2025-11-16
 
 ### 🚨 BREAKING CHANGES

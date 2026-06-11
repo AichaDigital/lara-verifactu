@@ -85,6 +85,19 @@ interface InvoiceContract
     public function getRectificationType(): ?string;
 
     /**
+     * Get the invoices rectified by this one (AEAT FacturasRectificadas).
+     *
+     * Each entry identifies one rectified invoice: its full serie+number and
+     * its issue date. The issuer NIF is taken from getIssuerTaxId() per the
+     * XSD ("El NIF se cogerá del NIF indicado en el bloque IDFactura").
+     * Return an empty array when not a rectificative invoice or when the
+     * rectified invoices are not identified.
+     *
+     * @return array<int, array{number: string, issue_date: Carbon}>
+     */
+    public function getRectifiedInvoices(): array;
+
+    /**
      * Get previous invoice ID for rectifications
      */
     public function getPreviousInvoiceId(): ?string;

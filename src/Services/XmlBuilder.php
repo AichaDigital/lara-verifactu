@@ -12,6 +12,7 @@ use AichaDigital\LaraVerifactu\Exceptions\XmlException;
 use AichaDigital\LaraVerifactu\Support\CancellationRecord;
 use AichaDigital\LaraVerifactu\Support\PreviousRegistry;
 use AichaDigital\LaraVerifactu\Support\RegistryChain;
+use Carbon\Carbon;
 use DOMDocument;
 use DOMElement;
 
@@ -142,6 +143,17 @@ final class XmlBuilder implements XmlBuilderContract
 
         $alta->appendChild($this->sfElement($dom, 'NombreRazonEmisor', $this->companyName()));
         $alta->appendChild($this->sfElement($dom, 'TipoFactura', $invoice->getType()->value));
+
+        if ($invoice->getType()->isRectificative()) {
+            $alta->appendChild($this->sfElement($dom, 'TipoRectificativa', $this->rectificationTypeCode($invoice)));
+
+            $rectified = $invoice->getRectifiedInvoices();
+
+            if ($rectified !== []) {
+                $alta->appendChild($this->buildFacturasRectificadas($dom, $invoice, $rectified));
+            }
+        }
+
         $alta->appendChild($this->sfElement($dom, 'DescripcionOperacion', $invoice->getDescription() ?? 'Factura'));
 
         if ($invoice->hasRecipient() && $invoice->getRecipient() instanceof RecipientContract) {
@@ -274,6 +286,41 @@ final class XmlBuilder implements XmlBuilderContract
     /**
      * Build Destinatarios with a single IDDestinatario (PersonaFisicaJuridicaType)
      */
+    /**
+     * Normalize the rectification type to the AEAT ClaveTipoRectificativaType.
+     *
+     * 'S' (sustitución) passes through; anything else — including legacy
+     * adapter codes like 'R1' or null — maps to 'I' (incremental, por
+     * diferencias), the common rectification modality.
+     */
+    private function rectificationTypeCode(InvoiceContract $invoice): string
+    {
+        return $invoice->getRectificationType() === 'S' ? 'S' : 'I';
+    }
+
+    /**
+     * Build FacturasRectificadas with one IDFacturaRectificada per rectified
+     * invoice. Per the XSD, IDEmisorFactura is the issuer NIF of the
+     * rectifying invoice's IDFactura block.
+     *
+     * @param  array<int, array{number: string, issue_date: Carbon}>  $rectified
+     */
+    private function buildFacturasRectificadas(DOMDocument $dom, InvoiceContract $invoice, array $rectified): DOMElement
+    {
+        $facturas = $dom->createElementNS(self::SF_NS, 'sf:FacturasRectificadas');
+
+        foreach ($rectified as $entry) {
+            $id = $dom->createElementNS(self::SF_NS, 'sf:IDFacturaRectificada');
+            $facturas->appendChild($id);
+
+            $id->appendChild($this->sfElement($dom, 'IDEmisorFactura', $invoice->getIssuerTaxId()));
+            $id->appendChild($this->sfElement($dom, 'NumSerieFactura', $entry['number']));
+            $id->appendChild($this->sfElement($dom, 'FechaExpedicionFactura', $entry['issue_date']->format('d-m-Y')));
+        }
+
+        return $facturas;
+    }
+
     private function buildDestinatarios(DOMDocument $dom, RecipientContract $recipient): DOMElement
     {
         $destinatarios = $dom->createElementNS(self::SF_NS, 'sf:Destinatarios');
