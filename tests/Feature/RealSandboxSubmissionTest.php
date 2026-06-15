@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use AichaDigital\LaraVerifactu\Contracts\QrGeneratorContract;
+use AichaDigital\LaraVerifactu\Enums\IdTypeEnum;
 use AichaDigital\LaraVerifactu\Enums\InvoiceTypeEnum;
 use AichaDigital\LaraVerifactu\Enums\RegistryStatusEnum;
 use AichaDigital\LaraVerifactu\Models\Invoice;
@@ -166,6 +167,70 @@ it('submits a real substitution (S) rectification with ImporteRectificacion to t
     ]);
 
     $registry = $registrar->register($rectification->refresh(), submitToAeat: true);
+    $registry->refresh();
+
+    dump([
+        'status' => $registry->status->value,
+        'csv' => $registry->aeat_csv,
+        'error' => $registry->aeat_error,
+    ]);
+
+    expect($registry->status)->toBe(RegistryStatusEnum::SENT)
+        ->and($registry->aeat_csv)->not->toBeNull();
+})->skip(! $certificateAvailable, 'Real AEAT sandbox certificate not available');
+
+/*
+ * AID-166 — F3 (factura en sustitución de simplificadas) end-to-end against AEAT.
+ *
+ * Register a simplified invoice (F2), then an F3 that substitutes it, emitting
+ * FacturasSustituidas. F3 MUST carry a recipient (AEAT rule 1189 requires
+ * Destinatarios for F1/F3/R1/R2/R3/R4), unlike the F2.
+ *
+ * Regression triage if this fails:
+ *  - rule 1189 / Destinatarios  -> recipient handling regressed
+ *  - FacturasSustituidas / XSD  -> XmlBuilder::buildFacturasSustituidas regressed
+ */
+it('submits a real F3 substitution-of-simplified invoice with FacturasSustituidas to the AEAT sandbox (AID-166)', function () {
+    $registrar = app(InvoiceRegistrar::class);
+
+    // 1) Simplified invoice (F2) accepted first — the one being substituted.
+    $simplified = createSandboxInvoice();
+    $simplifiedRegistry = $registrar->register($simplified, submitToAeat: true);
+    $simplifiedRegistry->refresh();
+    dump(['simplified_status' => $simplifiedRegistry->status->value, 'simplified_csv' => $simplifiedRegistry->aeat_csv, 'simplified_error' => $simplifiedRegistry->aeat_error]);
+    expect($simplifiedRegistry->status)->toBe(RegistryStatusEnum::SENT);
+
+    // 2) F3 substituting it, WITH recipient (rule 1189) and FacturasSustituidas.
+    $f3 = Invoice::factory()->create([
+        'serie' => null,
+        'number' => 'TESTF3-' . now()->format('YmdHis') . '-' . strtoupper(substr(uniqid(), -5)),
+        'type' => InvoiceTypeEnum::SUBSTITUTE,
+        'simplified' => false,
+        'recipient_nif' => (string) getenv('VERIFACTU_COMPANY_TAX_ID'),
+        'recipient_id_type' => IdTypeEnum::NIF,
+        'recipient_id' => null,
+        'recipient_name' => (string) getenv('VERIFACTU_COMPANY_NAME'),
+        'recipient_country' => 'ES',
+        'base_amount' => 10.00,
+        'tax_amount' => 2.10,
+        'total_amount' => 12.10,
+        'description' => 'Factura F3 en sustitucion de simplificada - lara-verifactu AID-166',
+        'metadata' => [
+            'substituted_invoices' => [
+                ['number' => $simplified->number, 'issue_date' => $simplified->getIssueDatetime()->toDateString()],
+            ],
+        ],
+    ]);
+
+    InvoiceBreakdown::factory()->create([
+        'invoice_id' => $f3->id,
+        'tax_rate' => 21.00,
+        'base_amount' => 10.00,
+        'tax_amount' => 2.10,
+        'exempt' => false,
+    ]);
+
+    $registry = $registrar->register($f3->refresh(), submitToAeat: true);
     $registry->refresh();
 
     dump([

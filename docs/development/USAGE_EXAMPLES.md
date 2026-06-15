@@ -222,11 +222,13 @@ app(InvoiceRegistrar::class)->register($rectification);
 > otherwise registration throws `ValidationException` before building the XML,
 > because AEAT rejects an `S` without `ImporteRectificacion`.
 >
-> `FacturasSustituidas` (invoice type `F3`, issued to substitute simplified
-> invoices) is a different AEAT concept and is **not supported yet**. Do not use
-> the `RECTIFICATIVE_BY_SUBSTITUTION` enum case for this — substitution
-> rectifications use a normal rectificative type (e.g. `RECTIFICATIVE` = `R1`)
-> with `rectification_type => 'S'`.
+> **F3 (substitution of simplified invoices)** is supported via
+> `InvoiceTypeEnum::SUBSTITUTE`: set `type` to F3, provide a recipient (AEAT rule
+> 1189 requires `Destinatarios` for F3) and the substituted invoices in
+> `metadata['substituted_invoices']` (`[['number' => ..., 'issue_date' => ...]]`).
+> It emits `FacturasSustituidas`; without a recipient or substituted invoices it
+> throws `ValidationException`. This is **distinct from rectifications** — do not
+> use the `RECTIFICATIVE_BY_SUBSTITUTION` enum case for it.
 
 ## Agnostic Mode
 

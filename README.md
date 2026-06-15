@@ -164,8 +164,11 @@ the bundled `Invoice` model (native mode) is optional. See
   (`S`) requires the substituted amounts via `getRectificationAmounts()` (native
   mode reads `metadata['rectification_amounts']`), emitted as
   `ImporteRectificacion`; a missing block raises `ValidationException`.
-  `FacturasSustituidas` (invoice type `F3`, substitution of simplified invoices)
-  is a distinct XSD concept and is **not supported yet**.
+- **Substitution of simplified invoices (`F3`)**: invoice type
+  `InvoiceTypeEnum::SUBSTITUTE` emits `FacturasSustituidas` (the substituted
+  simplified invoices via `getSubstitutedInvoices()`; native mode reads
+  `metadata['substituted_invoices']`). An F3 requires a recipient (AEAT rule 1189)
+  and at least one substituted invoice, otherwise it raises `ValidationException`.
 
 ## Sandbox validation
 

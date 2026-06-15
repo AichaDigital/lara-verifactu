@@ -111,6 +111,19 @@ interface InvoiceContract
     public function getRectificationAmounts(): ?array;
 
     /**
+     * Get the invoices substituted by this one (AEAT FacturasSustituidas).
+     *
+     * Applies to invoice type F3 (factura emitida en sustitución de facturas
+     * simplificadas). Each entry identifies one substituted invoice by its full
+     * serie+number and issue date; the issuer NIF is taken from getIssuerTaxId()
+     * per the XSD. Return an empty array when not an F3 invoice or when the
+     * substituted invoices are not identified.
+     *
+     * @return array<int, array{number: string, issue_date: Carbon}>
+     */
+    public function getSubstitutedInvoices(): array;
+
+    /**
      * Get previous invoice ID for rectifications
      */
     public function getPreviousInvoiceId(): ?string;
