@@ -152,7 +152,7 @@ it('submits a real substitution (S) rectification with ImporteRectificacion to t
         'description' => 'Rectificativa sustitutiva S - prueba lara-verifactu AID-142',
         'metadata' => [
             'rectified_invoices' => [
-                ['number' => $original->number, 'issue_date' => $original->issue_date],
+                ['number' => $original->number, 'issue_date' => $original->getIssueDatetime()->toDateString()],
             ],
             'rectification_amounts' => ['base' => 10.00, 'tax' => 2.10],
         ],
