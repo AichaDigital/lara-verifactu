@@ -103,3 +103,77 @@ it('submits a real cancellation to the AEAT sandbox', function () {
     expect($cancellation->status)->toBe(RegistryStatusEnum::SENT)
         ->and($cancellation->aeat_csv)->not->toBeNull();
 })->skip(! $certificateAvailable, 'Real AEAT sandbox certificate not available');
+
+/*
+ * AID-142 — substitution (S) rectification, end-to-end against AEAT Pruebas Externas.
+ *
+ * Scenario: register a simplified invoice (F2), then rectify it with a SUBSTITUTION
+ * rectification (rectification_type = 'S') carrying ImporteRectificacion
+ * (BaseRectificada + CuotaRectificada, XSD DesgloseRectificacionType).
+ *
+ * The rectifying invoice MUST be R5 (rectificativa en facturas simplificadas):
+ * AEAT rule 1189 requires the Destinatarios block for F1/F3/R1/R2/R3/R4, so an R1
+ * without a recipient is rejected ("Incorrecto - 1189"). R5 is NOT in that list.
+ *
+ * Validated live 2026-06-15: original CSV A-LY29RU9P3GSBA7, rectification CSV
+ * A-945EPP9FM8YB66 (EstadoEnvio Correcto — ImporteRectificacion accepted).
+ *
+ * Regression triage if this starts failing:
+ *  - rule 1189 / Destinatarios  -> rectifying type or recipient handling regressed
+ *  - ImporteRectificacion / XSD -> XmlBuilder::buildImporteRectificacion regressed
+ */
+it('submits a real substitution (S) rectification with ImporteRectificacion to the AEAT sandbox (AID-142)', function () {
+    $registrar = app(InvoiceRegistrar::class);
+
+    // 1) Original invoice, accepted by AEAT first.
+    $original = createSandboxInvoice();
+    $originalRegistry = $registrar->register($original, submitToAeat: true);
+    $originalRegistry->refresh();
+    dump(['original_status' => $originalRegistry->status->value, 'original_csv' => $originalRegistry->aeat_csv, 'original_error' => $originalRegistry->aeat_error]);
+    expect($originalRegistry->status)->toBe(RegistryStatusEnum::SENT);
+
+    // 2) Substitution (S) rectification referencing the original, carrying
+    //    ImporteRectificacion (base + tax of the substituted invoice).
+    $rectification = Invoice::factory()->create([
+        'serie' => null,
+        'number' => 'TESTR-' . now()->format('YmdHis') . '-' . strtoupper(substr(uniqid(), -5)),
+        'type' => InvoiceTypeEnum::RECTIFICATIVE_SUMMARY_SIMPLIFIED, // R5: rectifies a simplified invoice, no Destinatarios required (AEAT rule 1189)
+        'rectification_type' => 'S',
+        'simplified' => true,
+        'recipient_nif' => null,
+        'recipient_id_type' => null,
+        'recipient_id' => null,
+        'recipient_name' => null,
+        'recipient_country' => null,
+        'base_amount' => 10.00,
+        'tax_amount' => 2.10,
+        'total_amount' => 12.10,
+        'description' => 'Rectificativa sustitutiva S - prueba lara-verifactu AID-142',
+        'metadata' => [
+            'rectified_invoices' => [
+                ['number' => $original->number, 'issue_date' => $original->issue_date],
+            ],
+            'rectification_amounts' => ['base' => 10.00, 'tax' => 2.10],
+        ],
+    ]);
+
+    InvoiceBreakdown::factory()->create([
+        'invoice_id' => $rectification->id,
+        'tax_rate' => 21.00,
+        'base_amount' => 10.00,
+        'tax_amount' => 2.10,
+        'exempt' => false,
+    ]);
+
+    $registry = $registrar->register($rectification->refresh(), submitToAeat: true);
+    $registry->refresh();
+
+    dump([
+        'status' => $registry->status->value,
+        'csv' => $registry->aeat_csv,
+        'error' => $registry->aeat_error,
+    ]);
+
+    expect($registry->status)->toBe(RegistryStatusEnum::SENT)
+        ->and($registry->aeat_csv)->not->toBeNull();
+})->skip(! $certificateAvailable, 'Real AEAT sandbox certificate not available');
