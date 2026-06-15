@@ -8,6 +8,7 @@ use AichaDigital\LaraVerifactu\Contracts\InvoiceBreakdownContract;
 use AichaDigital\LaraVerifactu\Contracts\InvoiceContract;
 use AichaDigital\LaraVerifactu\Contracts\RecipientContract;
 use AichaDigital\LaraVerifactu\Contracts\XmlBuilderContract;
+use AichaDigital\LaraVerifactu\Enums\InvoiceTypeEnum;
 use AichaDigital\LaraVerifactu\Exceptions\ValidationException;
 use AichaDigital\LaraVerifactu\Exceptions\XmlException;
 use AichaDigital\LaraVerifactu\Support\CancellationRecord;
@@ -176,6 +177,31 @@ final class XmlBuilder implements XmlBuilderContract
             }
         }
 
+        // FacturasSustituidas (XSD: after the rectificative block, before
+        // DescripcionOperacion). Only for F3 (factura en sustitución de
+        // simplificadas), which is mutually exclusive with rectificative types.
+        // AEAT rejects an F3 without Destinatarios (rule 1189) or without the
+        // substituted invoices, so fail fast instead of producing rejectable XML.
+        if ($invoice->getType() === InvoiceTypeEnum::SUBSTITUTE) {
+            if (! $invoice->hasRecipient()) {
+                throw ValidationException::invalidInvoiceData(
+                    'recipient',
+                    'F3 (sustitución de simplificadas) requires Destinatarios (AEAT rule 1189)'
+                );
+            }
+
+            $substituted = $invoice->getSubstitutedInvoices();
+
+            if ($substituted === []) {
+                throw ValidationException::invalidInvoiceData(
+                    'substituted_invoices',
+                    'F3 requires FacturasSustituidas (the simplified invoices being substituted)'
+                );
+            }
+
+            $alta->appendChild($this->buildFacturasSustituidas($dom, $invoice, $substituted));
+        }
+
         $alta->appendChild($this->sfElement($dom, 'DescripcionOperacion', $invoice->getDescription() ?? 'Factura'));
 
         if ($invoice->hasRecipient() && $invoice->getRecipient() instanceof RecipientContract) {
@@ -333,6 +359,30 @@ final class XmlBuilder implements XmlBuilderContract
 
         foreach ($rectified as $entry) {
             $id = $dom->createElementNS(self::SF_NS, 'sf:IDFacturaRectificada');
+            $facturas->appendChild($id);
+
+            $id->appendChild($this->sfElement($dom, 'IDEmisorFactura', $invoice->getIssuerTaxId()));
+            $id->appendChild($this->sfElement($dom, 'NumSerieFactura', $entry['number']));
+            $id->appendChild($this->sfElement($dom, 'FechaExpedicionFactura', $entry['issue_date']->format('d-m-Y')));
+        }
+
+        return $facturas;
+    }
+
+    /**
+     * Build FacturasSustituidas with one IDFacturaSustituida per substituted
+     * invoice. Mirrors buildFacturasRectificadas (same IDFacturaARType); used
+     * for invoice type F3. The issuer NIF is the rectifying/substituting
+     * invoice's own NIF, per the XSD.
+     *
+     * @param  array<int, array{number: string, issue_date: Carbon}>  $substituted
+     */
+    private function buildFacturasSustituidas(DOMDocument $dom, InvoiceContract $invoice, array $substituted): DOMElement
+    {
+        $facturas = $dom->createElementNS(self::SF_NS, 'sf:FacturasSustituidas');
+
+        foreach ($substituted as $entry) {
+            $id = $dom->createElementNS(self::SF_NS, 'sf:IDFacturaSustituida');
             $facturas->appendChild($id);
 
             $id->appendChild($this->sfElement($dom, 'IDEmisorFactura', $invoice->getIssuerTaxId()));

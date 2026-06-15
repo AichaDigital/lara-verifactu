@@ -137,6 +137,28 @@ it('preserves a zero base and tax in rectification amounts because 0.00 is valid
     ]);
 });
 
+it('reads substituted invoices from metadata for F3 invoices', function () {
+    $invoice = Invoice::factory()->substitute()->create([
+        'serie' => 'F',
+        'number' => 'F3-0001',
+    ]);
+
+    expect($invoice->getType())->toBe(InvoiceTypeEnum::SUBSTITUTE)
+        ->and($invoice->getSubstitutedInvoices())->toHaveCount(1)
+        ->and($invoice->getSubstitutedInvoices()[0]['number'])->toBe('SIMP-0001');
+});
+
+it('returns empty substituted invoices when metadata is absent', function () {
+    $invoice = Invoice::factory()->create([
+        'serie' => 'F',
+        'number' => 'F3-0002',
+        'type' => InvoiceTypeEnum::SUBSTITUTE,
+        'metadata' => null,
+    ]);
+
+    expect($invoice->getSubstitutedInvoices())->toBe([]);
+});
+
 it('can handle metadata', function () {
     $invoice = Invoice::factory()->create([
         'metadata' => ['custom_field' => 'custom_value'],

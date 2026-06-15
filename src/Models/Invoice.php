@@ -298,6 +298,35 @@ class Invoice extends Model implements InvoiceContract
     }
 
     /**
+     * Get the invoices substituted by this one (AEAT FacturasSustituidas).
+     *
+     * Native mode reads them from metadata['substituted_invoices'], an array of
+     * ['number' => string, 'issue_date' => string|Carbon] entries. Applies to
+     * invoice type F3. Returns an empty array when none are identified.
+     *
+     * @return array<int, array{number: string, issue_date: Carbon}>
+     */
+    public function getSubstitutedInvoices(): array
+    {
+        $entries = $this->metadata['substituted_invoices'] ?? [];
+
+        $substituted = [];
+
+        foreach ($entries as $entry) {
+            if (empty($entry['number']) || empty($entry['issue_date'])) {
+                continue;
+            }
+
+            $substituted[] = [
+                'number' => (string) $entry['number'],
+                'issue_date' => Carbon::parse($entry['issue_date']),
+            ];
+        }
+
+        return $substituted;
+    }
+
+    /**
      * Get previous invoice ID for rectifications
      */
     public function getPreviousInvoiceId(): ?string

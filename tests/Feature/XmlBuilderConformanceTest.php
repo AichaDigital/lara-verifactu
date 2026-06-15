@@ -320,3 +320,72 @@ describe('rectificative registration XML (AID-135)', function () {
             ->and($xml)->not->toContain('FacturasRectificadas');
     });
 });
+
+describe('substitution invoice F3 (AID-166)', function () {
+    function substituteInvoice(bool $withRecipient = true, array $substituted = [['number' => 'SIMP-0001', 'issue_date' => '2026-06-01']]): InvoiceContract
+    {
+        $recipient = null;
+        if ($withRecipient) {
+            $recipient = Mockery::mock(RecipientContract::class);
+            $recipient->shouldReceive('getNif')->andReturn('12345678Z');
+            $recipient->shouldReceive('getName')->andReturn('Cliente Ejemplo');
+            $recipient->shouldReceive('getIdType')->andReturn(null);
+            $recipient->shouldReceive('getId')->andReturn(null);
+            $recipient->shouldReceive('getCountry')->andReturn('ES');
+        }
+
+        $mapped = array_map(
+            fn (array $e): array => ['number' => $e['number'], 'issue_date' => Carbon::parse($e['issue_date'])],
+            $substituted,
+        );
+
+        $invoice = Mockery::mock(InvoiceContract::class);
+        $invoice->shouldReceive('getIssuerTaxId')->andReturn('89890001K');
+        $invoice->shouldReceive('getSerie')->andReturn(null);
+        $invoice->shouldReceive('getNumber')->andReturn('FAC-2026-F3-1');
+        $invoice->shouldReceive('getInvoiceNumber')->andReturn('FAC-2026-F3-1');
+        $invoice->shouldReceive('getIssueDatetime')->andReturn(Carbon::parse('2026-06-05 09:00:00'));
+        $invoice->shouldReceive('getType')->andReturn(InvoiceTypeEnum::SUBSTITUTE);
+        $invoice->shouldReceive('getInvoiceType')->andReturn(InvoiceTypeEnum::SUBSTITUTE);
+        $invoice->shouldReceive('getSubstitutedInvoices')->andReturn($mapped);
+        $invoice->shouldReceive('getDescription')->andReturn('Factura en sustitución de simplificadas');
+        $invoice->shouldReceive('getRegimeType')->andReturn(RegimeTypeEnum::GENERAL);
+        $invoice->shouldReceive('getTaxAmount')->andReturn(21.0);
+        $invoice->shouldReceive('getTotalAmount')->andReturn(121.0);
+        $invoice->shouldReceive('hasRecipient')->andReturn($withRecipient);
+        $invoice->shouldReceive('getRecipient')->andReturn($recipient);
+        $invoice->shouldReceive('getBreakdowns')->andReturn(collect([conformanceBreakdown()]));
+
+        return $invoice;
+    }
+
+    it('emits FacturasSustituidas for F3 and validates against the XSD', function () {
+        $chain = new RegistryChain(hash: str_repeat('H', 64), generatedAt: Carbon::parse('2026-06-05T09:00:30+02:00'), previous: null);
+
+        $xml = $this->builder->buildRegistrationXml(substituteInvoice(), $chain);
+
+        expect($this->builder->validate($xml))->toBeTrue()
+            ->and($xml)->toContain('<sf:TipoFactura>F3</sf:TipoFactura>')
+            ->and($xml)->toContain('<sf:FacturasSustituidas>')
+            ->and($xml)->toContain('<sf:IDFacturaSustituida>')
+            ->and($xml)->toContain('<sf:NumSerieFactura>SIMP-0001</sf:NumSerieFactura>')
+            ->and($xml)->toContain('<sf:FechaExpedicionFactura>01-06-2026</sf:FechaExpedicionFactura>');
+
+        // XSD sequence: FacturasSustituidas before DescripcionOperacion.
+        expect(strpos($xml, 'FacturasSustituidas'))->toBeLessThan(strpos($xml, 'DescripcionOperacion'));
+    });
+
+    it('throws ValidationException for an F3 without a recipient (AEAT rule 1189)', function () {
+        $chain = new RegistryChain(hash: str_repeat('H', 64), generatedAt: Carbon::parse('2026-06-05T09:30:00+02:00'), previous: null);
+
+        expect(fn () => $this->builder->buildRegistrationXml(substituteInvoice(withRecipient: false), $chain))
+            ->toThrow(ValidationException::class);
+    });
+
+    it('throws ValidationException for an F3 without substituted invoices', function () {
+        $chain = new RegistryChain(hash: str_repeat('H', 64), generatedAt: Carbon::parse('2026-06-05T09:45:00+02:00'), previous: null);
+
+        expect(fn () => $this->builder->buildRegistrationXml(substituteInvoice(substituted: []), $chain))
+            ->toThrow(ValidationException::class);
+    });
+});

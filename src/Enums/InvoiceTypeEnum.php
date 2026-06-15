@@ -8,6 +8,7 @@ enum InvoiceTypeEnum: string
 {
     case COMPLETE = 'F1'; // Complete invoice
     case SIMPLIFIED = 'F2'; // Simplified invoice
+    case SUBSTITUTE = 'F3'; // Invoice issued to substitute simplified invoices
     case RECTIFICATIVE = 'R1'; // Rectificative invoice
     case RECTIFICATIVE_SIMPLIFIED = 'R2'; // Rectificative simplified invoice
     case RECTIFICATIVE_BY_SUBSTITUTION = 'R3'; // Rectificative invoice by substitution
@@ -19,6 +20,7 @@ enum InvoiceTypeEnum: string
         return match ($this) {
             self::COMPLETE => 'Factura completa',
             self::SIMPLIFIED => 'Factura simplificada',
+            self::SUBSTITUTE => 'Factura emitida en sustitución de facturas simplificadas',
             self::RECTIFICATIVE => 'Factura rectificativa',
             self::RECTIFICATIVE_SIMPLIFIED => 'Factura rectificativa simplificada',
             self::RECTIFICATIVE_BY_SUBSTITUTION => 'Factura rectificativa por sustitución',

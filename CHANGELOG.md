@@ -19,13 +19,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `['base' => float, 'tax' => float, 'surcharge' => float|null]` for the
   substituted original invoice, or `null` when not applicable. The native
   `Invoice` model reads it from `metadata['rectification_amounts']`.
+- Invoice type **F3** ("factura emitida en sustitución de facturas simplificadas")
+  is now supported (`InvoiceTypeEnum::SUBSTITUTE`) and emits the `FacturasSustituidas`
+  block — one `IDFacturaSustituida` per substituted invoice (AID-166). An F3 without
+  a recipient (AEAT rule 1189) or without substituted invoices throws
+  `ValidationException` before producing XML.
+- `InvoiceContract::getSubstitutedInvoices(): array` — the invoices an F3 substitutes
+  (`[['number' => string, 'issue_date' => Carbon]]`), `[]` when not applicable. Native
+  mode reads `metadata['substituted_invoices']`.
 
 ### Changed
 
 - **BREAKING (custom invoice models)**: `InvoiceContract` gained
-  `getRectificationAmounts(): ?array`. Custom implementations must add it
-  (return `null` when not applicable, e.g. for non-substitution rectifications).
-  Native mode is unaffected.
+  `getRectificationAmounts(): ?array` (AID-142) and `getSubstitutedInvoices(): array`
+  (AID-166). Custom implementations must add both (return `null` / `[]` when not
+  applicable). Native mode is unaffected.
 
 ## [0.10.0] - 2026-06-11
 

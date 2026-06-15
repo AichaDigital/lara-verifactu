@@ -41,7 +41,10 @@ class InvoiceFactory extends Factory
             'serie' => $this->faker->regexify('[A-Z]{2}'),
             'number' => $this->faker->unique()->numerify('INV-####'),
             'issue_datetime' => Carbon::now(),
-            'type' => $this->faker->randomElement(InvoiceTypeEnum::cases()),
+            'type' => $this->faker->randomElement(array_values(array_filter(
+                InvoiceTypeEnum::cases(),
+                fn (InvoiceTypeEnum $t): bool => $t !== InvoiceTypeEnum::SUBSTITUTE,
+            ))),
             'simplified' => false,
             'rectification_type' => null,
             'base_amount' => $baseAmount,
@@ -83,6 +86,24 @@ class InvoiceFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'type' => InvoiceTypeEnum::RECTIFICATIVE,
             'rectification_type' => 'S',
+        ]);
+    }
+
+    /**
+     * Indicate that the invoice is an F3 (issued to substitute simplified invoices).
+     *
+     * Keeps the default recipient (F3 requires Destinatarios per AEAT rule 1189)
+     * and provides the substituted invoices in metadata.
+     */
+    public function substitute(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'type' => InvoiceTypeEnum::SUBSTITUTE,
+            'metadata' => [
+                'substituted_invoices' => [
+                    ['number' => 'SIMP-0001', 'issue_date' => Carbon::now()->subDay()->toDateString()],
+                ],
+            ],
         ]);
     }
 
