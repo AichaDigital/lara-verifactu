@@ -189,6 +189,18 @@ $rectification = Invoice::create([
         'original_invoice_id' => $originalInvoice->id,
         'original_invoice_number' => $originalInvoice->number,
         'reason' => 'Error in amount',
+        // The invoices this one rectifies (AEAT FacturasRectificadas).
+        'rectified_invoices' => [
+            ['number' => $originalInvoice->number, 'issue_date' => $originalInvoice->issue_date],
+        ],
+        // Substitution (S) rectifications MUST carry the substituted amounts
+        // (AEAT ImporteRectificacion / DesgloseRectificacionType). Omitting them
+        // throws ValidationException before the XML is built.
+        'rectification_amounts' => [
+            'base' => 100.00,
+            'tax' => 21.00,
+            // 'surcharge' => 5.20, // optional (recargo de equivalencia)
+        ],
     ],
 ]);
 
@@ -203,6 +215,18 @@ $rectification->breakdowns()->create([
 // Register
 app(InvoiceRegistrar::class)->register($rectification);
 ```
+
+> **Substitution (`S`) vs incremental (`I`):** set `rectification_type` to `'S'`
+> or `'I'`. A substitution rectification MUST include
+> `metadata['rectification_amounts']` (`base`, `tax`, optional `surcharge`) —
+> otherwise registration throws `ValidationException` before building the XML,
+> because AEAT rejects an `S` without `ImporteRectificacion`.
+>
+> `FacturasSustituidas` (invoice type `F3`, issued to substitute simplified
+> invoices) is a different AEAT concept and is **not supported yet**. Do not use
+> the `RECTIFICATIVE_BY_SUBSTITUTION` enum case for this — substitution
+> rectifications use a normal rectificative type (e.g. `RECTIFICATIVE` = `R1`)
+> with `rectification_type => 'S'`.
 
 ## Agnostic Mode
 

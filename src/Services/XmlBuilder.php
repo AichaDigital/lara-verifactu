@@ -8,6 +8,7 @@ use AichaDigital\LaraVerifactu\Contracts\InvoiceBreakdownContract;
 use AichaDigital\LaraVerifactu\Contracts\InvoiceContract;
 use AichaDigital\LaraVerifactu\Contracts\RecipientContract;
 use AichaDigital\LaraVerifactu\Contracts\XmlBuilderContract;
+use AichaDigital\LaraVerifactu\Exceptions\ValidationException;
 use AichaDigital\LaraVerifactu\Exceptions\XmlException;
 use AichaDigital\LaraVerifactu\Support\CancellationRecord;
 use AichaDigital\LaraVerifactu\Support\PreviousRegistry;
@@ -48,6 +49,11 @@ final class XmlBuilder implements XmlBuilderContract
             $registroFactura->appendChild($this->buildRegistroAlta($dom, $invoice, $chain));
 
             return $this->formatXml($dom);
+        } catch (ValidationException $e) {
+            // Preserve business-rule validation failures (e.g. a substitution
+            // rectification missing ImporteRectificacion). The generic catch
+            // below would otherwise wrap them in XmlException.
+            throw $e;
         } catch (\Throwable $e) {
             throw XmlException::cannotBuildXml($e->getMessage());
         }
@@ -151,6 +157,22 @@ final class XmlBuilder implements XmlBuilderContract
 
             if ($rectified !== []) {
                 $alta->appendChild($this->buildFacturasRectificadas($dom, $invoice, $rectified));
+            }
+
+            // ImporteRectificacion (XSD DesgloseRectificacionType) is required by
+            // AEAT business rules for substitution rectifications (TipoRectificativa=S).
+            // Fail here instead of emitting XSD-valid XML that AEAT would reject.
+            if ($this->rectificationTypeCode($invoice) === 'S') {
+                $amounts = $invoice->getRectificationAmounts();
+
+                if ($amounts === null) {
+                    throw ValidationException::invalidInvoiceData(
+                        'rectification_amounts',
+                        'ImporteRectificacion is required for substitution rectifications (TipoRectificativa=S)'
+                    );
+                }
+
+                $alta->appendChild($this->buildImporteRectificacion($dom, $amounts));
             }
         }
 
@@ -319,6 +341,27 @@ final class XmlBuilder implements XmlBuilderContract
         }
 
         return $facturas;
+    }
+
+    /**
+     * Build ImporteRectificacion (DesgloseRectificacionType) for substitution
+     * rectifications. BaseRectificada and CuotaRectificada are mandatory;
+     * CuotaRecargoRectificado is emitted only when a surcharge is present.
+     *
+     * @param  array{base: float, tax: float, surcharge: float|null}  $amounts
+     */
+    private function buildImporteRectificacion(DOMDocument $dom, array $amounts): DOMElement
+    {
+        $importe = $dom->createElementNS(self::SF_NS, 'sf:ImporteRectificacion');
+
+        $importe->appendChild($this->sfElement($dom, 'BaseRectificada', $this->formatAmount($amounts['base'])));
+        $importe->appendChild($this->sfElement($dom, 'CuotaRectificada', $this->formatAmount($amounts['tax'])));
+
+        if ($amounts['surcharge'] !== null) {
+            $importe->appendChild($this->sfElement($dom, 'CuotaRecargoRectificado', $this->formatAmount($amounts['surcharge'])));
+        }
+
+        return $importe;
     }
 
     private function buildDestinatarios(DOMDocument $dom, RecipientContract $recipient): DOMElement

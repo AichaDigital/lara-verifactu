@@ -159,6 +159,13 @@ the bundled `Invoice` model (native mode) is optional. See
   queue with a unique lock) to preserve chain ordering.
 - `AceptadoConErrores` responses map to success: AEAT registered the
   record, so it must not be resubmitted; the error details are persisted.
+- **Rectifications**: `TipoRectificativa` derives from
+  `getRectificationType()` (`S` substitution / `I` incremental). A substitution
+  (`S`) requires the substituted amounts via `getRectificationAmounts()` (native
+  mode reads `metadata['rectification_amounts']`), emitted as
+  `ImporteRectificacion`; a missing block raises `ValidationException`.
+  `FacturasSustituidas` (invoice type `F3`, substitution of simplified invoices)
+  is a distinct XSD concept and is **not supported yet**.
 
 ## Sandbox validation
 

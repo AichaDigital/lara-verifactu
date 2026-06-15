@@ -8,10 +8,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Nothing yet
+
+- Substitution rectifications (`TipoRectificativa = S`) now emit
+  `ImporteRectificacion` (XSD `DesgloseRectificacionType`): `BaseRectificada` +
+  `CuotaRectificada` (mandatory) and `CuotaRecargoRectificado` (optional, recargo
+  de equivalencia) (AID-142). This closes the 0.10.0 known limitation. Building a
+  substitution rectification without the amounts now throws `ValidationException`
+  before producing XML, instead of emitting XSD-valid XML that AEAT would reject.
+- `InvoiceContract::getRectificationAmounts(): ?array` — returns
+  `['base' => float, 'tax' => float, 'surcharge' => float|null]` for the
+  substituted original invoice, or `null` when not applicable. The native
+  `Invoice` model reads it from `metadata['rectification_amounts']`.
 
 ### Changed
-- Nothing yet
+
+- **BREAKING (custom invoice models)**: `InvoiceContract` gained
+  `getRectificationAmounts(): ?array`. Custom implementations must add it
+  (return `null` when not applicable, e.g. for non-substitution rectifications).
+  Native mode is unaffected.
 
 ## [0.10.0] - 2026-06-11
 

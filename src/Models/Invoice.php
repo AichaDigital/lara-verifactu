@@ -266,6 +266,38 @@ class Invoice extends Model implements InvoiceContract
     }
 
     /**
+     * Get the rectified amounts for substitution rectifications (TipoRectificativa = S).
+     *
+     * Native mode reads them from metadata['rectification_amounts'] as
+     * ['base' => numeric, 'tax' => numeric, 'surcharge' => numeric|null].
+     * Returns null when base or tax are missing or non-numeric. 0.00 is a valid
+     * amount and is preserved (hence array_key_exists + is_numeric, not empty()).
+     * The surcharge is included only when present and numeric.
+     *
+     * @return array{base: float, tax: float, surcharge: float|null}|null
+     */
+    public function getRectificationAmounts(): ?array
+    {
+        $amounts = $this->metadata['rectification_amounts'] ?? null;
+
+        if (! is_array($amounts)
+            || ! array_key_exists('base', $amounts) || ! is_numeric($amounts['base'])
+            || ! array_key_exists('tax', $amounts) || ! is_numeric($amounts['tax'])) {
+            return null;
+        }
+
+        $surcharge = (array_key_exists('surcharge', $amounts) && is_numeric($amounts['surcharge']))
+            ? (float) $amounts['surcharge']
+            : null;
+
+        return [
+            'base' => (float) $amounts['base'],
+            'tax' => (float) $amounts['tax'],
+            'surcharge' => $surcharge,
+        ];
+    }
+
+    /**
      * Get previous invoice ID for rectifications
      */
     public function getPreviousInvoiceId(): ?string

@@ -8,6 +8,7 @@ use AichaDigital\LaraVerifactu\Contracts\RecipientContract;
 use AichaDigital\LaraVerifactu\Enums\InvoiceTypeEnum;
 use AichaDigital\LaraVerifactu\Enums\RegimeTypeEnum;
 use AichaDigital\LaraVerifactu\Enums\TaxTypeEnum;
+use AichaDigital\LaraVerifactu\Exceptions\ValidationException;
 use AichaDigital\LaraVerifactu\Services\XmlBuilder;
 use AichaDigital\LaraVerifactu\Support\CancellationRecord;
 use AichaDigital\LaraVerifactu\Support\PreviousRegistry;
@@ -164,7 +165,7 @@ it('includes the recipient as Destinatarios when the invoice has one', function 
 });
 
 describe('rectificative registration XML (AID-135)', function () {
-    function rectificativeInvoice(?string $rectificationType = 'I', array $rectifiedInvoices = []): InvoiceContract
+    function rectificativeInvoice(?string $rectificationType = 'I', array $rectifiedInvoices = [], ?array $rectificationAmounts = null): InvoiceContract
     {
         $invoice = Mockery::mock(InvoiceContract::class);
         $invoice->shouldReceive('getIssuerTaxId')->andReturn('89890001K');
@@ -176,6 +177,7 @@ describe('rectificative registration XML (AID-135)', function () {
         $invoice->shouldReceive('getInvoiceType')->andReturn(InvoiceTypeEnum::RECTIFICATIVE);
         $invoice->shouldReceive('getRectificationType')->andReturn($rectificationType);
         $invoice->shouldReceive('getRectifiedInvoices')->andReturn($rectifiedInvoices);
+        $invoice->shouldReceive('getRectificationAmounts')->andReturn($rectificationAmounts);
         $invoice->shouldReceive('getDescription')->andReturn('Rectificación por diferencias');
         $invoice->shouldReceive('getRegimeType')->andReturn(RegimeTypeEnum::GENERAL);
         $invoice->shouldReceive('getTaxAmount')->andReturn(-21.0);
@@ -210,7 +212,7 @@ describe('rectificative registration XML (AID-135)', function () {
             ->and($xml)->toContain('<sf:FechaExpedicionFactura>01-06-2026</sf:FechaExpedicionFactura>');
     });
 
-    it('emits an explicit substitution rectification type', function () {
+    it('emits ImporteRectificacion with BaseRectificada and CuotaRectificada for substitution (S) and validates against the XSD', function () {
         $chain = new RegistryChain(
             hash: str_repeat('E', 64),
             generatedAt: Carbon::parse('2026-06-05T10:00:00+02:00'),
@@ -219,12 +221,74 @@ describe('rectificative registration XML (AID-135)', function () {
 
         $invoice = rectificativeInvoice('S', [
             ['number' => 'FAC-2026-002', 'issue_date' => Carbon::parse('2026-06-02')],
-        ]);
+        ], ['base' => 100.0, 'tax' => 21.0, 'surcharge' => null]);
 
         $xml = $this->builder->buildRegistrationXml($invoice, $chain);
 
         expect($this->builder->validate($xml))->toBeTrue()
-            ->and($xml)->toContain('<sf:TipoRectificativa>S</sf:TipoRectificativa>');
+            ->and($xml)->toContain('<sf:TipoRectificativa>S</sf:TipoRectificativa>')
+            ->and($xml)->toContain('<sf:ImporteRectificacion>')
+            ->and($xml)->toContain('<sf:BaseRectificada>100.00</sf:BaseRectificada>')
+            ->and($xml)->toContain('<sf:CuotaRectificada>21.00</sf:CuotaRectificada>')
+            ->and($xml)->not->toContain('CuotaRecargoRectificado');
+
+        // XSD sequence: ImporteRectificacion goes after FacturasRectificadas and
+        // before DescripcionOperacion. Assert the order directly, not only presence.
+        $posFacturas = strpos($xml, 'FacturasRectificadas');
+        $posImporte = strpos($xml, 'ImporteRectificacion');
+        $posDescripcion = strpos($xml, 'DescripcionOperacion');
+        expect($posImporte)->toBeGreaterThan($posFacturas)
+            ->and($posImporte)->toBeLessThan($posDescripcion);
+    });
+
+    it('emits CuotaRecargoRectificado when the substitution carries a surcharge', function () {
+        $chain = new RegistryChain(
+            hash: str_repeat('E', 64),
+            generatedAt: Carbon::parse('2026-06-05T10:30:00+02:00'),
+            previous: null,
+        );
+
+        $invoice = rectificativeInvoice('S', [
+            ['number' => 'FAC-2026-002', 'issue_date' => Carbon::parse('2026-06-02')],
+        ], ['base' => 100.0, 'tax' => 21.0, 'surcharge' => 5.2]);
+
+        $xml = $this->builder->buildRegistrationXml($invoice, $chain);
+
+        expect($this->builder->validate($xml))->toBeTrue()
+            ->and($xml)->toContain('<sf:CuotaRecargoRectificado>5.20</sf:CuotaRecargoRectificado>');
+    });
+
+    it('emits a zero BaseRectificada because 0.00 is a valid fiscal amount', function () {
+        $chain = new RegistryChain(
+            hash: str_repeat('E', 64),
+            generatedAt: Carbon::parse('2026-06-05T10:45:00+02:00'),
+            previous: null,
+        );
+
+        $invoice = rectificativeInvoice('S', [
+            ['number' => 'FAC-2026-002', 'issue_date' => Carbon::parse('2026-06-02')],
+        ], ['base' => 0.0, 'tax' => 0.0, 'surcharge' => null]);
+
+        $xml = $this->builder->buildRegistrationXml($invoice, $chain);
+
+        expect($this->builder->validate($xml))->toBeTrue()
+            ->and($xml)->toContain('<sf:BaseRectificada>0.00</sf:BaseRectificada>')
+            ->and($xml)->toContain('<sf:CuotaRectificada>0.00</sf:CuotaRectificada>');
+    });
+
+    it('throws ValidationException for a substitution (S) without rectification amounts', function () {
+        $chain = new RegistryChain(
+            hash: str_repeat('E', 64),
+            generatedAt: Carbon::parse('2026-06-05T11:00:00+02:00'),
+            previous: null,
+        );
+
+        $invoice = rectificativeInvoice('S', [
+            ['number' => 'FAC-2026-002', 'issue_date' => Carbon::parse('2026-06-02')],
+        ], null);
+
+        expect(fn () => $this->builder->buildRegistrationXml($invoice, $chain))
+            ->toThrow(ValidationException::class);
     });
 
     it('normalizes legacy non-S codes (R1 from older adapters) to I', function () {
