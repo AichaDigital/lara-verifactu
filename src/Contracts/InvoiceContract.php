@@ -98,6 +98,19 @@ interface InvoiceContract
     public function getRectifiedInvoices(): array;
 
     /**
+     * Get the rectified amounts for substitution rectifications (TipoRectificativa = S).
+     *
+     * Returns the base and tax of the original invoice being substituted, for the
+     * AEAT ImporteRectificacion block (XSD DesgloseRectificacionType): base and tax
+     * are mandatory, surcharge (recargo de equivalencia) is optional. AEAT business
+     * rules require this block for substitution rectifications. Return null when not
+     * applicable (non-substitution rectification, or amounts not provided).
+     *
+     * @return array{base: float, tax: float, surcharge: float|null}|null
+     */
+    public function getRectificationAmounts(): ?array;
+
+    /**
      * Get previous invoice ID for rectifications
      */
     public function getPreviousInvoiceId(): ?string;

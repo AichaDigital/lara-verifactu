@@ -90,6 +90,53 @@ it('can create a rectification invoice', function () {
         ->and($invoice->getRectificationType())->toBe('S');
 });
 
+it('reads rectification amounts from metadata for substitution invoices', function () {
+    $invoice = Invoice::factory()->create([
+        'serie' => 'R',
+        'number' => 'RECT-0001',
+        'type' => InvoiceTypeEnum::RECTIFICATIVE,
+        'rectification_type' => 'S',
+        'metadata' => [
+            'rectification_amounts' => ['base' => 100.0, 'tax' => 21.0, 'surcharge' => 5.2],
+        ],
+    ]);
+
+    expect($invoice->getRectificationAmounts())->toBe([
+        'base' => 100.0,
+        'tax' => 21.0,
+        'surcharge' => 5.2,
+    ]);
+});
+
+it('returns null rectification amounts when metadata is absent', function () {
+    $invoice = Invoice::factory()->create([
+        'serie' => 'R',
+        'number' => 'RECT-0002',
+        'type' => InvoiceTypeEnum::RECTIFICATIVE,
+        'rectification_type' => 'S',
+    ]);
+
+    expect($invoice->getRectificationAmounts())->toBeNull();
+});
+
+it('preserves a zero base and tax in rectification amounts because 0.00 is valid', function () {
+    $invoice = Invoice::factory()->create([
+        'serie' => 'R',
+        'number' => 'RECT-0003',
+        'type' => InvoiceTypeEnum::RECTIFICATIVE,
+        'rectification_type' => 'S',
+        'metadata' => [
+            'rectification_amounts' => ['base' => 0.0, 'tax' => 0.0],
+        ],
+    ]);
+
+    expect($invoice->getRectificationAmounts())->toBe([
+        'base' => 0.0,
+        'tax' => 0.0,
+        'surcharge' => null,
+    ]);
+});
+
 it('can handle metadata', function () {
     $invoice = Invoice::factory()->create([
         'metadata' => ['custom_field' => 'custom_value'],
