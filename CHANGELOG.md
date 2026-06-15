@@ -34,6 +34,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `getRectificationAmounts(): ?array` (AID-142) and `getSubstitutedInvoices(): array`
   (AID-166). Custom implementations must add both (return `null` / `[]` when not
   applicable). Native mode is unaffected.
+- **BREAKING (enum)**: `InvoiceTypeEnum::RECTIFICATIVE_BY_SUBSTITUTION` (value `R3`)
+  renamed to `InvoiceTypeEnum::RECTIFICATIVE_ART_80_4` (AID-167). The old name was
+  misleading: per the official XSD `ClaveTipoFacturaType`, `R3` is "FACTURA
+  RECTIFICATIVA (Art. 80.4)" (uncollectable debts), not a substitution. Substitution
+  in Verifactu is `TipoRectificativa = S`, orthogonal to the invoice type. The
+  backing value (`R3`) and the `isRectificative()` behaviour are unchanged; only the
+  case name and its description ("Factura rectificativa (Art. 80.4)") changed. Update
+  any reference to the old case name — a backed-enum alias is impossible (two cases
+  cannot share the value `R3`), so this is a direct rename.
 
 ## [0.10.0] - 2026-06-11
 

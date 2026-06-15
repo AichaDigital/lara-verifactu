@@ -19,7 +19,7 @@ describe('InvoiceTypeEnum', function () {
         expect(InvoiceTypeEnum::SIMPLIFIED->value)->toBe('F2');
         expect(InvoiceTypeEnum::RECTIFICATIVE->value)->toBe('R1');
         expect(InvoiceTypeEnum::RECTIFICATIVE_SIMPLIFIED->value)->toBe('R2');
-        expect(InvoiceTypeEnum::RECTIFICATIVE_BY_SUBSTITUTION->value)->toBe('R3');
+        expect(InvoiceTypeEnum::RECTIFICATIVE_ART_80_4->value)->toBe('R3');
         expect(InvoiceTypeEnum::RECTIFICATIVE_SUMMARY->value)->toBe('R4');
         expect(InvoiceTypeEnum::RECTIFICATIVE_SUMMARY_SIMPLIFIED->value)->toBe('R5');
     });
@@ -35,7 +35,7 @@ describe('InvoiceTypeEnum', function () {
         expect(InvoiceTypeEnum::SIMPLIFIED->isRectificative())->toBeFalse();
         expect(InvoiceTypeEnum::RECTIFICATIVE->isRectificative())->toBeTrue();
         expect(InvoiceTypeEnum::RECTIFICATIVE_SIMPLIFIED->isRectificative())->toBeTrue();
-        expect(InvoiceTypeEnum::RECTIFICATIVE_BY_SUBSTITUTION->isRectificative())->toBeTrue();
+        expect(InvoiceTypeEnum::RECTIFICATIVE_ART_80_4->isRectificative())->toBeTrue();
         expect(InvoiceTypeEnum::RECTIFICATIVE_SUMMARY->isRectificative())->toBeTrue();
         expect(InvoiceTypeEnum::RECTIFICATIVE_SUMMARY_SIMPLIFIED->isRectificative())->toBeTrue();
     });
