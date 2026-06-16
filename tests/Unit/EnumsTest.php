@@ -17,35 +17,39 @@ describe('InvoiceTypeEnum', function () {
     it('has correct values for all cases', function () {
         expect(InvoiceTypeEnum::COMPLETE->value)->toBe('F1');
         expect(InvoiceTypeEnum::SIMPLIFIED->value)->toBe('F2');
+        expect(InvoiceTypeEnum::SUBSTITUTE->value)->toBe('F3');
         expect(InvoiceTypeEnum::RECTIFICATIVE->value)->toBe('R1');
-        expect(InvoiceTypeEnum::RECTIFICATIVE_SIMPLIFIED->value)->toBe('R2');
+        expect(InvoiceTypeEnum::RECTIFICATIVE_ART_80_3->value)->toBe('R2');
         expect(InvoiceTypeEnum::RECTIFICATIVE_ART_80_4->value)->toBe('R3');
-        expect(InvoiceTypeEnum::RECTIFICATIVE_SUMMARY->value)->toBe('R4');
-        expect(InvoiceTypeEnum::RECTIFICATIVE_SUMMARY_SIMPLIFIED->value)->toBe('R5');
+        expect(InvoiceTypeEnum::RECTIFICATIVE_OTHER->value)->toBe('R4');
+        expect(InvoiceTypeEnum::RECTIFICATIVE_SIMPLIFIED_INVOICES->value)->toBe('R5');
     });
 
     it('returns correct description for each type', function () {
-        expect(InvoiceTypeEnum::COMPLETE->getDescription())->toBe('Factura completa');
-        expect(InvoiceTypeEnum::SIMPLIFIED->getDescription())->toBe('Factura simplificada');
-        expect(InvoiceTypeEnum::RECTIFICATIVE->getDescription())->toBe('Factura rectificativa');
+        expect(InvoiceTypeEnum::COMPLETE->getDescription())->toContain('art. 6');
+        expect(InvoiceTypeEnum::SIMPLIFIED->getDescription())->toContain('simplificada');
+        expect(InvoiceTypeEnum::RECTIFICATIVE_ART_80_3->getDescription())->toBe('Factura rectificativa (art. 80.3)');
+        expect(InvoiceTypeEnum::RECTIFICATIVE_OTHER->getDescription())->toBe('Factura rectificativa (Resto)');
+        expect(InvoiceTypeEnum::RECTIFICATIVE_SIMPLIFIED_INVOICES->getDescription())->toBe('Factura rectificativa en facturas simplificadas');
     });
 
     it('identifies rectificative invoices correctly', function () {
         expect(InvoiceTypeEnum::COMPLETE->isRectificative())->toBeFalse();
         expect(InvoiceTypeEnum::SIMPLIFIED->isRectificative())->toBeFalse();
         expect(InvoiceTypeEnum::RECTIFICATIVE->isRectificative())->toBeTrue();
-        expect(InvoiceTypeEnum::RECTIFICATIVE_SIMPLIFIED->isRectificative())->toBeTrue();
+        expect(InvoiceTypeEnum::RECTIFICATIVE_ART_80_3->isRectificative())->toBeTrue();
         expect(InvoiceTypeEnum::RECTIFICATIVE_ART_80_4->isRectificative())->toBeTrue();
-        expect(InvoiceTypeEnum::RECTIFICATIVE_SUMMARY->isRectificative())->toBeTrue();
-        expect(InvoiceTypeEnum::RECTIFICATIVE_SUMMARY_SIMPLIFIED->isRectificative())->toBeTrue();
+        expect(InvoiceTypeEnum::RECTIFICATIVE_OTHER->isRectificative())->toBeTrue();
+        expect(InvoiceTypeEnum::RECTIFICATIVE_SIMPLIFIED_INVOICES->isRectificative())->toBeTrue();
     });
 
-    it('identifies simplified invoices correctly', function () {
+    it('identifies simplified invoices correctly (F2 and R5 only, per rules 1185/1190)', function () {
         expect(InvoiceTypeEnum::COMPLETE->isSimplified())->toBeFalse();
         expect(InvoiceTypeEnum::SIMPLIFIED->isSimplified())->toBeTrue();
         expect(InvoiceTypeEnum::RECTIFICATIVE->isSimplified())->toBeFalse();
-        expect(InvoiceTypeEnum::RECTIFICATIVE_SIMPLIFIED->isSimplified())->toBeTrue();
-        expect(InvoiceTypeEnum::RECTIFICATIVE_SUMMARY_SIMPLIFIED->isSimplified())->toBeTrue();
+        // R2 (Art. 80.3) is NOT simplified — the prior code wrongly included it.
+        expect(InvoiceTypeEnum::RECTIFICATIVE_ART_80_3->isSimplified())->toBeFalse();
+        expect(InvoiceTypeEnum::RECTIFICATIVE_SIMPLIFIED_INVOICES->isSimplified())->toBeTrue();
     });
 });
 
@@ -54,33 +58,26 @@ describe('InvoiceTypeEnum', function () {
 // ========================================
 
 describe('TaxTypeEnum', function () {
-    it('has correct values for all cases', function () {
+    it('has correct values for all cases (L1: 01/02/03/05, no IRPF)', function () {
         expect(TaxTypeEnum::IVA->value)->toBe('01');
         expect(TaxTypeEnum::IPSI->value)->toBe('02');
         expect(TaxTypeEnum::IGIC->value)->toBe('03');
-        expect(TaxTypeEnum::IRPF->value)->toBe('04');
         expect(TaxTypeEnum::OTHER->value)->toBe('05');
+        expect(TaxTypeEnum::cases())->toHaveCount(4);
     });
 
     it('returns correct description for each type', function () {
         expect(TaxTypeEnum::IVA->getDescription())->toContain('IVA');
         expect(TaxTypeEnum::IPSI->getDescription())->toContain('IPSI');
+        expect(TaxTypeEnum::IPSI->getDescription())->toContain('Ceuta y Melilla');
         expect(TaxTypeEnum::IGIC->getDescription())->toContain('IGIC');
-        expect(TaxTypeEnum::IRPF->getDescription())->toContain('IRPF');
     });
 
     it('identifies indirect taxes correctly', function () {
         expect(TaxTypeEnum::IVA->isIndirectTax())->toBeTrue();
         expect(TaxTypeEnum::IPSI->isIndirectTax())->toBeTrue();
         expect(TaxTypeEnum::IGIC->isIndirectTax())->toBeTrue();
-        expect(TaxTypeEnum::IRPF->isIndirectTax())->toBeFalse();
         expect(TaxTypeEnum::OTHER->isIndirectTax())->toBeFalse();
-    });
-
-    it('identifies direct taxes correctly', function () {
-        expect(TaxTypeEnum::IRPF->isDirectTax())->toBeTrue();
-        expect(TaxTypeEnum::IVA->isDirectTax())->toBeFalse();
-        expect(TaxTypeEnum::IPSI->isDirectTax())->toBeFalse();
     });
 });
 
@@ -209,24 +206,33 @@ describe('OperationTypeEnum', function () {
 // ========================================
 
 describe('RegimeTypeEnum', function () {
-    it('has correct values for key cases', function () {
+    it('has correct values for key cases (no invented 12/13)', function () {
         expect(RegimeTypeEnum::GENERAL->value)->toBe('01');
         expect(RegimeTypeEnum::EXPORT->value)->toBe('02');
-        expect(RegimeTypeEnum::SPECIAL_SIMPLIFIED->value)->toBe('12');
-        expect(RegimeTypeEnum::NOT_SUBJECT->value)->toBe('15');
+        expect(RegimeTypeEnum::EQUIVALENCE_SURCHARGE->value)->toBe('18');
+        expect(RegimeTypeEnum::SIMPLIFIED_REGIME->value)->toBe('20');
     });
 
-    it('returns correct description for each type', function () {
-        expect(RegimeTypeEnum::GENERAL->getDescription())->toBe('Régimen general');
+    it('returns the L8A (IVA) description by default', function () {
+        expect(RegimeTypeEnum::GENERAL->getDescription())->toBe('Operación de régimen general');
         expect(RegimeTypeEnum::EXPORT->getDescription())->toBe('Exportación');
-        expect(RegimeTypeEnum::NOT_SUBJECT->getDescription())->toBe('No sujeto');
+        expect(RegimeTypeEnum::EQUIVALENCE_SURCHARGE->getDescription())->toBe('Recargo de equivalencia');
+    });
+
+    it('resolves divergent IGIC (L8B) labels via descriptionFor()', function () {
+        // 17/18/19 mean different things for IVA (L8A) vs IGIC (L8B).
+        expect(RegimeTypeEnum::OSS_IOSS->descriptionFor(TaxTypeEnum::IVA))->toContain('OSS');
+        expect(RegimeTypeEnum::OSS_IOSS->descriptionFor(TaxTypeEnum::IGIC))->toContain('comerciante minorista');
+        expect(RegimeTypeEnum::EQUIVALENCE_SURCHARGE->descriptionFor(TaxTypeEnum::IGIC))->toContain('pequeño empresario');
+        expect(RegimeTypeEnum::REAGYP->descriptionFor(TaxTypeEnum::IGIC))->toContain('artículo 25');
+        // Shared codes keep the same label for both.
+        expect(RegimeTypeEnum::GENERAL->descriptionFor(TaxTypeEnum::IGIC))->toBe('Operación de régimen general');
     });
 
     it('identifies special regimes correctly', function () {
         expect(RegimeTypeEnum::GENERAL->isSpecialRegime())->toBeFalse();
         expect(RegimeTypeEnum::EXPORT->isSpecialRegime())->toBeTrue();
         expect(RegimeTypeEnum::SPECIAL_USED_GOODS->isSpecialRegime())->toBeTrue();
-        expect(RegimeTypeEnum::SPECIAL_SIMPLIFIED->isSpecialRegime())->toBeTrue();
-        expect(RegimeTypeEnum::NOT_SUBJECT->isSpecialRegime())->toBeTrue();
+        expect(RegimeTypeEnum::EQUIVALENCE_SURCHARGE->isSpecialRegime())->toBeTrue();
     });
 });

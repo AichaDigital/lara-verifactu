@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (BREAKING)
+
+- Rebuilt the AEAT code-list enums against the official XSD / lists (AID-178),
+  the prerequisite for the v1.0 honest core:
+  - `RegimeTypeEnum` (L8A/L8B): removed the invalid codes `12`/`13` (not in the
+    XSD `IdOperacionesTrascendenciaTributariaType`, AEAT error 1246), fixed the
+    mislabeled codes 08-15, added the missing 06/17/18/19/20/21, and added
+    `descriptionFor(TaxTypeEnum $tax)` to resolve the IGIC (L8B) labels that
+    diverge from IVA (L8A) for codes 17/18/19. Several case names changed.
+  - `TaxTypeEnum`: removed `IRPF` (`04`) — not a valid `ImpuestoType` (AEAT
+    error 1218); removed `isDirectTax()` (no direct-tax case remains).
+  - `InvoiceTypeEnum`: renamed the rectificative cases to match the law —
+    R2 `RECTIFICATIVE_SIMPLIFIED` → `RECTIFICATIVE_ART_80_3`, R4
+    `RECTIFICATIVE_SUMMARY` → `RECTIFICATIVE_OTHER`, R5
+    `RECTIFICATIVE_SUMMARY_SIMPLIFIED` → `RECTIFICATIVE_SIMPLIFIED_INVOICES`;
+    fixed `isSimplified()` to F2/R5 only (R2 was wrongly included).
+  - `OperationTypeEnum`: marked legacy (not an official AEAT list; ignored by
+    the XML builder). Scheduled for removal with the `operation_key` column in
+    AID-179.
+
+### Added
+
+- `CalificacionOperacionEnum` (L9), `OperacionExentaEnum` (L10) and
+  `RectificativeTypeEnum` (L3) — typed definitions for the lists previously
+  carried as hardcode / regex / raw string. Wiring into the builder lands in
+  AID-179.
+- XSD↔enum conformance guardrail test: asserts every code-list enum stays in
+  sync with the official XSD enumerations (would have caught the 12/13 and
+  IRPF=04 defects in CI).
+
+### Upgrade notes
+
+- BREAKING for code referencing the removed/renamed enum cases — there are no
+  aliases, so stale references fail loudly. Any persisted `regime_type` of
+  `12`/`13` or `tax_type` of `04` was already invalid for AEAT and will no
+  longer hydrate through the model cast; clean such rows if present.
+
 ## [0.11.0] - 2026-06-16
 
 ### Added
