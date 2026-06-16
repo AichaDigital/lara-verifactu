@@ -324,7 +324,7 @@ final class XmlBuilder implements XmlBuilderContract
 
         // S1: subject and not exempt, without reverse charge
         $detalle->appendChild($this->sfElement($dom, 'CalificacionOperacion', 'S1'));
-        $detalle->appendChild($this->sfElement($dom, 'TipoImpositivo', $this->formatRate($breakdown->getTaxRate())));
+        $detalle->appendChild($this->sfElement($dom, 'TipoImpositivo', $this->formatRate($breakdown->getTaxRate(), 'TipoImpositivo')));
         $detalle->appendChild($this->sfElement($dom, 'BaseImponibleOimporteNoSujeto', $this->formatAmount($breakdown->getBaseAmount(), 'BaseImponibleOimporteNoSujeto')));
         $detalle->appendChild($this->sfElement($dom, 'CuotaRepercutida', $this->formatAmount($breakdown->getTaxAmount(), 'CuotaRepercutida')));
 
@@ -342,7 +342,7 @@ final class XmlBuilder implements XmlBuilderContract
                 );
             }
 
-            $detalle->appendChild($this->sfElement($dom, 'TipoRecargoEquivalencia', $this->formatRate($surchargeRate)));
+            $detalle->appendChild($this->sfElement($dom, 'TipoRecargoEquivalencia', $this->formatRate($surchargeRate, 'TipoRecargoEquivalencia')));
             $detalle->appendChild($this->sfElement($dom, 'CuotaRecargoEquivalencia', $this->formatAmount($surchargeAmount, 'CuotaRecargoEquivalencia')));
         }
 
@@ -531,11 +531,35 @@ final class XmlBuilder implements XmlBuilderContract
         return $formatted;
     }
 
-    private function formatRate(float $rate): string
+    private function formatRate(float $rate, string $field): string
     {
-        // TipoImpositivo is Tipo2.2Type (percentage), not an amount; the
-        // ImporteSgn12.2Type magnitude check does not apply.
-        return number_format($rate, 2, '.', '');
+        // TipoImpositivo / TipoRecargoEquivalencia are Tipo2.2Type: finite,
+        // non-negative (no sign), at most 3 integer digits and 2 decimals.
+        if (! is_finite($rate)) {
+            throw ValidationException::invalidInvoiceData(
+                $field,
+                'value is not a finite number (Tipo2.2Type requires a finite value)'
+            );
+        }
+
+        if ($rate < 0) {
+            throw ValidationException::invalidInvoiceData(
+                $field,
+                'value is negative; Tipo2.2Type has no sign'
+            );
+        }
+
+        $formatted = number_format($rate, 2, '.', '');
+
+        // No sign is possible here ($rate >= 0), so the integer part is digits only.
+        if (strlen(explode('.', $formatted)[0]) > 3) {
+            throw ValidationException::invalidInvoiceData(
+                $field,
+                "value {$formatted} exceeds Tipo2.2Type: maximum 3 integer digits"
+            );
+        }
+
+        return $formatted;
     }
 
     private function companyName(): string

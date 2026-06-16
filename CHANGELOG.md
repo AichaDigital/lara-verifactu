@@ -45,6 +45,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   order. Rate and amount are a semantic pair: providing only one throws
   `ValidationException` before producing XML. `CuotaRecargoEquivalencia` inherits
   the AID-168 magnitude check.
+- Percentage fields are now validated against the XSD `Tipo2.2Type` (finite,
+  non-negative, max 3 integer digits) before building XML (AID-175). `formatRate()`
+  — used by `TipoImpositivo` and `TipoRecargoEquivalencia` — throws
+  `ValidationException` (naming the field) on a negative, non-finite, or
+  out-of-range rate (counted after rounding, so `999.999` → `1000.00` is rejected),
+  instead of emitting XSD-invalid XML.
 
 ### Changed
 
