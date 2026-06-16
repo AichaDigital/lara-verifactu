@@ -328,6 +328,24 @@ final class XmlBuilder implements XmlBuilderContract
         $detalle->appendChild($this->sfElement($dom, 'BaseImponibleOimporteNoSujeto', $this->formatAmount($breakdown->getBaseAmount(), 'BaseImponibleOimporteNoSujeto')));
         $detalle->appendChild($this->sfElement($dom, 'CuotaRepercutida', $this->formatAmount($breakdown->getTaxAmount(), 'CuotaRepercutida')));
 
+        $surchargeRate = $breakdown->getSurchargeRate();
+        $surchargeAmount = $breakdown->getSurchargeAmount();
+
+        if ($surchargeRate !== null || $surchargeAmount !== null) {
+            // Recargo de equivalencia: TipoRecargoEquivalencia + CuotaRecargoEquivalencia
+            // are a semantic pair. Emitting one without the other is XSD-valid but
+            // fiscally incoherent and AEAT would reject it, so fail fast.
+            if ($surchargeRate === null || $surchargeAmount === null) {
+                throw ValidationException::invalidInvoiceData(
+                    'surcharge',
+                    'TipoRecargoEquivalencia and CuotaRecargoEquivalencia must be provided together'
+                );
+            }
+
+            $detalle->appendChild($this->sfElement($dom, 'TipoRecargoEquivalencia', $this->formatRate($surchargeRate)));
+            $detalle->appendChild($this->sfElement($dom, 'CuotaRecargoEquivalencia', $this->formatAmount($surchargeAmount, 'CuotaRecargoEquivalencia')));
+        }
+
         return $detalle;
     }
 

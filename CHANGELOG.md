@@ -38,6 +38,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   non-finite amounts (`INF`/`NaN`) are rejected too. `TipoImpositivo` (XSD
   `Tipo2.2Type`, a percentage, not an amount) is formatted separately and is not
   subject to this check.
+- Equivalence surcharge (recargo de equivalencia) in the breakdown (AID-173): when
+  a breakdown carries a surcharge, the registration XML now emits
+  `TipoRecargoEquivalencia` (XSD `Tipo2.2Type`) and `CuotaRecargoEquivalencia` (XSD
+  `ImporteSgn12.2Type`) after `CuotaRepercutida`, in XSD `DetalleType` sequence
+  order. Rate and amount are a semantic pair: providing only one throws
+  `ValidationException` before producing XML. `CuotaRecargoEquivalencia` inherits
+  the AID-168 magnitude check.
 
 ### Changed
 
