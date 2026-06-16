@@ -27,6 +27,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `InvoiceContract::getSubstitutedInvoices(): array` — the invoices an F3 substitutes
   (`[['number' => string, 'issue_date' => Carbon]]`), `[]` when not applicable. Native
   mode reads `metadata['substituted_invoices']`.
+- Amount magnitude is now validated against the XSD `ImporteSgn12.2Type` (max 12
+  integer digits) before building XML (AID-168). Every monetary field
+  (`CuotaTotal`, `ImporteTotal`, `BaseImponibleOimporteNoSujeto`,
+  `CuotaRepercutida`, `BaseRectificada`, `CuotaRectificada`,
+  `CuotaRecargoRectificado`) throws `ValidationException` when it exceeds the
+  range, instead of emitting XSD-invalid XML that AEAT would reject. The sign and
+  the two decimals do not count toward the limit; rounding is accounted for
+  (`999999999999.999` rounds up to 13 integer digits and is rejected), and
+  non-finite amounts (`INF`/`NaN`) are rejected too. `TipoImpositivo` (XSD
+  `Tipo2.2Type`, a percentage, not an amount) is formatted separately and is not
+  subject to this check.
 
 ### Changed
 
