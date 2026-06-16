@@ -14,7 +14,7 @@ records regulation (Real Decreto 1007/2023). It generates AEAT-conformant
 chained fingerprints (huella), validation QR codes and registration XML,
 and submits registration and cancellation records to the AEAT web service.
 
-> **Status: 0.9.x — sandbox-validated beta.**
+> **Status: 0.11.x — sandbox-validated beta.**
 >
 > Every artifact this package produces has been validated against the
 > official AEAT specifications, and the full submission flow has been
