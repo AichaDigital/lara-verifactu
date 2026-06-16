@@ -210,8 +210,8 @@ final class XmlBuilder implements XmlBuilderContract
 
         $alta->appendChild($this->buildDesglose($dom, $invoice));
 
-        $alta->appendChild($this->sfElement($dom, 'CuotaTotal', $this->formatAmount($invoice->getTaxAmount())));
-        $alta->appendChild($this->sfElement($dom, 'ImporteTotal', $this->formatAmount($invoice->getTotalAmount())));
+        $alta->appendChild($this->sfElement($dom, 'CuotaTotal', $this->formatAmount($invoice->getTaxAmount(), 'CuotaTotal')));
+        $alta->appendChild($this->sfElement($dom, 'ImporteTotal', $this->formatAmount($invoice->getTotalAmount(), 'ImporteTotal')));
 
         $alta->appendChild($this->buildEncadenamiento($dom, $chain->previous));
         $alta->appendChild($this->buildSistemaInformatico($dom));
@@ -317,16 +317,16 @@ final class XmlBuilder implements XmlBuilderContract
 
         if ($breakdown->isExempt()) {
             $detalle->appendChild($this->sfElement($dom, 'OperacionExenta', $this->exemptionCode($breakdown)));
-            $detalle->appendChild($this->sfElement($dom, 'BaseImponibleOimporteNoSujeto', $this->formatAmount($breakdown->getBaseAmount())));
+            $detalle->appendChild($this->sfElement($dom, 'BaseImponibleOimporteNoSujeto', $this->formatAmount($breakdown->getBaseAmount(), 'BaseImponibleOimporteNoSujeto')));
 
             return $detalle;
         }
 
         // S1: subject and not exempt, without reverse charge
         $detalle->appendChild($this->sfElement($dom, 'CalificacionOperacion', 'S1'));
-        $detalle->appendChild($this->sfElement($dom, 'TipoImpositivo', $this->formatAmount($breakdown->getTaxRate())));
-        $detalle->appendChild($this->sfElement($dom, 'BaseImponibleOimporteNoSujeto', $this->formatAmount($breakdown->getBaseAmount())));
-        $detalle->appendChild($this->sfElement($dom, 'CuotaRepercutida', $this->formatAmount($breakdown->getTaxAmount())));
+        $detalle->appendChild($this->sfElement($dom, 'TipoImpositivo', $this->formatRate($breakdown->getTaxRate())));
+        $detalle->appendChild($this->sfElement($dom, 'BaseImponibleOimporteNoSujeto', $this->formatAmount($breakdown->getBaseAmount(), 'BaseImponibleOimporteNoSujeto')));
+        $detalle->appendChild($this->sfElement($dom, 'CuotaRepercutida', $this->formatAmount($breakdown->getTaxAmount(), 'CuotaRepercutida')));
 
         return $detalle;
     }
@@ -404,11 +404,11 @@ final class XmlBuilder implements XmlBuilderContract
     {
         $importe = $dom->createElementNS(self::SF_NS, 'sf:ImporteRectificacion');
 
-        $importe->appendChild($this->sfElement($dom, 'BaseRectificada', $this->formatAmount($amounts['base'])));
-        $importe->appendChild($this->sfElement($dom, 'CuotaRectificada', $this->formatAmount($amounts['tax'])));
+        $importe->appendChild($this->sfElement($dom, 'BaseRectificada', $this->formatAmount($amounts['base'], 'BaseRectificada')));
+        $importe->appendChild($this->sfElement($dom, 'CuotaRectificada', $this->formatAmount($amounts['tax'], 'CuotaRectificada')));
 
         if ($amounts['surcharge'] !== null) {
-            $importe->appendChild($this->sfElement($dom, 'CuotaRecargoRectificado', $this->formatAmount($amounts['surcharge'])));
+            $importe->appendChild($this->sfElement($dom, 'CuotaRecargoRectificado', $this->formatAmount($amounts['surcharge'], 'CuotaRecargoRectificado')));
         }
 
         return $importe;
@@ -487,9 +487,37 @@ final class XmlBuilder implements XmlBuilderContract
         return $xml;
     }
 
-    private function formatAmount(float $amount): string
+    private function formatAmount(float $amount, string $field): string
     {
-        return number_format($amount, 2, '.', '');
+        if (! is_finite($amount)) {
+            throw ValidationException::invalidInvoiceData(
+                $field,
+                'value is not a finite number (ImporteSgn12.2Type requires a finite amount)'
+            );
+        }
+
+        $formatted = number_format($amount, 2, '.', '');
+
+        // ImporteSgn12.2Type allows at most 12 integer digits (the sign and the
+        // two decimals do not count). Fail here instead of emitting XSD-invalid
+        // XML that AEAT (or schemaValidate) would reject.
+        $integerDigits = strlen(ltrim(explode('.', $formatted)[0], '-'));
+
+        if ($integerDigits > 12) {
+            throw ValidationException::invalidInvoiceData(
+                $field,
+                "value {$formatted} exceeds ImporteSgn12.2Type: maximum 12 integer digits"
+            );
+        }
+
+        return $formatted;
+    }
+
+    private function formatRate(float $rate): string
+    {
+        // TipoImpositivo is Tipo2.2Type (percentage), not an amount; the
+        // ImporteSgn12.2Type magnitude check does not apply.
+        return number_format($rate, 2, '.', '');
     }
 
     private function companyName(): string
