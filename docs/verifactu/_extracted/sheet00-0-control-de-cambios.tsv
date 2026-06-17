@@ -1,0 +1,24 @@
+# Source: DsRegistroVeriFactu.xlsx :: sheet '0)Control de cambios'
+VERSIÓN	FECHA	HOJA/ PESTAÑA	AUTOR	DESCRIPCIÓN
+1.0	2024-10-28 00:00:00	0	AEAT.DIT.SGA y  AEAT.DIFT.ONIF	Versión oficial a raíz de la publicación de la Orden Ministerial HAC-1177-2024. Sin cambios respecto a la versión 0.14.4. Asignación del mismo valor de numeración de versión, acorde al campo IdVersion (Lista L15).
+0.14.4	2024-10-02 00:00:00	2 y 3	AEAT.DIT.SGA	Nuevo campo RefExterna. 
+0.14.3	2024-09-24 00:00:00	1 y7 	AEAT.DIT.SGA	Modificación bloque "RemisionRequerimiento" y listas L8A (IVA) y L8B (IGIC) respectos a claves de régimen 8 (se añaden) y 16 (se elimina). 
+0.14.2	2024-09-16 00:00:00	1 y7 	AEAT.DIT.SGA	Modificación lista L1 (Impuesto "Otros) y modificaciones de descripciones asociadas. 
+0.14.1	2024-09-10 00:00:00	1, 6 y 7	AEAT.DIFT.ONIF	1) Cambios en las descripciones de la agrupación Representante y se "desagrupan" columnas. 6) Cambio del título de la lista L8A; se añade una nota debajo de la lista L2. 7) Se completa la leyenda.
+0.14.0	2024-07-19 00:00:00	1,2 y 6	AEAT.DIT.SGA	Nuevo campo Representante e Impuesto. ClaveRegimen opcional. RefRequerimiento obligatorio. Nuevas listas L1, L8A y L8B (en sustitución de la L8).
+0.13.2	2024-06-07 00:00:00	6	AEAT.DIT.SGA	Eliminada lista L1, sin uso. 
+0.13.1	2024-04-29 00:00:00	0,1,2,3,4,5 y 6	AEAT.DIFT.ONIF	Traslado de los cambios (corrección de erratas, comillas…) incluidos en el anexo del documento de la propuesta de OM a las pestañas correspondientes.
+0.13	2024-04-25 00:00:00	0,1,2,3,4,5 y 6	AEAT.DIFT.ONIF	Corrección de erratas (coherencias singular/plural, espacios duplicados…)
+0.12.3	2024-04-17 00:00:00	0 y 5	AEAT.DIFT.ONIF	Corrección de erratas (espacios duplicados…)
+0.12.2	2024-04-16 00:00:00	0 y 5	AEAT.DIFT.ONIF	Pestaña 0) nueva fila 2, 5) celda D13 descrip.
+0.12.1	2024-04-15 00:00:00	0 y 2	AEAT.DIFT.ONIF	Pestaña 0) nueva fila 2, 2) formato celda G56 ("IdAcuerdoSistemaInformatico").
+0.12.0	2024-04-15 00:00:00	0, 4, 5 y 6	AEAT.DIFT.ONIF	Pestaña 0) nueva fila 2, 4) antiguas celdas E54 y E55 desaparecen, 4) "combinadas" celdas E37 a E39, 5)D7 descrip., 5)D8 descrip., 5)D9 descrip., 5)D10 descrip., 5)D11 descrip., 5)D12 descrip., 5)B13 nombre campo,  5)D13 descrip., 5)E13 formato, 5)A14 NOTA, 6) cambio valores y descrip. en Lista L2E.
+0.11.5	2024-04-03 00:00:00	4	AEAT.DIT.SGA	Modificación descripción campo Signature
+0.11.4	2024-03-20 00:00:00	2	AEAT.DIT.SGA	Modificación de campos CalificacionOperacion y OperaciónExenta a obligatorios y alternativos
+0.11.3	2024-03-19 00:00:00	0, 1, 2, 3 y 5	AEAT.DIFT.ONIF y AEAT.DIT.SGA	Corrección de erratas y ampliación de descripciones: pestaña 0) nueva fila 2, pestaña 1) celda H5, 2)C11, 2)C14, 2)C31, 2)C37, 2)D38, 2)D39, 2)G22, G)23, 3)E3, 3)E8 y 5)D10.
+0.11.2	2024-03-12 00:00:00	0,1,2,3,4,5 (nueva), 6 (antigua 5), A y B	AEAT.DIFT.ONIF y AEAT.DIT.SGA	Revisión y cambios en Pestaña 4) DR Evento. Revisión general y cambios formales (fundamentalmente de las descripciones). Nueva pestaña 5 e inclusión de 2 últimas pestañas A y B (no irán en el anexo I de la orden, sino en la Sede-e) con operativa de alta y de anulación admitidas.
+0.9.0	2024-03-05 00:00:00	1,2,3,4, 6 (antigua 5)	AEAT.DIT.SGA	Refactorización de la operativa de remisión, alta y anulación de los registros de facturación. 
+0.5.0	2023-12-20 00:00:00	1,2,3 y 6 (antigua 5)	AEAT.DIT.SGA	Inclusión de lista L14 "Macrodato"
+0.4.0	2023-12-19 00:00:00	0	AEAT.DIFT.ONIF	Inclusión de la pestaña "0)Control.de.cambios"
+0.4.0	2023-12-19 00:00:00	1	AEAT.DIFT.ONIF	Campo Cuota Rectificada a CuotaRectificada (sin espacio intermedio).
+0.4.0	2023-12-19 00:00:00	6 (antigua 5)	AEAT.DIFT.ONIF	- Cambio en la hoja de listas para realizar ajustes en algunos bordes de las filas/celdas. ⏎ - Cambio en la hoja de listas para corregir errata en la L17: in(i)cial.  ⏎ - Cambio en la hoja de listas para añadir a la L16 y a la L17 los registros que faltaban (3 y 2, respectivamente) con los valores que se utilizan en los registros de anulación.  ⏎ - Cambio en la hoja de listas para sustituir un valor en la L15, de V0.1 a V1.0 (versión publicada).

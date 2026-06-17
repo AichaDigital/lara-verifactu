@@ -1,0 +1,46 @@
+# Source: DsRegistroVeriFactu.xlsx :: sheet 'Comprobaciones'
+revisado
+
+Fecha: 15/12/2023
+
+- Cambio del Formato en la columna H
+- ¿Lista L11 para "Macrodato"?
+
+
+
+Fecha: 13/12/2023 11:08
+
+- Te pasamos como ejemplo los anexos incluidos en la orden del SII (1) que puede ser interesante imitar en la medida de lo posible. En ellos establecieron un "código" de colores o marcas para los tipos de campo, obligatorios, de selección (alternativa) y demás.
+
+- En los campos que se indica el uso de las listas "L4" y "L5", ¿os parece conveniente "completar" con el formato (alfanumérico u otro) así como la longitud especificada?
+
+- Sobre los campos "CodigoPais", creemos que hay una errata al indicar la lista "L17". No sabemos si queríais indicar otra lista nueva y la cual podría apuntar directamente a "ISO 3166-1 alpha-2 codes" sin necesidad de reproducirla en la pestaña de las listas.
+
+- En el campo "OperacionExenta", la longitud entre paréntesis aparece como "(02)" y suponemos que es simplemente "(2)".
+
+- En las descripciones había algunas erratas "..alta incial, alta sutitutiva..." y algún detalle ortográfico menor.
+
+Fecha: 13/12/2023 12:22
+
+- IDVersion en los 2 DR de conservación: Identificación de la versión actual del esquema o estructura de información utilizada para la generación y conservación de los registros de facturación a la AEAT. 
+
+- Huella en los 6 DR: Huella o "hash" del registro de facturación (Realizada sobre el nodo RegistroFacturacion)
+
+- Mencionar lo del SII:
+  # Fondo salmón para opciones alternativas.
+  # Superíndices, además de rojo (esto se puede dejar para más adelante)
+  ...
+
+- Formato de "impresión" de los Excel: eliminar columnas no usadas, ajustar anchuras del resto, "paginar" con suficiente espacio por si se necesita "crecer" dentro de la pág. a posteriori, ajustar páginas a ciertos bloques o filas sin dejar campos "partidos"...
+
+
+Fecha: 13/12/2023 13:17
+
+- Para poder ajustar su tamaño automáticamente (Formato de celdas>Alineación>Ajustar texto y doble clic entre filas, en la cabecera, con todas las filas seleccionadas), deshacer combinar celdas en aquellos "conceptos" que no engloben a otros, como TipoFactura, IDType... (casi todas derivadas de que la celda de formato se dividía en "3 filas" -formato/longitud/lista- pero en la práctica no se hace así en muchos casos, sino que se pone todo seguido en la misma celda).
+
+- NombreRazonEmisor: Nombre-razón social del obligado a expedir la factura.
+
+- Quitar espacio de nombres de campo: Base Rectificada, Cuota Rectificada.
+
+- FacturaSimplificadaArticulos7.2_7.3 Factura simplificada Articulo 7.2 Y 7.3 RD 1619/2012. Si no se informa este campo se entenderá que tiene valor  “N"
+- FacturaSinIdentifDestinatarioArticulo6.1.d Factura sin identificación destinatario artículo 6.1.d) RD 1619/2012. Si no se informa este campo se entenderá que tiene valor  “N"

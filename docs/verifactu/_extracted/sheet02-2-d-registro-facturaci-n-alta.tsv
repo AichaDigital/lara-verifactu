@@ -1,0 +1,64 @@
+# Source: DsRegistroVeriFactu.xlsx :: sheet '2)D. Registro Facturación Alta'
+BLOQUE	DATOS/ AGRUPACIÓN	DATOS/ AGRUPACIÓN	DATOS/ AGRUPACIÓN	DATOS/ AGRUPACIÓN	DESCRIPCIÓN	FORMATO / (LONGITUD) / LISTA
+RegistroAlta1	IDVersion1				Identificación de la versión actual del esquema o estructura de información utilizada para la generación y conservación / remisión de los registros de facturación. Este campo forma parte del detalle de las circunstancias de generación de los registros de facturación.	Alfanumérico (3) L15
+	IDFactura1	IDEmisorFactura1			Número de identificación fiscal (NIF) del obligado a expedir la factura.	FormatoNIF (9) 
+		NumSerieFactura1			Nº Serie+Nº Factura que identifica a la factura emitida.	Alfanumérico (60) 
+		FechaExpedicionFactura1			Fecha de expedición de la factura.	Fecha (dd-mm-yyyy) 
+	RefExterna				Dato adicional de contenido libre con el objetivo de que se pueda asociar opcionalmente información interna del sistema informático de facturación al registro de facturación. Este dato puede ayudar a completar la identificación o calificación de la factura y/o su registro de facturación.	Alfanumérico (60) 
+	NombreRazonEmisor1				Nombre-razón social del obligado a expedir la factura.	Alfanumérico (120) 
+	Subsanacion				Indicador que especifica que se trata de una subsanación de un registro de facturación de alta previamente generado, por lo que el contenido de este nuevo registro de facturación es el correcto y el que deberá tenerse en cuenta. Si no se informa este campo se entenderá que tiene valor "N" (Alta Normal-Inicial). Este campo forma parte del detalle de las circunstancias de generación de los registros de facturación.	Alfanumérico (1) L4
+	RechazoPrevio				Indicador que especifica que se está generando -para volverlo a remitir- un nuevo registro de facturación de alta subsanado tras haber sido rechazado en su remisión inmediatamente anterior, es decir, en el último envío que contenía ese registro de facturación de alta rechazado. Si no se informa este campo se entenderá que tiene valor "N". Solo es necesario informarlo en caso de remisión voluntaria «VERI*FACTU». Este campo forma parte del detalle de las circunstancias de generación de los registros de facturación.	Alfanumérico (1) L17
+	TipoFactura1				Especificación del tipo de factura: factura completa, factura simplificada, factura emitida en sustitución de facturas simplificadas o factura rectificativa.	Alfanumérico (2) L2
+	TipoRectificativa				Campo que identifica si el tipo de factura rectificativa es por sustitución o por diferencia.	Alfanumérico (1) L3
+	FacturasRectificadas	IDFacturaRectificada (1-1000)1	IDEmisorFactura1		NIF del obligado a expedir la factura.	FormatoNIF (9) 
+			NumSerieFactura1		Nº Serie+Nº Factura que identifica a la factura emitida.	Alfanumérico (60) 
+			FechaExpedicionFactura1		Fecha de expedición de la factura.	Fecha (dd-mm-yyyy) 
+	FacturasSustituidas	IDFacturaSustituida (1-1000)1	IDEmisorFactura1		NIF del obligado a expedir la factura.	FormatoNIF (9) 
+			NumSerieFactura1		Nº Serie+Nº Factura que identifica a la factura emitida.	Alfanumérico (60) 
+			FechaExpedicionFactura1		Fecha de expedición de la factura.	Fecha (dd-mm-yyyy) 
+	ImporteRectificacion	BaseRectificada1			Base imponible de la factura.	Decimal (12,2) 
+		CuotaRectificada1			Cuota repercutida o soportada de la factura.	Decimal (12,2) 
+		CuotaRecargoRectificado			Cuota recargo de equivalencia de la factura.	Decimal (12,2) 
+	FechaOperacion				Fecha en la que se ha realizado la operación siempre que sea diferente a la fecha de expedición.	Fecha (dd-mm-yyyy) 
+	DescripcionOperacion1				Descripción del objeto de la factura.	Alfanumérico (500) 
+	FacturaSimplificadaArt7273				Factura simplificada Articulo 7.2 Y 7.3 RD 1619/2012. Si no se informa este campo se entenderá que tiene valor “N".	Alfanumérico (1) L4
+	FacturaSinIdentifDestinatarioArt61d				Factura sin identificación destinatario artículo 6.1.d) RD 1619/2012. Si no se informa este campo se entenderá que tiene valor “N".	Alfanumérico (1) L5
+	Macrodato				Identificador que especifica aquellas facturas con base o importe de la factura superior al umbral especificado. Este campo es necesario porque contribuye a completar el detalle de la tipología de la factura. Si no se informa este campo se entenderá que tiene valor “N”.	Alfanumérico (1) L14
+	EmitidaPorTerceroODestinatario				Identificador que especifica si la factura ha sido expedida materialmente por un tercero o por el destinatario (contraparte). 	Alfanumérico (1) L6
+	Tercero	NombreRazon1			Nombre-razón social del tercero que expida la factura.	Alfanumérico (120) 
+		NIF1			Identificador del NIF del tercero que expida la factura.	FormatoNIF (9) 
+		IDOtro1	CodigoPais		Código del país del tercero que expida la factura.	Alfanumérico (2) (ISO 3166-1 alpha-2 codes) 
+			IDType1		Clave para establecer el tipo de identificación del tercero en el país de residencia.	Alfanumérico (2) L7
+			ID1		Número de identificación del tercero en el país de residencia.	Alfanumérico (20) 
+	Destinatarios	IDDestinatario (1-1000)1	NombreRazon1		Nombre-razón social del destinatario (a veces también denominado contraparte, es decir, el cliente) de la operación.	Alfanumérico (120) 
+			NIF1		Identificador del NIF del destinatario (a veces también denominado contraparte, es decir, el cliente) de la operación.	FormatoNIF (9) 
+			IDOtro1	CodigoPais	Código del país del destinatario (a veces también denominado contraparte, es decir, el cliente) de la operación de la factura expedida.	Alfanumérico (2) (ISO 3166-1 alpha-2 codes) 
+				IDType1	Clave para establecer el tipo de identificación, en el país de residencia, del destinatario (a veces también denominado contraparte, es decir, el cliente) de la operación de la factura expedida.	Alfanumérico (2) L7
+				ID1	Número de identificación, en el país de residencia, del destinatario (a veces también denominado contraparte, es decir, el cliente) de la operación de la factura expedida.	Alfanumérico (20) 
+	Cupon				Identificador que especifica si tiene minoración de la base imponible por la concesión de cupones, bonificaciones o descuentos cuando solo se expide el original de la factura. Este campo es necesario porque contribuye a completar el detalle de la tipología de la factura. Si no se informa este campo se entenderá que tiene valor “N”.	Alfanumérico (1) L4
+	Desglose1	DetalleDesglose (1-12)1	Impuesto		Impuesto de aplicación. Si no se informa este campo se entenderá que el impuesto de aplicación es el IVA. Este campo es necesario porque contribuye a completar el detalle de la tipología de la factura.	Alfanumérico (1) L1
+			ClaveRegimen		Clave que identificará el tipo de régimen del impuesto o una operación con trascendencia tributaria.	Alfanumérico (2) L8A/L8B
+			CalificacionOperacion1		Clave de la operación sujeta y no exenta o de la operación no sujeta.	Alfanumérico (2) L9
+			OperacionExenta1		Campo que especifica la causa de exención.	Alfanumérico (2) L10
+			TipoImpositivo		Porcentaje aplicado sobre la base imponible para calcular la cuota.	Decimal (3,2) 
+			BaseImponibleOimporteNoSujeto1		Magnitud dineraria sobre la que se aplica el tipo impositivo / Importe no sujeto.	Decimal (12,2) 
+			BaseImponibleACoste		Magnitud dineraria sobre la que se aplica el tipo impositivo en régimen especial de grupos nivel avanzado.	Decimal (12,2) 
+			CuotaRepercutida		Cuota resultante de aplicar a la base imponible el tipo impositivo.	Decimal (12,2) 
+			TipoRecargoEquivalencia		Porcentaje asociado en función del impuesto y tipo impositivo	Decimal (3,2) 
+			CuotaRecargoEquivalencia		Cuota resultante de aplicar a la base imponible el tipo de recargo de equivalencia.	Decimal (12,2) 
+	CuotaTotal1				Importe total de la cuota (sumatorio de la Cuota Repercutida y Cuota de Recargo de Equivalencia). 	Decimal (12,2) 
+	ImporteTotal1				Importe total de la factura. Se detallará la forma de calcularlo en la documentación correspondiente en la sede electrónica de la AEAT (documento de validaciones...).	Decimal (12,2) 
+	Encadenamiento1	PrimerRegistro1			Indicador que especifica que no existe registro de facturación anterior en este sistema informático por tratarse del primer registro de facturación generado en él. En este caso, se informará con el valor "S". Si no se informa este campo se entenderá que no es el primer registro de facturación, en cuyo caso es obligatorio informar los campos de que consta «RegistroAnterior».	Alfanumérico (1)
+		RegistroAnterior1	IDEmisorFactura1		NIF del obligado a expedir la factura a que se refiere el registro de facturación anterior (sea de alta o de anulación) generado en este sistema informático. Este campo forma parte del detalle de las circunstancias de generación de los registros de facturación, ya que es necesario para completar la identificación de la factura contenida en el registro de facturación anterior a encadenar en casos excepcionales y puntuales en los que no coincida con el actual, como al cambiar en un momento dado el NIF tras fusiones, absorciones, etc.	FormatoNIF (9) 
+			NumSerieFactura1		Nº Serie+Nº Factura que identifica a la factura a que se refiere el registro de facturación anterior (sea de alta o de anulación) generado en este sistema informático.	Alfanumérico (60) 
+			FechaExpedicionFactura1		Fecha de expedición de la factura a que se refiere el registro de facturación anterior (sea de alta o de anulación) generado en este sistema informático.	Fecha (dd-mm-yyyy) 
+			Huella1		Primeros 64 caracteres de la huella o «hash» del registro de facturación anterior (sea de alta o de anulación) generado en este sistema informático.	Alfanumérico (64) 
+	SistemaInformatico1				Datos del sistema informático de facturación utilizado. Ver su diseño de bloque: «SistemaInformatico».
+	FechaHoraHusoGenRegistro1				Fecha, hora y huso horario de generación del registro de facturación. El huso horario es el que está usando el sistema informático de facturación en el momento de generación del registro de facturación.	DateTime. Formato: YYYY-MM-DDThh:mm:ssTZD (ej: 2024-01-01T19:20:30+01:00) (ISO 8601)
+	NumRegistroAcuerdoFacturacion				Número de registro obtenido al enviar la autorización en materia de facturación o de libros registro a que se refiere la disposición adicional primera del Real Decreto que aprueba el Reglamento. Este campo forma parte del detalle de las circunstancias de generación del registro de facturación.	Alfanumérico (15) 
+	IdAcuerdoSistemaInformatico				Identificación del acuerdo (resolución) a que se refiere el artículo 5 del Reglamento. Este campo forma parte del detalle de las circunstancias de generación del registro de facturación.	Alfanumérico (16) 
+	TipoHuella1				Tipo de algoritmo aplicado a cierto contenido del registro de facturación para obtener la huella o «hash».	Alfanumérico (2) L12
+	Huella1				Huella o «hash» de cierto contenido de este registro de facturación. Dicho contenido se detallará en la documentación correspondiente en la sede electrónica de la AEAT (documento de huella...).	Alfanumérico (64) 
+	Signature				Firma electrónica del registro de facturación en formato Xades Enveloped	Ver formato del "schema", en http://www.w3.org/2000/09/xmldsig#
+					Namespace=http://www.w3.org/2000/09/xmldsig#.
+					Obligatorio para conservación y para requerimiento, pero no para remisión voluntaria («VERI*FACTU»).

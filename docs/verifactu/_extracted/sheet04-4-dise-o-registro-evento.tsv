@@ -1,0 +1,91 @@
+# Source: DsRegistroVeriFactu.xlsx :: sheet '4)Diseño Registro Evento'
+BLOQUE	DATOS/ AGRUPACIÓN	DATOS/ AGRUPACIÓN	DATOS/ AGRUPACIÓN	DATOS/ AGRUPACIÓN	DATOS/ AGRUPACIÓN	DESCRIPCIÓN	FORMATO / (LONGITUD) / LISTA
+RegistroEvento1	IDVersion1					Identificación de la versión actual del esquema o estructura de información utilizada para la generación y conservación de los registros de evento.	Alfanumérico (3)
+							L15
+	Evento1	SistemaInformatico1				Datos del sistema informático de facturación utilizado. Ver su diseño de bloque: «SistemaInformatico».
+		ObligadoEmision1	NombreRazon1			Nombre-razón social del obligado a expedir las facturas.	Alfanumérico (120) 
+			NIF1			NIF del obligado a expedir las facturas.	FormatoNIF (9) 
+		EmitidaPorTerceroODestinatario				Campo que especifica si las facturas son expedidas materialmente por un tercero o destinatario en nombre del obligado a expedir facturas, en cuyo caso el campo «TerceroODestinatario» es obligatorio. Si no se informa este indicador, se entiende que quien expide materialmente las facturas (y genera los correspondientes registros de facturación) es el propio obligado a expedir las facturas.	Alfanumérico (1)
+							L4E
+		TerceroODestinatario	NombreRazon1			Nombre-razón social del tercero o destinatario que expida las facturas.	Alfanumérico (120) 
+			NIF1			NIF del tercero o destinatario que expida las facturas.	FormatoNIF (9) 
+			IDOtro1	CodigoPais		Código del país del tercero o destinatario que expida las facturas.	Alfanumérico (2) (ISO 3166-1 alpha-2 codes) 
+				IDType1		Clave para establecer el tipo de identificación en el país de residencia.	Alfanumérico (2)
+							L7
+				ID1		Número de identificación en el país de residencia.	Alfanumérico (20) 
+		FechaHoraHusoGenEvento1				Fecha, hora y huso horario de generación del registro de evento. El huso horario es el que está usando el sistema informático de facturación en el momento de generación del evento.	DateTime. Formato: YYYY-MM-DDThh:mm:ssTZD (ej: 2024-01-01T19:20:30+01:00) (ISO 8601)
+		TipoEvento1				Tipo de evento que se está registrando.	Alfanumérico (2) L2E
+		DatosPropiosEvento	LanzamientoProcesoDeteccionAnomaliasRegFacturacion1	RealizadoProcesoSobreIntegridadHuellasRegFacturacion1		Indica si se ha lanzado algún proceso de detección de anomalías sobre la integridad de las huellas de los registros de facturación.	Alfanumérico (1) L3E
+				NumeroDeRegistrosFacturacionProcesadosSobreIntegridadHuellas		Número de registros de facturación analizados por el proceso sobre la integridad de las huellas. Obligatorio si el campo anterior es igual a "S"	Numérico (7) 
+				RealizadoProcesoSobreIntegridadFirmasRegFacturacion1		Indica si se ha lanzado algún proceso de detección de anomalías sobre la integridad de las firmas de los registros de facturación.	Alfanumérico (1) L3E
+				NumeroDeRegistrosFacturacionProcesadosSobreIntegridadFirmas		Número de registros de facturación analizados por el proceso sobre la integridad de la firma. Obligatorio si el campo anterior es igual a "S".	Numérico (7) 
+				RealizadoProcesoSobreTrazabilidadCadenaRegFacturacion1		Indica si se ha lanzado algún proceso de detección de anomalías sobre la trazabilidad del encadenamiento de los registros de facturación.	Alfanumérico (1) L3E
+				NumeroDeRegistrosFacturacionProcesadosSobreTrazabilidadCadena		Número de registros de facturación analizados por el proceso sobre la trazabilidad del encadenamiento. Obligatorio si el campo anterior es igual a "S".	Numérico (7) 
+				RealizadoProcesoSobreTrazabilidadFechasRegFacturacion1		Indica si se ha lanzado algún proceso de detección de anomalías sobre la trazabilidad de las fechas de los registros de facturación.	Alfanumérico (1) L3E
+				NumeroDeRegistrosFacturacionProcesadosSobreTrazabilidadFechas		Número de registros de facturación analizados por el proceso sobre la trazabilidad de las fechas. Obligatorio si el campo anterior es igual a "S".	Numérico (7) 
+			DeteccionAnomaliasRegFacturacion1	TipoAnomalia1		Tipo de anomalía detectado.	Alfanumérico (2) L1E
+				OtrosDatosAnomalia		Otros datos de interés o explicación adicional que el sistema informático pueda aportar sobre la anomalía detectada.	Alfanumérico (100) 
+				RegistroFacturacionAnomalo	IDEmisorFactura1	NIF del obligado a expedir la factura a que se refiere el registro de facturación anómalo.	FormatoNIF (9) 
+					NumSerieFactura1	Nº Serie+Nº Factura a que se refiere el registro de facturación anómalo. 	Alfanumérico (60) 
+					FechaExpedicionFactura1	Fecha de expedición de la factura a que se refiere el registro de facturación anómalo.	Fecha (dd-mm-yyyy) 
+			LanzamientoProcesoDeteccionAnomaliasRegEvento1	RealizadoProcesoSobreIntegridadHuellasRegEvento1		Indica si se ha lanzado algún proceso de detección de anomalías sobre la integridad de las huellas de los registros de evento.	Alfanumérico (1) L3E
+				NumeroDeRegistrosEventoProcesadosSobreIntegridadHuellas		Número de registros de evento analizados por el proceso sobre la integridad de las huellas. Obligatorio si el campo anterior es igual a "S".	Numérico (5) 
+				RealizadoProcesoSobreIntegridadFirmasRegEvento1		Indica si se ha lanzado algún proceso de detección de anomalías sobre la integridad de las firmas de los registros de evento.	Alfanumérico (1) L3E
+				NumeroDeRegistrosEventoProcesadosSobreIntegridadFirmas		Número de registros de evento analizados por el proceso sobre la integridad de la firma. Obligatorio si el campo anterior es igual a "S".	Numérico (5) 
+				RealizadoProcesoSobreTrazabilidadCadenaRegEvento1		Indica si se ha lanzado algún proceso de detección de anomalías sobre la trazabilidad del encadenamiento de los registros de evento.	Alfanumérico (1) L3E
+				NumeroDeRegistrosEventoProcesadosSobreTrazabilidadCadena		Número de registros de evento analizados por el proceso sobre la trazabilidad del encadenamiento. Obligatorio si el campo anterior es igual a "S".	Numérico (5) 
+				RealizadoProcesoSobreTrazabilidadFechasRegEvento1		Indica si se ha lanzado algún proceso de detección de anomalías sobre la trazabilidad de las fechas de los registros de evento.	Alfanumérico (1) L3E
+				NumeroDeRegistrosEventoProcesadosSobreTrazabilidadFechas		Número de registros de evento analizados por el proceso sobre la trazabilidad de las fechas. Obligatorio si el campo anterior es igual a "S".	Numérico (5) 
+			DeteccionAnomaliasRegEvento1	TipoAnomalia1		Tipo de anomalía detectada.	Alfanumérico (2) L1E
+				OtrosDatosAnomalia		Otros datos de interés o explicación adicional que el sistema informático pueda aportar sobre la anomalía detectada.	Alfanumérico (100) 
+				RegEventoAnomalo	TipoEvento1	Tipo de evento detectado como anómalo.	Alfanumérico (2) L2E
+					FechaHoraHusoEvento1	Fecha hora y huso del evento detectado como anómalo. El huso horario es el que está usando el sistema informático de facturación en el momento de generación del evento.	DateTime. Formato: YYYY-MM-DDThh:mm:ssTZD (ej: 2024-01-01T19:20:30+01:00) (ISO 8601)
+					HuellaEvento1	Huella del evento detectado como anómalo.	Alfanumérico (64) 
+			ExportacionRegFacturacionPeriodo1	FechaHoraHusoInicioPeriodoExport1		Fecha, hora y huso horario inicial del período a exportar. El huso horario es el que está usando el sistema informático de facturación en el momento de generación del evento.	DateTime. Formato: YYYY-MM-DDThh:mm:ssTZD (ej: 2024-01-01T19:20:30+01:00) (ISO 8601)
+				FechaHoraHusoFinPeriodoExport1		Fecha, hora y huso horario final del período a exportar. El huso horario es el que está usando el sistema informático de facturación en el momento de generación del evento.	DateTime. Formato: YYYY-MM-DDThh:mm:ssTZD (ej: 2024-01-01T19:20:30+01:00) (ISO 8601)
+				RegistroFacturacionInicialPeriodo1	IDEmisorFactura1	NIF del obligado a expedir la factura a que se refiere el primer registro de facturación del período exportado.	FormatoNIF (9) 
+					NumSerieFactura1	Nº Serie+Nº Factura de la factura a que se refiere el primer registro de facturación del período.	Alfanumérico (60) 
+					FechaExpedicionFactura1	Fecha de expedición de la factura a que se refiere el primer registro de facturación del período. 	Fecha (dd-mm-yyyy) 
+					Huella1	Huella del primer registro de facturación del período. 	Alfanumérico (64) 
+				RegistroFacturacionFinalPeriodo1	IDEmisorFactura1	NIF del obligado a expedir la factura a que se refiere el último registro de facturación del período exportado.	FormatoNIF (9) 
+					NumSerieFactura1	Nº Serie+Nº Factura de la factura a que se refiere el último registro de facturación del período.	Alfanumérico (60) 
+					FechaExpedicionFactura1	Fecha de expedición de la factura correspondiente al último registro de facturación del período. 	Fecha (dd-mm-yyyy) 
+					Huella1	Huella del último registro de facturación del período. 	Alfanumérico (64) 
+				NumeroDeRegistrosFacturacionAltaExportados1		Número de registros de facturación de alta exportados para el período.	Numérico (9) 
+				SumaCuotaTotalAlta1		Suma de la Cuota total de las facturas de todos los registros de facturación de alta exportados para el período.	Decimal (12,2) 
+				SumaImporteTotalAlta1		Suma del Importe total de las facturas de todos los registros de facturación de alta exportados para el período.	Decimal (12,2) 
+				NumeroDeRegistrosFacturacionAnulacionExportados1		Número de registros de facturación de anulación exportados para el período.	Numérico (9) 
+				RegistrosFacturacionExportadosDejanDeConservarse1		Indica si los registros de facturación exportados para el período dejan (o no) de conservarse en el sistema informático.	Alfanumérico (1) L3E
+			ExportacionRegEventoPeriodo1	FechaHoraHusoInicioPeriodoExport1		Fecha, hora y huso horario inicial del período a exportar (registros de evento). El huso horario es el que está usando el sistema informático de facturación en el momento de generación del evento.	DateTime. Formato: YYYY-MM-DDThh:mm:ssTZD (ej: 2024-01-01T19:20:30+01:00) (ISO 8601)
+				FechaHoraHusoFinPeriodoExport1		Fecha, hora y huso horario final del período a exportar (registros de evento). El huso horario es el que está usando el sistema informático de facturación en el momento de generación del evento.	DateTime. Formato: YYYY-MM-DDThh:mm:ssTZD (ej: 2024-01-01T19:20:30+01:00) (ISO 8601)
+				RegistroEventoInicialPeriodo1	TipoEvento1	Tipo de evento del primer reg. de evento del período exportado.	Alfanumérico (2) L2E
+					FechaHoraHusoEvento1	Fecha, hora y huso horario del primer reg. de evento del período exportado. El huso horario es el que está usando el sistema informático de facturación en el momento de generación del evento.	DateTime. Formato: YYYY-MM-DDThh:mm:ssTZD (ej: 2024-01-01T19:20:30+01:00) (ISO 8601)
+					HuellaEvento1	Huella del primer registro de evento del período. 	Alfanumérico (64) 
+				RegistroEventoFinalPeriodo1	TipoEvento1	Tipo de evento del último reg. de evento del período exportado.	Alfanumérico (2) L2E
+					FechaHoraHusoEvento1	Fecha, hora y huso horario del último reg. de evento del período exportado. El huso horario es el que está usando el sistema informático de facturación en el momento de generación del evento.	DateTime. Formato: YYYY-MM-DDThh:mm:ssTZD (ej: 2024-01-01T19:20:30+01:00) (ISO 8601)
+					HuellaEvento1	Huella del último registro de evento del período. 	Alfanumérico (64) 
+				NumeroDeRegEventoExportados1		Número de registros de evento exportados para el período indicado.	Numérico (7) 
+				RegEventoExportadosDejanDeConservarse1		Indica si los registros de evento exportados para el período indicado dejan de conservarse (o no) en el sistema informático.	Alfanumérico (1) L3E
+			ResumenEventos1	TipoEvento (1-20)1	TipoEvento1	Tipo de evento al que va a referirse la información que va a inmediatamente a continuación de este campo.	Alfanumérico (2) L2E
+					NumeroDeEventos1	Número de eventos del tipo que indica el campo anterior que se han producido en el período (desde que se generó el último registro de resumen de eventos hasta el actual registro de resumen de eventos que se está generando).	Numérico (4) 
+				RegistroFacturacionInicialPeriodo	IDEmisorFactura1	NIF del obligado a expedir la factura a que se refiere el primer registro de facturación del período (desde que se generó el último registro de resumen de eventos hasta el actual registro de resumen de eventos que se está generando).	FormatoNIF (9) 
+					NumSerieFactura1	Nº Serie+Nº Factura de la factura a que se refiere el primer registro de facturación del período (desde que se generó el último registro de resumen de eventos hasta el actual registro de resumen de eventos que se está generando).	Alfanumérico (60) 
+					FechaExpedicionFactura1	Fecha de expedición de la factura a que se refiere el primer registro de facturación del período. 	Fecha (dd-mm-yyyy) 
+					Huella1	Huella del primer registro de facturación del período. 	Alfanumérico (64) 
+				RegistroFacturacionFinalPeriodo	IDEmisorFactura1	NIF del obligado a expedir la factura a que se refiere el último registro de facturación del período (desde que se generó el último registro de resumen de eventos hasta el actual registro de resumen de eventos que se está generando).	FormatoNIF (9) 
+					NumSerieFactura1	Nº Serie+Nº Factura de la factura a que se refiere el último registro de facturación del período (desde que se generó el último registro de resumen de eventos hasta el actual registro de resumen de eventos que se está generando). 	Alfanumérico (60) 
+					FechaExpedicionFactura1	Fecha de expedición de la factura correspondiente al último registro de facturación del período. 	Fecha (dd-mm-yyyy) 
+					Huella1	Huella del último registro de facturación del período. 	Alfanumérico (64) 
+				NumeroDeRegistrosFacturacionAltaGenerados1		Número de registros de facturación de alta generados en el período(desde que se generó el último registro de resumen de eventos hasta el actual registro de resumen de eventos que se está generando).	Numérico (6) 
+				SumaCuotaTotalAlta1		Suma de la Cuota total de las facturas de todos los registros de facturación de alta del período (desde que se generó el último registro de resumen de eventos hasta el actual registro de resumen de eventos que se está generando).	Decimal (12,2) 
+				SumaImporteTotalAlta1		Suma del Importe total de las facturas de todos los registros de facturación de alta del período (desde que se generó el último registro de resumen de eventos hasta el actual registro de resumen de eventos que se está generando).	Decimal (12,2) 
+				NumeroDeRegistrosFacturacionAnulacionGenerados1		Número de registros de facturación de anulación generados en el período (desde que se generó el último registro de resumen de eventos hasta el actual registro de resumen de eventos que se está generando).	Numérico (6) 
+		OtrosDatosEvento				Cualquier dato o conjunto de datos adicionales que el sistema informático considere de interés sobre el evento registrado.	Alfanumérico (100) 
+		Encadenamiento1	PrimerEvento1			Indicador que especifica que no existe registro de evento anterior en este sistema informático por tratarse del primer registro de evento generado en él. En este caso, se informará con el valor "S". Si no se informa este campo se entenderá que no es el primer registro de evento, en cuyo caso es obligatorio informar los campos de que consta «EventoAnterior».	Alfanumérico (1)
+			EventoAnterior1	TipoEvento1		Tipo de registro de evento anterior.	Alfanumérico (2) L2E
+				FechaHoraHusoGenEvento1		Fecha, hora y huso horario de generación del registro de evento anterior. El huso horario es el que está usando el sistema informático de facturación en el momento de generación del registro de evento.	DateTime. Formato: YYYY-MM-DDThh:mm:ssTZD (ej: 2024-01-01T19:20:30+01:00) (ISO 8601)
+				HuellaEvento1		Primeros 64 caracteres de la huella o «hash» del registro de evento anterior.	Alfanumérico (64) 
+		TipoHuella1				Tipo de algoritmo aplicado a cierto contenido del registro de evento para obtener la huella o «hash».	Alfanumérico (2) L12
+		HuellaEvento1				Huella o «hash» de cierto contenido de este registro de evento. Dicho contenido se detallará en la documentación correspondiente en la sede electrónica de la AEAT (documento de huella...).	Alfanumérico (64) 
+		Signature1				Firma electrónica del registro de evento en formato Xades Enveloped	Ver formato del "schema", en http://www.w3.org/2000/09/xmldsig#
+						Namespace=http://www.w3.org/2000/09/xmldsig#
