@@ -91,7 +91,9 @@ it('throws ValidationException when an amount exceeds ImporteSgn12.2Type (13 int
 });
 
 it('accepts an amount at the 12 integer-digit boundary and validates against the XSD', function () {
-    $breakdown = magnitudeBreakdown(baseAmount: 999999999999.99, taxAmount: 999999999999.99);
+    // Base 0 so the 12-digit boundary lands on the cuota and the declared totals
+    // (CuotaTotal = ImporteTotal = cuota) stay coherent with the desglose.
+    $breakdown = magnitudeBreakdown(baseAmount: 0.0, taxAmount: 999999999999.99);
     $invoice = magnitudeInvoice(taxAmount: 999999999999.99, totalAmount: 999999999999.99, breakdown: $breakdown);
 
     $xml = $this->builder->buildRegistrationXml($invoice, magnitudeChain());
@@ -102,7 +104,7 @@ it('accepts an amount at the 12 integer-digit boundary and validates against the
 });
 
 it('does not count the sign: a negative amount at the 12-digit boundary is accepted', function () {
-    $breakdown = magnitudeBreakdown(baseAmount: -999999999999.99, taxAmount: -999999999999.99);
+    $breakdown = magnitudeBreakdown(baseAmount: 0.0, taxAmount: -999999999999.99);
     $invoice = magnitudeInvoice(taxAmount: -999999999999.99, totalAmount: -999999999999.99, breakdown: $breakdown);
 
     expect(fn () => $this->builder->buildRegistrationXml($invoice, magnitudeChain()))

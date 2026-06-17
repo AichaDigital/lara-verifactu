@@ -186,8 +186,8 @@ describe('rectificative registration XML (AID-135)', function () {
         $invoice->shouldReceive('getRectificationAmounts')->andReturn($rectificationAmounts);
         $invoice->shouldReceive('getDescription')->andReturn('Rectificación por diferencias');
         $invoice->shouldReceive('getRegimeType')->andReturn(RegimeTypeEnum::GENERAL);
-        $invoice->shouldReceive('getTaxAmount')->andReturn(-21.0);
-        $invoice->shouldReceive('getTotalAmount')->andReturn(-121.0);
+        $invoice->shouldReceive('getTaxAmount')->andReturn(21.0);
+        $invoice->shouldReceive('getTotalAmount')->andReturn(121.0);
         $recipient = Mockery::mock(RecipientContract::class);
         $recipient->shouldReceive('getNif')->andReturn('12345678Z');
         $recipient->shouldReceive('getName')->andReturn('Cliente Ejemplo');

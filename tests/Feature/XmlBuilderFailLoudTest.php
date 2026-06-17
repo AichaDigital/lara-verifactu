@@ -220,7 +220,7 @@ describe('OperacionExenta guard (#2)', function () {
     });
 
     it('accepts an explicit core cause (E1) and validates against the XSD', function () {
-        $invoice = flInvoice(breakdown: flBreakdown([
+        $invoice = flInvoice(['getTaxAmount' => 0.0, 'getTotalAmount' => 100.0], breakdown: flBreakdown([
             'isExempt' => true,
             'getExemptionReason' => 'E1',
         ]));
