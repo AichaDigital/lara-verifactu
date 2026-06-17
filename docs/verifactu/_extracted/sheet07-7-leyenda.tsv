@@ -1,0 +1,5 @@
+# Source: DsRegistroVeriFactu.xlsx :: sheet '7)Leyenda'
+Leyenda:	Representación	Significado
+	Fuente de color rojo o 1(superíndice)	Campo obligatorio
+	Fuente de color negro	Campo opcional
+	(Fondo coloreado)	Campo de selección (alternativo)

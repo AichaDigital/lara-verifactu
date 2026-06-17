@@ -1,0 +1,192 @@
+# Source: DsRegistroVeriFactu.xlsx :: sheet '6)Listas'
+
+	L1
+
+	VALORES	DESCRIPCIÓN
+	01	Impuesto sobre el Valor Añadido (IVA)
+	02	Impuesto sobre la Producción, los Servicios y la Importación (IPSI) de Ceuta y Melilla
+	03	Impuesto General Indirecto Canario (IGIC)
+	05	Otros
+
+	L2
+
+	VALORES	DESCRIPCIÓN
+	F1	Factura (art. 6, 7.2 y 7.3 del RD 1619/2012)
+	F2	Factura Simplificada y Facturas sin identificación del destinatario art. 6.1.d) RD 1619/2012
+	F3	Factura emitida en sustitución de facturas simplificadas facturadas y declaradas
+	R1	Factura Rectificativa (Error fundado en derecho y Art. 80 Uno Dos y Seis LIVA)
+	R2	Factura Rectificativa (Art. 80.3)
+	R3	Factura Rectificativa (Art. 80.4)
+	R4	Factura Rectificativa (Resto)
+	R5	Factura Rectificativa en facturas simplificadas
+	NOTA: las menciones a la LIVA (Ley 37/1992, de 28 de diciembre, del Impuesto sobre el Valor Añadido) en la lista L2 deben entenderse realizadas, en su caso, a la normativa equivalente de Canarias, Ceuta y Melilla
+
+	L3
+
+	VALORES	DESCRIPCIÓN
+	S	Por sustitución
+	I	Por diferencias
+
+	L4
+
+	VALORES	DESCRIPCIÓN
+	S	Sí
+	N	No
+
+	L5
+
+	VALORES	DESCRIPCIÓN
+	S	Sí
+	N	No
+
+	L6
+
+	VALORES	DESCRIPCIÓN
+	D	Destinatario
+	T	Tercero
+
+	L7
+
+	VALORES	DESCRIPCIÓN
+	02	NIF-IVA
+	03	Pasaporte
+	04	Documento oficial de identificación expedido por el país o territorio de residencia
+	05	Certificado de residencia
+	06	Otro documento probatorio
+	07	No censado
+
+	L8A
+
+	VALORES	DESCRIPCIÓN DE LA CLAVE DE RÉGIMEN PARA DESGLOSES  ⏎ DONDE EL IMPUESTO DE APLICACIÓN ES EL IVA
+	01	Operación de régimen general.
+	02	Exportación.
+	03	Operaciones a las que se aplique el régimen especial de bienes usados, objetos de arte, antigüedades y objetos de colección.
+	04	Régimen especial del oro de inversión.
+	05	Régimen especial de las agencias de viajes.
+	06	Régimen especial grupo de entidades en IVA (Nivel Avanzado)
+	07	Régimen especial del criterio de caja.
+	08	Operaciones sujetas al IPSI  / IGIC (Impuesto sobre la Producción, los Servicios y la Importación  / Impuesto General Indirecto Canario).
+	09	Facturación de las prestaciones de servicios de agencias de viaje que actúan como mediadoras en nombre y por cuenta ajena (D.A.4ª RD1619/2012)
+	10	Cobros por cuenta de terceros de honorarios profesionales o de derechos derivados de la propiedad industrial, de autor u otros por cuenta de sus socios, asociados o colegiados efectuados por sociedades, asociaciones, colegios profesionales u otras entidades que realicen estas funciones de cobro.
+	11	Operaciones de arrendamiento de local de negocio.
+	14	Factura con IVA pendiente de devengo en certificaciones de obra cuyo destinatario sea una Administración Pública.
+	15	Factura con IVA pendiente de devengo en operaciones de tracto sucesivo.
+	17	Operación acogida a alguno de los regímenes previstos en el Capítulo XI del Título IX (OSS e IOSS)
+	18	Recargo de equivalencia.
+	19	Operaciones de actividades incluidas en el Régimen Especial de Agricultura, Ganadería y Pesca (REAGYP)
+	20	Régimen simplificado
+
+	L8B
+
+	VALORES	DESCRIPCIÓN DE LA CLAVE DE RÉGIMEN PARA DESGLOSES  ⏎ DONDE EL IMPUESTO DE APLICACIÓN ES EL IGIC
+	01	Operación de régimen general.
+	02	Exportación.
+	03	Operaciones a las que se aplique el régimen especial de bienes usados, objetos de arte, antigüedades y objetos de colección.
+	04	Régimen especial del oro de inversión.
+	05	Régimen especial de las agencias de viajes.
+	06	Régimen especial grupo de entidades en IGIC (Nivel Avanzado)
+	07	Régimen especial del criterio de caja.
+	08	Operaciones sujetas al IPSI / IVA (Impuesto sobre la Producción, los Servicios y la ⏎ Importación / Impuesto sobre el Valor Añadido).
+	09	Facturación de las prestaciones de servicios de agencias de viaje que actúan como mediadoras en nombre y por cuenta ajena (D.A.4ª RD1619/2012)
+	10	Cobros por cuenta de terceros de honorarios profesionales o de derechos derivados de la propiedad industrial, de autor u otros por cuenta de sus socios, asociados o colegiados efectuados por sociedades, asociaciones, colegios profesionales u otras entidades que realicen estas funciones de cobro.
+	11	Operaciones de arrendamiento de local de negocio.
+	14	Factura con IGIC pendiente de devengo en certificaciones de obra cuyo destinatario sea una Administración Pública.
+	15	Factura con IGIC pendiente de devengo en operaciones de tracto sucesivo.
+	17	Régimen especial de comerciante minorista
+	18	Régimen especial del pequeño empresario o profesional
+	19	Operaciones interiores exentas por aplicación artículo 25 Ley 19/1994
+
+	L9
+
+	VALORES	DESCRIPCIÓN
+	S1	Operación Sujeta y No exenta - Sin inversión del sujeto pasivo.
+	S2	Operación Sujeta y No exenta - Con Inversión del sujeto pasivo
+	N1	Operación No Sujeta artículo 7, 14, otros.
+	N2	Operación No Sujeta por Reglas de localización.
+
+	L10
+
+	VALORES	DESCRIPCIÓN
+	E1	Exenta por el artículo 20
+	E2	Exenta por el artículo 21
+	E3	Exenta por el artículo 22
+	E4	Exenta por los artículos 23 y 24
+	E5	Exenta por el artículo 25
+	E6	Exenta por otros
+
+	L12
+
+	VALORES	DESCRIPCIÓN
+	01	SHA-256
+
+	L14
+
+	VALORES	DESCRIPCIÓN
+	S	Sí
+	N	No
+
+	L15
+
+	VALORES	DESCRIPCIÓN
+	1.0	Versión actual (1.0) del esquema utilizado 
+
+	L16
+
+	VALORES	DESCRIPCIÓN
+	E	Expedidor (obligado a Expedir la factura anulada).
+	D	Destinatario
+	T	Tercero
+
+	L17
+
+	VALORES	DESCRIPCIÓN
+	N	No ha habido rechazo previo por la AEAT.
+	S	Ha habido rechazo previo por la AEAT. No deberían existir operaciones de alta con valores ('Subsanacion'="N" y 'RechazoPrevio'="S"), por lo que no se admiten. 
+	X	Independientemente de si ha habido o no algún rechazo previo por la AEAT, el registro de facturación no existe en la AEAT (registro existente en ese sistema informático o en algún sistema informático del obligado tributario y que no se remitió a la AEAT, por ejemplo, al acogerse a la modalidad «VERI*FACTU» desde la modalidad «NO VERI*FACTU»). No deberían existir operaciones de alta con valores ('Subsanacion'="N" y 'RechazoPrevio'="X"), por lo que no se admiten. 
+
+	L1E
+
+	VALORES	DESCRIPCIÓN
+	01	Integridad-huella
+	02	Integridad-firma
+	03	Integridad - Otros
+	04	Trazabilidad-cadena-registro - Reg. no primero pero con reg. anterior no anotado o inexistente
+	05	Trazabilidad-cadena-registro - Reg. no último pero con reg. posterior no anotado o inexistente
+	06	Trazabilidad-cadena-registro - Otros
+	07	Trazabilidad-cadena-huella - Huella del reg. no se corresponde con la 'huella del reg. anterior' almacenada en el registro posterior
+	08	Trazabilidad-cadena-huella - Campo 'huella del reg. anterior' no se corresponde con la huella del reg. anterior
+	09	Trazabilidad-cadena-huella - Otros
+	10	Trazabilidad-cadena - Otros
+	11	Trazabilidad-fechas - Fecha-hora anterior a la fecha del reg. anterior
+	12	Trazabilidad-fechas - Fecha-hora posterior a la fecha del reg. posterior
+	13	Trazabilidad-fechas - Reg. con fecha-hora de generación posterior a la fecha-hora actual del sistema
+	14	Trazabilidad-fechas - Otros 
+	15	Trazabilidad - Otros 
+	90	Otros 
+
+	L2E
+
+	VALORES	DESCRIPCIÓN
+	01	Inicio del funcionamiento del sistema informático como «NO VERI*FACTU».
+	02	Fin del funcionamiento del sistema informático como «NO VERI*FACTU».
+	03	Lanzamiento del proceso de detección de anomalías en los registros de facturación.
+	04	Detección de anomalías en la integridad, inalterabilidad y trazabilidad de registros de facturación.
+	05	Lanzamiento del proceso de detección de anomalías en los registros de evento.
+	06	Detección de anomalías en la integridad, inalterabilidad y trazabilidad de registros de evento.
+	07	Restauración de copia de seguridad, cuando ésta se gestione desde el propio sistema informático de facturación.
+	08	Exportación de registros de facturación generados en un periodo.
+	09	Exportación de registros de evento generados en un periodo.
+	10	Registro resumen de eventos
+	90	Otros tipos de eventos a registrar voluntariamente por la persona o entidad productora del sistema informático.
+
+	L3E
+
+	VALORES	DESCRIPCIÓN
+	S	Sí
+	N	No
+
+	L4E
+
+	VALORES	DESCRIPCIÓN
+	D	Destinatario
+	T	Tercero

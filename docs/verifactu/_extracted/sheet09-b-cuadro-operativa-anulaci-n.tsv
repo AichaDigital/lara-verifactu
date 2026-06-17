@@ -1,0 +1,20 @@
+# Source: DsRegistroVeriFactu.xlsx :: sheet 'B)Cuadro Operativa Anulación'
+	ANULACIÓN DE REGISTROS
+
+	ANULACIÓN DE REGISTRO
+	Operación	Descripción	Operativa	Tipo SIF al que aplica	Condiciones	Consecuencias	Situación en la AEAT (sólo aplica a sistemas VERI*FACTU)
+							No existe registro de facturación 	Existe registro de alta 	Existe registro de anulación 
+	ANULACIÓN 	· Anulación de registro de facturación ya generado/remitido. ⏎ · Es la anulación habitual de un registro de facturación cuando no se exige la emisión de una factura rectificativa (u otro mecanismo contemplado en el Reglamento de Facturación).	· No informar <SinRegistroPrevio> o informarlo con valor N ⏎ · No informar <RechazoPrevio> o informarlo con valor N	· VERI*FACTU ⏎ · NO VERI*FACTU	· El registro de facturación debe existir previamente en SIF del obligado / AEAT. ⏎ · El registro a anular puede ser de alta o de anulación (en cuyo caso, deja constancia de los nuevos datos a tener en cuenta).  ⏎ 	Anula el registro de facturación registrado dejando los nuevos datos.	ERROR (6)	OK(7)	OK(8)
+	ANULACIÓN POR RECHAZO	· Anulación (tras un rechazo previo) del registro de facturación cuando el registro de facturación que se quiere anular está registrado en la AEAT.	· No informar <SinRegistroPrevio> o informarlo con valor N ⏎ · <RechazoPrevio>=S	· VERI*FACTU	· La clave única del registro de facturación debe existir previamente en la AEAT. ⏎ · La anulación previa del registro de facturación fue rechazada.	Anula el registro de facturación registrado dejando los nuevos datos.
+	ANULACIÓN DE REGISTRO QUE NO EXISTE PREVIAMENTE
+	ANULACIÓN SIN REGISTRO PREVIO	·Anulación del registro de facturación cuando el registro de facturación que se quiere anular existe en SIF del obligado (a expedir factura) pero NO existe en la AEAT porque no se remitió en su momento, por ejemplo, porque funcionaba como NO VERI*FACTU y cambió a VERI*FACTU, que es como funciona ahora; o bien, dependiendo de la implementación del SIF y si así lo necesita, cuando no consta el registro anterior a anular en el SIF donde se da de alta la anulación.	· <SinRegistroPrevio>=S ⏎ · No informar <RechazoPrevio> o informarlo con valor N	· VERI*FACTU ⏎ · NO VERI*FACTU (opcional)	·El registro de facturación no debe existir previamente en la AEAT (o bien, en su caso, en SIF del obligado).	Supone la creación de un registro de facturación de anulación con los nuevos datos.	OK(9)	ERROR(10)	ERROR(10)
+	ANULACIÓN POR RECHAZO SIN REGISTRO PREVIO 	· Anulación (tras un rechazo previo) del registro de facturación cuando el registro de facturación que se quiere anular existe en SIF del obligado (a expedir factura) pero NO existe en la AEAT porque no se remitió en su momento, por ejemplo, porque funcionaba como NO VERI*FACTU y cambió a VERI*FACTU, que es como funciona ahora.	· <SinRegistroPrevio>=S ⏎ · <RechazoPrevio>=S	· VERI*FACTU	. La clave única del registro de facturación no debe existir previamente en la AEAT. ⏎ · El intento de anulación anterior del registro de facturación fue rechazado.	Supone la creación de un registro de facturación de anulación con los nuevos datos.
+
+	LEYENDA
+	OPERATIVA HABITUAL (fondo blanco).
+	OPERATIVA ESPECIAL (fondo gris).
+	ERROR (6) = Debería existir en la AEAT un registro de facturación previo correspondiente a esa factura.
+	OK (7) = El registro remitido anula el registro de facturación de alta registrado dejando los nuevos datos recibidos.
+	OK (8) = El registro remitido anula el registro de facturación de anulación registrado dejando los nuevos datos recibidos.
+	OK (9) = Creación del registro de facturación de anulación con los datos recibidos.
+	ERROR (10) = En una "ANULACIÓN SIN REGISTRO PREVIO" NO puede haber en la AEAT ningún registro de facturación de esa factura ya remitido (bien sea de alta o de anulación).
