@@ -169,6 +169,30 @@ final class XmlBuilder implements XmlBuilderContract
 
         $alta->appendChild($this->sfElement($dom, 'TipoFactura', $type->value));
 
+        // Destinatarios × TipoFactura guard (#8): AEAT rules 1189 / 1190.
+        // 1189 — F1/F3/R1 require a Destinatarios block. Require an actually
+        // emittable recipient: hasRecipient() alone is not enough, since a
+        // contract could report a recipient while getRecipient() is null, which
+        // would emit no block and still violate 1189.
+        // 1190 — F2/R5 (simplified) forbid Destinatarios. Reject on any recipient
+        // signal, before guard #5 (NIF), since the type rules regardless of
+        // whether the recipient carries a valid NIF.
+        $hasEmittableRecipient = $invoice->hasRecipient() && $invoice->getRecipient() instanceof RecipientContract;
+
+        if ($type->requiresRecipientInV10Core() && ! $hasEmittableRecipient) {
+            throw ValidationException::invalidInvoiceData(
+                'recipient',
+                "TipoFactura {$type->value} requires a Destinatarios block (AEAT rule 1189)"
+            );
+        }
+
+        if ($type->isSimplified() && ($invoice->hasRecipient() || $invoice->getRecipient() !== null)) {
+            throw ValidationException::invalidInvoiceData(
+                'recipient',
+                "TipoFactura {$type->value} (simplified) must not carry a Destinatarios block (AEAT rule 1190)"
+            );
+        }
+
         if ($type->isRectificative()) {
             $alta->appendChild($this->sfElement($dom, 'TipoRectificativa', $this->rectificationTypeCode($invoice)));
 
@@ -198,16 +222,9 @@ final class XmlBuilder implements XmlBuilderContract
         // FacturasSustituidas (XSD: after the rectificative block, before
         // DescripcionOperacion). Only for F3 (factura en sustitución de
         // simplificadas), which is mutually exclusive with rectificative types.
-        // AEAT rejects an F3 without Destinatarios (rule 1189) or without the
-        // substituted invoices, so fail fast instead of producing rejectable XML.
-        if ($invoice->getType() === InvoiceTypeEnum::SUBSTITUTE) {
-            if (! $invoice->hasRecipient()) {
-                throw ValidationException::invalidInvoiceData(
-                    'recipient',
-                    'F3 (sustitución de simplificadas) requires Destinatarios (AEAT rule 1189)'
-                );
-            }
-
+        // The Destinatarios requirement (rule 1189) is enforced by guard #8 above;
+        // here we only ensure the substituted invoices are present.
+        if ($type === InvoiceTypeEnum::SUBSTITUTE) {
             $substituted = $invoice->getSubstitutedInvoices();
 
             if ($substituted === []) {

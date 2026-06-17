@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use AichaDigital\LaraVerifactu\Contracts\InvoiceContract;
+use AichaDigital\LaraVerifactu\Contracts\RecipientContract;
 use AichaDigital\LaraVerifactu\Enums\InvoiceTypeEnum;
 use AichaDigital\LaraVerifactu\Enums\RegimeTypeEnum;
 use AichaDigital\LaraVerifactu\Services\XmlBuilder;
@@ -148,8 +149,14 @@ function createMockInvoiceForXml(array $overrides = []): InvoiceContract
     $invoice->shouldReceive('getRegimeType')->andReturn(RegimeTypeEnum::GENERAL);
     $invoice->shouldReceive('getTaxAmount')->andReturn(floatval($data['total_tax_amount']));
     $invoice->shouldReceive('getTotalAmount')->andReturn(floatval($data['total_amount']));
-    $invoice->shouldReceive('hasRecipient')->andReturn(false);
-    $invoice->shouldReceive('getRecipient')->andReturn(null);
+    $recipient = Mockery::mock(RecipientContract::class);
+    $recipient->shouldReceive('getNif')->andReturn('12345678Z');
+    $recipient->shouldReceive('getName')->andReturn('Cliente Ejemplo');
+    $recipient->shouldReceive('getIdType')->andReturn(null);
+    $recipient->shouldReceive('getId')->andReturn(null);
+    $recipient->shouldReceive('getCountry')->andReturn('ES');
+    $invoice->shouldReceive('hasRecipient')->andReturn(true);
+    $invoice->shouldReceive('getRecipient')->andReturn($recipient);
     $invoice->shouldReceive('getBreakdowns')->andReturn($data['breakdowns']);
 
     return $invoice;

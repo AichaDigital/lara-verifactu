@@ -61,6 +61,19 @@ function flBreakdown(array $overrides = []): InvoiceBreakdownContract
  */
 function flInvoice(array $overrides = [], ?InvoiceBreakdownContract $breakdown = null, ?RecipientContract $recipient = null): InvoiceContract
 {
+    $type = $overrides['getType'] ?? InvoiceTypeEnum::COMPLETE;
+
+    // Rule 1189: F1/F3/R1 require a recipient. Default one in so fixtures that
+    // are not specifically about a missing recipient stay valid under guard #8.
+    // F2/R5 (rule 1190) and any test that passes its own recipient — or forces
+    // hasRecipient via overrides — are left untouched.
+    if ($recipient === null
+        && $type instanceof InvoiceTypeEnum
+        && $type->requiresRecipientInV10Core()
+        && ! array_key_exists('hasRecipient', $overrides)) {
+        $recipient = flRecipient('12345678Z');
+    }
+
     $defaults = [
         'getIssuerTaxId' => '89890001K',
         'getSerie' => null,
@@ -372,5 +385,82 @@ describe('TipoFactura guard (#7)', function () {
 
         expect($this->builder->validate($xml))->toBeTrue()
             ->and($xml)->toContain('<sf:TipoFactura>R5</sf:TipoFactura>');
+    });
+});
+
+describe('Destinatarios × TipoFactura guard (#8)', function () {
+    // AEAT rule 1189: F1/F3/R1 require a Destinatarios block. Rule 1190: F2/R5
+    // (simplified) forbid it. R2/R3/R4 are already rejected by guard #7.
+
+    it('rejects F1 without a recipient (rule 1189)', function () {
+        $invoice = flInvoice(['hasRecipient' => false, 'getRecipient' => null]);
+
+        expect(fn () => $this->builder->buildRegistrationXml($invoice, flChain()))
+            ->toThrow(ValidationException::class, 'rule 1189');
+    });
+
+    it('rejects R1 without a recipient (rule 1189)', function () {
+        $invoice = flInvoice([
+            'getType' => InvoiceTypeEnum::RECTIFICATIVE,
+            'getInvoiceType' => InvoiceTypeEnum::RECTIFICATIVE,
+            'getRectificationType' => 'I',
+            'getRectifiedInvoices' => [],
+            'getRectificationAmounts' => null,
+            'hasRecipient' => false,
+            'getRecipient' => null,
+        ]);
+
+        expect(fn () => $this->builder->buildRegistrationXml($invoice, flChain()))
+            ->toThrow(ValidationException::class, 'rule 1189');
+    });
+
+    it('accepts F1 with a NIF recipient', function () {
+        $invoice = flInvoice(recipient: flRecipient('12345678Z'));
+
+        $xml = $this->builder->buildRegistrationXml($invoice, flChain());
+
+        expect($this->builder->validate($xml))->toBeTrue()
+            ->and($xml)->toContain('<sf:NIF>12345678Z</sf:NIF>');
+    });
+
+    it('rejects F2 carrying a recipient (rule 1190)', function () {
+        $invoice = flInvoice([
+            'getType' => InvoiceTypeEnum::SIMPLIFIED,
+            'getInvoiceType' => InvoiceTypeEnum::SIMPLIFIED,
+        ], recipient: flRecipient('12345678Z'));
+
+        expect(fn () => $this->builder->buildRegistrationXml($invoice, flChain()))
+            ->toThrow(ValidationException::class, 'rule 1190');
+    });
+
+    it('rejects R5 carrying a recipient (rule 1190)', function () {
+        $invoice = flInvoice([
+            'getType' => InvoiceTypeEnum::RECTIFICATIVE_SIMPLIFIED_INVOICES,
+            'getInvoiceType' => InvoiceTypeEnum::RECTIFICATIVE_SIMPLIFIED_INVOICES,
+            'getRectificationType' => 'I',
+            'getRectifiedInvoices' => [],
+            'getRectificationAmounts' => null,
+        ], recipient: flRecipient('12345678Z'));
+
+        expect(fn () => $this->builder->buildRegistrationXml($invoice, flChain()))
+            ->toThrow(ValidationException::class, 'rule 1190');
+    });
+
+    it('accepts F2 without a recipient', function () {
+        $invoice = flInvoice([
+            'getType' => InvoiceTypeEnum::SIMPLIFIED,
+            'getInvoiceType' => InvoiceTypeEnum::SIMPLIFIED,
+        ]);
+
+        $xml = $this->builder->buildRegistrationXml($invoice, flChain());
+
+        expect($this->builder->validate($xml))->toBeTrue();
+    });
+
+    it('rejects a contract reporting hasRecipient with a null getRecipient (1189 needs an emittable recipient)', function () {
+        $invoice = flInvoice(['hasRecipient' => true, 'getRecipient' => null]);
+
+        expect(fn () => $this->builder->buildRegistrationXml($invoice, flChain()))
+            ->toThrow(ValidationException::class, 'rule 1189');
     });
 });

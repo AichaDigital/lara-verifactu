@@ -81,4 +81,19 @@ enum InvoiceTypeEnum: string
             self::RECTIFICATIVE_SIMPLIFIED_INVOICES,
         ], true);
     }
+
+    /**
+     * TipoFactura that require a Destinatarios block in the v1.0 core (AEAT rule
+     * 1189): F1, F3 and R1. F2/R5 forbid it (rule 1190 — see isSimplified()); the
+     * post-1.0 R2/R3/R4 are rejected upstream by the TipoFactura core guard, so
+     * they are intentionally not part of this positive set.
+     */
+    public function requiresRecipientInV10Core(): bool
+    {
+        return in_array($this, [
+            self::COMPLETE,
+            self::SUBSTITUTE,
+            self::RECTIFICATIVE,
+        ], true);
+    }
 }
