@@ -433,6 +433,8 @@ final class XmlBuilder implements XmlBuilderContract
         $detalle->appendChild($this->sfElement($dom, 'BaseImponibleOimporteNoSujeto', $this->formatAmount($breakdown->getBaseAmount(), 'BaseImponibleOimporteNoSujeto')));
         $detalle->appendChild($this->sfElement($dom, 'CuotaRepercutida', $this->formatAmount($breakdown->getTaxAmount(), 'CuotaRepercutida')));
 
+        $this->assertLineCuotaCoherent($invoice, $breakdown);
+
         $surchargeRate = $breakdown->getSurchargeRate();
         $surchargeAmount = $breakdown->getSurchargeAmount();
 
@@ -577,6 +579,57 @@ final class XmlBuilder implements XmlBuilderContract
         }
 
         return $importe;
+    }
+
+    /**
+     * Per-line CuotaRepercutida coherence guard (AEAT §15.7, errores 1142/1143):
+     * for an S1 line the cuota must share BaseImponibleOimporteNoSujeto's sign
+     * (1143) and equal base × TipoImpositivo / 100 within ±10,00 EUR (1142).
+     * Skipped for rectifications by differences (TipoRectificativa I; R2/R3 are
+     * already rejected by guard #7), whose difference lines need not satisfy the
+     * equality. Called after the fields' form is validated, so non-finite/overflow
+     * amounts fail on their own field first. Beyond the margin AEAT accepts the
+     * record AceptadoConErrores (subsanable), not reject it.
+     */
+    private function assertLineCuotaCoherent(InvoiceContract $invoice, InvoiceBreakdownContract $breakdown): void
+    {
+        // Only rectifications carry a TipoRectificativa; consult it solely for
+        // them (mirrors the rest of the builder, which reads it only when the type
+        // is rectificative).
+        if ($invoice->getType()->isRectificative()) {
+            $rectType = $invoice->getRectificationType();
+
+            if ($rectType !== null && RectificativeTypeEnum::tryFrom($rectType) === RectificativeTypeEnum::BY_DIFFERENCES) {
+                return;
+            }
+        }
+
+        $base = $breakdown->getBaseAmount();
+        $cuota = $breakdown->getTaxAmount();
+
+        if (($base > 0 && $cuota < 0) || ($base < 0 && $cuota > 0)) {
+            throw ValidationException::invalidInvoiceData(
+                'cuota_repercutida',
+                sprintf(
+                    'CuotaRepercutida %s and BaseImponible %s must share the same sign (AEAT 1143)',
+                    $this->fromCents($this->toCents($cuota)),
+                    $this->fromCents($this->toCents($base))
+                )
+            );
+        }
+
+        $expectedCents = $this->toCents($base * $breakdown->getTaxRate() / 100);
+
+        if (abs($this->toCents($cuota) - $expectedCents) > self::TOTAL_TOLERANCE_CENTS) {
+            throw ValidationException::invalidInvoiceData(
+                'cuota_repercutida',
+                sprintf(
+                    'CuotaRepercutida %s differs from BaseImponible × TipoImpositivo (%s) by more than 10,00 EUR (AEAT 1142; AEAT would accept the record AceptadoConErrores, not reject it)',
+                    $this->fromCents($this->toCents($cuota)),
+                    $this->fromCents($expectedCents)
+                )
+            );
+        }
     }
 
     /**
