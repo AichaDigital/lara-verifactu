@@ -5,7 +5,6 @@ declare(strict_types=1);
 use AichaDigital\LaraVerifactu\Database\Factories\InvoiceBreakdownFactory;
 use AichaDigital\LaraVerifactu\Enums\IdTypeEnum;
 use AichaDigital\LaraVerifactu\Enums\InvoiceTypeEnum;
-use AichaDigital\LaraVerifactu\Enums\OperationTypeEnum;
 use AichaDigital\LaraVerifactu\Enums\RegimeTypeEnum;
 use AichaDigital\LaraVerifactu\Models\Invoice;
 use Carbon\Carbon;
@@ -45,8 +44,7 @@ it('implements InvoiceContract methods', function () {
         ->and($invoice->getIssueDate())->toBeInstanceOf(Carbon::class)
         ->and($invoice->getIssueTime())->toBeInstanceOf(Carbon::class)
         ->and($invoice->getType())->toBeInstanceOf(InvoiceTypeEnum::class)
-        ->and($invoice->getRegimeType())->toBeInstanceOf(RegimeTypeEnum::class)
-        ->and($invoice->getOperationKey())->toBeInstanceOf(OperationTypeEnum::class);
+        ->and($invoice->getRegimeType())->toBeInstanceOf(RegimeTypeEnum::class);
 });
 
 it('can create a simplified invoice', function () {

@@ -58,7 +58,6 @@ interface InvoiceBreakdownContract
 {
     public function getTaxType(): TaxTypeEnum;
     public function getRegimeType(): RegimeTypeEnum;
-    public function getOperationType(): OperationTypeEnum;
     public function getTaxRate(): string;
     public function getBaseAmount(): string;
     public function getTaxAmount(): string;

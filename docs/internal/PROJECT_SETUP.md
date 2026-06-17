@@ -40,7 +40,6 @@ Este documento describe la estructura completa del paquete Laravel Verifactu y l
 - ✅ `InvoiceTypeEnum` - Tipos de factura según AEAT
 - ✅ `TaxTypeEnum` - Tipos de impuestos
 - ✅ `RegimeTypeEnum` - Tipos de régimen fiscal
-- ✅ `OperationTypeEnum` - Tipos de operación
 - ✅ `IdTypeEnum` - Tipos de identificación
 - ✅ `RegistryStatusEnum` - Estados de registro
 

@@ -10,7 +10,6 @@ use AichaDigital\LaraVerifactu\Contracts\RecipientContract;
 use AichaDigital\LaraVerifactu\Database\Factories\InvoiceFactory;
 use AichaDigital\LaraVerifactu\Enums\IdTypeEnum;
 use AichaDigital\LaraVerifactu\Enums\InvoiceTypeEnum;
-use AichaDigital\LaraVerifactu\Enums\OperationTypeEnum;
 use AichaDigital\LaraVerifactu\Enums\RegimeTypeEnum;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -43,7 +42,6 @@ use Illuminate\Support\Collection;
  * @property string|null $recipient_name
  * @property string|null $recipient_country
  * @property RegimeTypeEnum $regime_type
- * @property OperationTypeEnum $operation_key
  * @property string|null $description
  * @property array<string, mixed>|null $metadata
  * @property Carbon $created_at
@@ -86,7 +84,6 @@ class Invoice extends Model implements InvoiceContract
         'recipient_name',
         'recipient_country',
         'regime_type',
-        'operation_key',
         'description',
         'metadata',
     ];
@@ -106,7 +103,6 @@ class Invoice extends Model implements InvoiceContract
         'type' => InvoiceTypeEnum::class,
         'recipient_id_type' => IdTypeEnum::class,
         'regime_type' => RegimeTypeEnum::class,
-        'operation_key' => OperationTypeEnum::class,
     ];
 
     /**
@@ -450,14 +446,6 @@ class Invoice extends Model implements InvoiceContract
     public function getRegimeType(): RegimeTypeEnum
     {
         return $this->regime_type;
-    }
-
-    /**
-     * Get the operation key.
-     */
-    public function getOperationKey(): OperationTypeEnum
-    {
-        return $this->operation_key;
     }
 
     /**
