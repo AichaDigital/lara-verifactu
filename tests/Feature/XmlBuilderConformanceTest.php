@@ -62,8 +62,14 @@ function conformanceInvoice(): InvoiceContract
     $invoice->shouldReceive('getRegimeType')->andReturn(RegimeTypeEnum::GENERAL);
     $invoice->shouldReceive('getTaxAmount')->andReturn(21.0);
     $invoice->shouldReceive('getTotalAmount')->andReturn(121.0);
-    $invoice->shouldReceive('hasRecipient')->andReturn(false);
-    $invoice->shouldReceive('getRecipient')->andReturn(null);
+    $recipient = Mockery::mock(RecipientContract::class);
+    $recipient->shouldReceive('getNif')->andReturn('12345678Z');
+    $recipient->shouldReceive('getName')->andReturn('Cliente Ejemplo');
+    $recipient->shouldReceive('getIdType')->andReturn(null);
+    $recipient->shouldReceive('getId')->andReturn(null);
+    $recipient->shouldReceive('getCountry')->andReturn('ES');
+    $invoice->shouldReceive('hasRecipient')->andReturn(true);
+    $invoice->shouldReceive('getRecipient')->andReturn($recipient);
     $invoice->shouldReceive('getBreakdowns')->andReturn(collect([conformanceBreakdown()]));
 
     return $invoice;
@@ -182,8 +188,14 @@ describe('rectificative registration XML (AID-135)', function () {
         $invoice->shouldReceive('getRegimeType')->andReturn(RegimeTypeEnum::GENERAL);
         $invoice->shouldReceive('getTaxAmount')->andReturn(-21.0);
         $invoice->shouldReceive('getTotalAmount')->andReturn(-121.0);
-        $invoice->shouldReceive('hasRecipient')->andReturn(false);
-        $invoice->shouldReceive('getRecipient')->andReturn(null);
+        $recipient = Mockery::mock(RecipientContract::class);
+        $recipient->shouldReceive('getNif')->andReturn('12345678Z');
+        $recipient->shouldReceive('getName')->andReturn('Cliente Ejemplo');
+        $recipient->shouldReceive('getIdType')->andReturn(null);
+        $recipient->shouldReceive('getId')->andReturn(null);
+        $recipient->shouldReceive('getCountry')->andReturn('ES');
+        $invoice->shouldReceive('hasRecipient')->andReturn(true);
+        $invoice->shouldReceive('getRecipient')->andReturn($recipient);
         $invoice->shouldReceive('getBreakdowns')->andReturn(collect([conformanceBreakdown()]));
 
         return $invoice;

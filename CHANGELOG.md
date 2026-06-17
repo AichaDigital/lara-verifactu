@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed (BREAKING)
 
+- Made `XmlBuilder` enforce Destinatarios × TipoFactura (AID-194, AEAT rules
+  1189/1190): F1/F3/R1 now require a Destinatarios block (only F3 was enforced
+  before) and F2/R5 (simplified) must not carry one — both fail loud with
+  `ValidationException` (guard #8). 1189 requires an actually emittable recipient
+  (`hasRecipient()` plus a non-null `getRecipient()`), and 1190 fires before the
+  NIF guard. Added `InvoiceTypeEnum::requiresRecipientInV10Core()` ({F1, F3, R1}).
 - Made `Invoice::isSimplified()` derive from `type` (AID-187): `type` is now the
   single source of truth for simplified-ness, deriving from `InvoiceTypeEnum`
   (F2/R5) instead of a separate stored `simplified` boolean that could disagree

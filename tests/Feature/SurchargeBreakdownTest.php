@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use AichaDigital\LaraVerifactu\Contracts\InvoiceBreakdownContract;
 use AichaDigital\LaraVerifactu\Contracts\InvoiceContract;
+use AichaDigital\LaraVerifactu\Contracts\RecipientContract;
 use AichaDigital\LaraVerifactu\Enums\InvoiceTypeEnum;
 use AichaDigital\LaraVerifactu\Enums\RegimeTypeEnum;
 use AichaDigital\LaraVerifactu\Enums\TaxTypeEnum;
@@ -61,8 +62,14 @@ function surchargeInvoice(InvoiceBreakdownContract $breakdown): InvoiceContract
     $invoice->shouldReceive('getRegimeType')->andReturn(RegimeTypeEnum::GENERAL);
     $invoice->shouldReceive('getTaxAmount')->andReturn(21.0);
     $invoice->shouldReceive('getTotalAmount')->andReturn(126.2);
-    $invoice->shouldReceive('hasRecipient')->andReturn(false);
-    $invoice->shouldReceive('getRecipient')->andReturn(null);
+    $recipient = Mockery::mock(RecipientContract::class);
+    $recipient->shouldReceive('getNif')->andReturn('12345678Z');
+    $recipient->shouldReceive('getName')->andReturn('Cliente Ejemplo');
+    $recipient->shouldReceive('getIdType')->andReturn(null);
+    $recipient->shouldReceive('getId')->andReturn(null);
+    $recipient->shouldReceive('getCountry')->andReturn('ES');
+    $invoice->shouldReceive('hasRecipient')->andReturn(true);
+    $invoice->shouldReceive('getRecipient')->andReturn($recipient);
     $invoice->shouldReceive('getBreakdowns')->andReturn(collect([$breakdown]));
 
     return $invoice;
