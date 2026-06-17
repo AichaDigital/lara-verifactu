@@ -73,6 +73,15 @@ final class XmlBuilder implements XmlBuilderContract
      */
     private const TOTAL_TOLERANCE_CENTS = 1000;
 
+    /** AEAT Macrodato threshold (rule 1139): ImporteTotal >= |100.000.000,00|, in cents. */
+    private const MACRODATO_THRESHOLD_CENTS = 10_000_000_000;
+
+    /** AEAT F2 base+cuota cap (rule 1150 / §15.8): 3.000,00 EUR, in cents. */
+    private const F2_LIMIT_CENTS = 300_000;
+
+    /** AEAT earliest valid FechaExpedicionFactura (rule 1152): Verifactu go-live date. */
+    private const MIN_ISSUE_DATE = '2024-10-28';
+
     /**
      * @throws XmlException
      */
@@ -178,6 +187,11 @@ final class XmlBuilder implements XmlBuilderContract
     {
         $alta = $dom->createElementNS(self::SF_NS, 'sf:RegistroAlta');
 
+        // Date validity guard (AEAT 1112 / 1152): FechaExpedicionFactura cannot be
+        // later than the registration generation date, nor earlier than the
+        // Verifactu go-live (28-10-2024). Validate before any date is formatted.
+        $this->assertIssueDateValid($invoice, $chain);
+
         $alta->appendChild($this->sfElement($dom, 'IDVersion', self::ID_VERSION));
 
         $idFactura = $dom->createElementNS(self::SF_NS, 'sf:IDFactura');
@@ -274,11 +288,24 @@ final class XmlBuilder implements XmlBuilderContract
 
         $alta->appendChild($this->sfElement($dom, 'DescripcionOperacion', $invoice->getDescription() ?? 'Factura'));
 
+        // Macrodato guard (AEAT 1139): mandatory with value S when |ImporteTotal|
+        // reaches 100.000.000,00. Omitted below the threshold (minOccurs 0). XSD
+        // position: after DescripcionOperacion, before Destinatarios.
+        if (abs($this->toCents($invoice->getTotalAmount())) >= self::MACRODATO_THRESHOLD_CENTS) {
+            $alta->appendChild($this->sfElement($dom, 'Macrodato', 'S'));
+        }
+
         if ($invoice->hasRecipient() && $invoice->getRecipient() instanceof RecipientContract) {
             $alta->appendChild($this->buildDestinatarios($dom, $invoice->getRecipient()));
         }
 
         $alta->appendChild($this->buildDesglose($dom, $invoice));
+
+        // F2 limit guard (AEAT 1150 / §15.8): a simplified invoice's base+cuota must
+        // not exceed 3.000,00 EUR (+10 margin). The exception fields
+        // (NumRegistroAcuerdoFacturacion / FacturaSinIdentifDestinatarioArt61d) are
+        // post-1.0 and never emitted, so the cap always applies to F2.
+        $this->assertF2WithinLimit($invoice);
 
         // Validate the totals' form (formatAmount: finite, <= 12 integer digits)
         // before their coherence, so a malformed total fails on its own field
@@ -579,6 +606,66 @@ final class XmlBuilder implements XmlBuilderContract
         }
 
         return $importe;
+    }
+
+    /**
+     * Date validity guard (AEAT 1112 / 1152): the FechaExpedicionFactura (compared
+     * by day) cannot be later than the registration's generation date (it cannot be
+     * issued in the future) nor earlier than 28-10-2024, the Verifactu go-live date.
+     */
+    private function assertIssueDateValid(InvoiceContract $invoice, RegistryChain $chain): void
+    {
+        // Compare calendar dates as Y-m-d strings (lexicographic = chronological),
+        // each in its own timezone — matching the dates the XML actually emits and
+        // avoiding cross-timezone startOfDay() drift.
+        $issueDate = $invoice->getIssueDatetime()->format('Y-m-d');
+
+        if ($issueDate < self::MIN_ISSUE_DATE) {
+            throw ValidationException::invalidInvoiceData(
+                'issue_date',
+                'FechaExpedicionFactura is earlier than 28-10-2024, the Verifactu go-live date (AEAT 1152)'
+            );
+        }
+
+        if ($issueDate > $chain->generatedAt->format('Y-m-d')) {
+            throw ValidationException::invalidInvoiceData(
+                'issue_date',
+                'FechaExpedicionFactura is later than the registration generation date; an invoice cannot be issued in the future (AEAT 1112)'
+            );
+        }
+    }
+
+    /**
+     * F2 limit guard (AEAT 1150 / §15.8): for a simplified invoice (F2) the sum of
+     * BaseImponibleOimporteNoSujeto + CuotaRepercutida over the lines must not exceed
+     * 3.000,00 EUR (+10 EUR margin). Per §15.8 the equivalence surcharge is NOT part
+     * of the sum. Exempt lines contribute base only (no CuotaRepercutida).
+     */
+    private function assertF2WithinLimit(InvoiceContract $invoice): void
+    {
+        if (! $invoice->getType()->isSimplified()) {
+            return;
+        }
+
+        $cents = 0;
+
+        foreach ($invoice->getBreakdowns() as $breakdown) {
+            $cents += $this->toCents($breakdown->getBaseAmount());
+
+            if (! $breakdown->isExempt()) {
+                $cents += $this->toCents($breakdown->getTaxAmount());
+            }
+        }
+
+        if ($cents > self::F2_LIMIT_CENTS + self::TOTAL_TOLERANCE_CENTS) {
+            throw ValidationException::invalidInvoiceData(
+                'f2_limit',
+                sprintf(
+                    'F2 (simplified) base+cuota %s exceeds the 3.000,00 EUR limit (AEAT 1150); the exception fields NumRegistroAcuerdoFacturacion / FacturaSinIdentifDestinatarioArt61d are post-1.0',
+                    $this->fromCents($cents)
+                )
+            );
+        }
     }
 
     /**
