@@ -9,6 +9,7 @@ use AichaDigital\LaraVerifactu\Contracts\InvoiceContract;
 use AichaDigital\LaraVerifactu\Contracts\RecipientContract;
 use AichaDigital\LaraVerifactu\Contracts\XmlBuilderContract;
 use AichaDigital\LaraVerifactu\Enums\CalificacionOperacionEnum;
+use AichaDigital\LaraVerifactu\Enums\GeneradoPorEnum;
 use AichaDigital\LaraVerifactu\Enums\InvoiceTypeEnum;
 use AichaDigital\LaraVerifactu\Enums\OperacionExentaEnum;
 use AichaDigital\LaraVerifactu\Enums\RectificativeTypeEnum;
@@ -122,6 +123,10 @@ final class XmlBuilder implements XmlBuilderContract
             $registroFactura->appendChild($this->buildRegistroAnulacion($dom, $record, $chain));
 
             return $this->formatXml($dom);
+        } catch (ValidationException $e) {
+            // Preserve business-rule failures (GeneradoPor/Generador coupling, NIF
+            // rules) instead of wrapping them in a generic XmlException.
+            throw $e;
         } catch (\Throwable $e) {
             throw XmlException::cannotBuildXml($e->getMessage());
         }
@@ -344,6 +349,8 @@ final class XmlBuilder implements XmlBuilderContract
         $idFactura->appendChild($this->sfElement($dom, 'NumSerieFacturaAnulada', $record->invoiceNumber));
         $idFactura->appendChild($this->sfElement($dom, 'FechaExpedicionFacturaAnulada', $record->issueDate->format('d-m-Y')));
 
+        $this->appendAnulacionCircumstances($dom, $anulacion, $record);
+
         $anulacion->appendChild($this->buildEncadenamiento($dom, $chain->previous));
         $anulacion->appendChild($this->buildSistemaInformatico($dom));
 
@@ -352,6 +359,74 @@ final class XmlBuilder implements XmlBuilderContract
         $anulacion->appendChild($this->sfElement($dom, 'Huella', $chain->hash));
 
         return $anulacion;
+    }
+
+    /**
+     * Append the optional anulación circumstance fields in XSD order:
+     * SinRegistroPrevio, RechazoPrevio, GeneradoPor, Generador. GeneradoPor and
+     * Generador are coupled (AEAT 1224): emitting one without the other is rejected.
+     * The Generador is identified by NombreRazon + NIF (AEAT 1227/1228; IDOtro is
+     * post-1.0), and its NIF must differ from the ObligadoEmision NIF (AEAT 1259).
+     */
+    private function appendAnulacionCircumstances(DOMDocument $dom, DOMElement $anulacion, CancellationRecord $record): void
+    {
+        if ($record->withoutPriorRegistry) {
+            $anulacion->appendChild($this->sfElement($dom, 'SinRegistroPrevio', 'S'));
+        }
+
+        if ($record->rejectedPreviously) {
+            $anulacion->appendChild($this->sfElement($dom, 'RechazoPrevio', 'S'));
+        }
+
+        $hasGeneradorData = $record->generatorName !== null || $record->generatorNif !== null;
+
+        if ($record->generatedBy === null) {
+            if ($hasGeneradorData) {
+                throw ValidationException::invalidInvoiceData(
+                    'generated_by',
+                    'Generador data was provided without GeneradoPor; the two are coupled (AEAT 1224)'
+                );
+            }
+
+            return;
+        }
+
+        $generatedBy = GeneradoPorEnum::tryFrom($record->generatedBy);
+
+        if (! $generatedBy instanceof GeneradoPorEnum) {
+            throw ValidationException::invalidInvoiceData(
+                'generated_by',
+                "GeneradoPor '{$record->generatedBy}' is invalid; must be E (issuer), D (recipient) or T (third party) (AEAT L16)"
+            );
+        }
+
+        if ($record->generatorName === null || $record->generatorName === '') {
+            throw ValidationException::invalidInvoiceData(
+                'generator_name',
+                'Generador requires a NombreRazon when GeneradoPor is set (AEAT 1224)'
+            );
+        }
+
+        if ($record->generatorNif === null || $record->generatorNif === '') {
+            throw ValidationException::invalidInvoiceData(
+                'generator_nif',
+                'Generador requires a Spanish NIF when GeneradoPor is set (AEAT 1227/1228); IDOtro identification is post-1.0'
+            );
+        }
+
+        if ($record->generatorNif === $this->companyTaxId()) {
+            throw ValidationException::invalidInvoiceData(
+                'generator_nif',
+                'Generador NIF must differ from the ObligadoEmision NIF (AEAT 1259)'
+            );
+        }
+
+        $anulacion->appendChild($this->sfElement($dom, 'GeneradoPor', $generatedBy->value));
+
+        $generador = $dom->createElementNS(self::SF_NS, 'sf:Generador');
+        $anulacion->appendChild($generador);
+        $generador->appendChild($this->sfElement($dom, 'NombreRazon', $record->generatorName));
+        $generador->appendChild($this->sfElement($dom, 'NIF', $record->generatorNif));
     }
 
     /**
