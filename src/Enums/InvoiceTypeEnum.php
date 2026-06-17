@@ -59,4 +59,26 @@ enum InvoiceTypeEnum: string
             self::RECTIFICATIVE_SIMPLIFIED_INVOICES,
         ], true);
     }
+
+    /**
+     * TipoFactura supported in the v1.0 honest core. Per the v1.0 coverage
+     * matrix (list L2), the core set is F1/F2/F3/R1/R5. R2/R3/R4 (Art. 80.3,
+     * 80.4 and "Resto") remain valid AEAT codes — they stay in the enum for XSD
+     * conformance — but are post-1.0 and must be rejected fail-loud by
+     * XmlBuilder instead of emitting XML outside the honest core.
+     *
+     * Positive allow-list (default-deny): a future XSD addition (e.g. R6) is
+     * rejected until the package gains its fiscal semantics, business rules and
+     * tests, rather than being silently accepted.
+     */
+    public function isSupportedInV10Core(): bool
+    {
+        return in_array($this, [
+            self::COMPLETE,
+            self::SIMPLIFIED,
+            self::SUBSTITUTE,
+            self::RECTIFICATIVE,
+            self::RECTIFICATIVE_SIMPLIFIED_INVOICES,
+        ], true);
+    }
 }

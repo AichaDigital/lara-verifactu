@@ -269,3 +269,108 @@ describe('TipoRectificativa guard (#6)', function () {
             ->and($xml)->toContain('<sf:TipoRectificativa>I</sf:TipoRectificativa>');
     });
 });
+
+describe('TipoFactura guard (#7)', function () {
+    /**
+     * Post-1.0 rectificative fixture (R2/R3/R4). The rectificative fields carry
+     * valid 'I' values so that, WITHOUT guard #7, the invoice would silently
+     * build XSD-valid XML carrying an out-of-core TipoFactura — the exact defect
+     * AID-185 closes. The XSD itself permits R2/R3/R4, so validate() cannot catch
+     * this; only the domain guard can. With the guard, it fails before emission.
+     */
+    function flPost10Rectificative(InvoiceTypeEnum $type): InvoiceContract
+    {
+        return flInvoice([
+            'getType' => $type,
+            'getInvoiceType' => $type,
+            'getRectificationType' => 'I',
+            'getRectifiedInvoices' => [],
+            'getRectificationAmounts' => null,
+        ]);
+    }
+
+    it('rejects R2 (Art. 80.3, post-1.0) fail-loud', function () {
+        expect(fn () => $this->builder->buildRegistrationXml(
+            flPost10Rectificative(InvoiceTypeEnum::RECTIFICATIVE_ART_80_3),
+            flChain()
+        ))->toThrow(ValidationException::class, 'TipoFactura R2');
+    });
+
+    it('rejects R3 (Art. 80.4, post-1.0) fail-loud', function () {
+        expect(fn () => $this->builder->buildRegistrationXml(
+            flPost10Rectificative(InvoiceTypeEnum::RECTIFICATIVE_ART_80_4),
+            flChain()
+        ))->toThrow(ValidationException::class, 'TipoFactura R3');
+    });
+
+    it('rejects R4 (Resto, post-1.0) fail-loud', function () {
+        expect(fn () => $this->builder->buildRegistrationXml(
+            flPost10Rectificative(InvoiceTypeEnum::RECTIFICATIVE_OTHER),
+            flChain()
+        ))->toThrow(ValidationException::class, 'TipoFactura R4');
+    });
+
+    it('accepts F1 (factura completa) as core', function () {
+        $xml = $this->builder->buildRegistrationXml(flInvoice(), flChain());
+
+        expect($this->builder->validate($xml))->toBeTrue()
+            ->and($xml)->toContain('<sf:TipoFactura>F1</sf:TipoFactura>');
+    });
+
+    it('accepts F2 (factura simplificada) as core', function () {
+        $invoice = flInvoice([
+            'getType' => InvoiceTypeEnum::SIMPLIFIED,
+            'getInvoiceType' => InvoiceTypeEnum::SIMPLIFIED,
+        ]);
+
+        $xml = $this->builder->buildRegistrationXml($invoice, flChain());
+
+        expect($this->builder->validate($xml))->toBeTrue()
+            ->and($xml)->toContain('<sf:TipoFactura>F2</sf:TipoFactura>');
+    });
+
+    it('accepts F3 (sustitución de simplificadas) as core', function () {
+        $invoice = flInvoice([
+            'getType' => InvoiceTypeEnum::SUBSTITUTE,
+            'getInvoiceType' => InvoiceTypeEnum::SUBSTITUTE,
+            'getSubstitutedInvoices' => [
+                ['number' => 'S-2026-009', 'issue_date' => Carbon::parse('2026-05-01')],
+            ],
+        ], recipient: flRecipient('12345678Z'));
+
+        $xml = $this->builder->buildRegistrationXml($invoice, flChain());
+
+        expect($this->builder->validate($xml))->toBeTrue()
+            ->and($xml)->toContain('<sf:TipoFactura>F3</sf:TipoFactura>');
+    });
+
+    it('accepts R1 (rectificativa por diferencias) as core', function () {
+        $invoice = flInvoice([
+            'getType' => InvoiceTypeEnum::RECTIFICATIVE,
+            'getInvoiceType' => InvoiceTypeEnum::RECTIFICATIVE,
+            'getRectificationType' => 'I',
+            'getRectifiedInvoices' => [],
+            'getRectificationAmounts' => null,
+        ]);
+
+        $xml = $this->builder->buildRegistrationXml($invoice, flChain());
+
+        expect($this->builder->validate($xml))->toBeTrue()
+            ->and($xml)->toContain('<sf:TipoFactura>R1</sf:TipoFactura>');
+    });
+
+    it('accepts R5 (rectificativa en facturas simplificadas, no Destinatarios per rule 1190) as core', function () {
+        $invoice = flInvoice([
+            'getType' => InvoiceTypeEnum::RECTIFICATIVE_SIMPLIFIED_INVOICES,
+            'getInvoiceType' => InvoiceTypeEnum::RECTIFICATIVE_SIMPLIFIED_INVOICES,
+            'getRectificationType' => 'I',
+            'getRectifiedInvoices' => [],
+            'getRectificationAmounts' => null,
+        ]);
+
+        $xml = $this->builder->buildRegistrationXml($invoice, flChain());
+
+        expect($this->builder->validate($xml))->toBeTrue()
+            ->and($xml)->toContain('<sf:TipoFactura>R5</sf:TipoFactura>');
+    });
+});
