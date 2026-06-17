@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed (BREAKING)
 
+- Made `XmlBuilder` fail loud for data outside the v1.0 honest core instead of
+  silently emitting a default the AEAT would reject (AID-179). It now throws
+  `ValidationException` for: `Impuesto` ∉ {01,02,03} (05 Otros is post-1.0);
+  any `ClaveRegimen` other than the general regime 01 (special regimes — incl.
+  04/08/10/20, which force a non-S1 calificación — are post-1.0); an exempt
+  breakdown without an explicit `OperacionExenta` cause E1-E4/E6 (E5 requires
+  IDOtro, post-1.0) instead of defaulting to `E1`; a non-NIF (IDOtro / foreign)
+  recipient instead of defaulting `IDType` to `02`; and a `TipoRectificativa`
+  outside {S,I} instead of collapsing it to `I`. `CalificacionOperacion` is now
+  emitted from `CalificacionOperacionEnum::S1`. Added
+  `RegimeTypeEnum::isSupportedInV10Core()` and
+  `OperacionExentaEnum::isSupportedInV10Core()`.
 - Rebuilt the AEAT code-list enums against the official XSD / lists (AID-178),
   the prerequisite for the v1.0 honest core:
   - `RegimeTypeEnum` (L8A/L8B): removed the invalid codes `12`/`13` (not in the
@@ -25,7 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     fixed `isSimplified()` to F2/R5 only (R2 was wrongly included).
   - `OperationTypeEnum`: marked legacy (not an official AEAT list; ignored by
     the XML builder). Scheduled for removal with the `operation_key` column in
-    AID-179.
+    AID-186.
 
 ### Added
 

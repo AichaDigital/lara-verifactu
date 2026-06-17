@@ -291,20 +291,19 @@ describe('rectificative registration XML (AID-135)', function () {
             ->toThrow(ValidationException::class);
     });
 
-    it('normalizes legacy non-S codes (R1 from older adapters) to I', function () {
+    it('rejects a legacy non-{S,I} TipoRectificativa (R1) fail-loud (AID-179)', function () {
         $chain = new RegistryChain(
             hash: str_repeat('F', 64),
             generatedAt: Carbon::parse('2026-06-05T11:00:00+02:00'),
             previous: null,
         );
 
+        // Before AID-179 this collapsed silently to 'I'. The honest core now
+        // rejects any TipoRectificativa outside {S,I} instead of guessing.
         $invoice = rectificativeInvoice('R1', []);
 
-        $xml = $this->builder->buildRegistrationXml($invoice, $chain);
-
-        expect($this->builder->validate($xml))->toBeTrue()
-            ->and($xml)->toContain('<sf:TipoRectificativa>I</sf:TipoRectificativa>')
-            ->and($xml)->not->toContain('<sf:FacturasRectificadas>');
+        expect(fn () => $this->builder->buildRegistrationXml($invoice, $chain))
+            ->toThrow(ValidationException::class);
     });
 
     it('does not emit rectification elements for non-rectificative invoices', function () {
