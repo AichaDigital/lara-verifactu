@@ -7,7 +7,9 @@ namespace AichaDigital\LaraVerifactu\Database\Factories;
 use AichaDigital\LaraVerifactu\Enums\IdTypeEnum;
 use AichaDigital\LaraVerifactu\Enums\InvoiceTypeEnum;
 use AichaDigital\LaraVerifactu\Enums\RegimeTypeEnum;
+use AichaDigital\LaraVerifactu\Enums\TaxTypeEnum;
 use AichaDigital\LaraVerifactu\Models\Invoice;
+use AichaDigital\LaraVerifactu\Models\InvoiceBreakdown;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -142,5 +144,42 @@ class InvoiceFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'issue_datetime' => $datetime,
         ]);
+    }
+
+    /**
+     * Attach a coherent default breakdown so the invoice totals back the desglose
+     * sums (XmlBuilder's AEAT 1210/1216 coherence guard). The breakdown mirrors the
+     * invoice's base/tax at the general 21% rate. Tests that build their own
+     * breakdowns keep full control: the hook is a no-op when one already exists.
+     */
+    public function configure(): static
+    {
+        return $this->afterCreating(function (Invoice $invoice): void {
+            if ($invoice->breakdowns()->exists()) {
+                return;
+            }
+
+            InvoiceBreakdown::factory()->create([
+                'invoice_id' => $invoice->id,
+                'tax_type' => TaxTypeEnum::IVA,
+                'tax_rate' => 21.00,
+                'base_amount' => $invoice->base_amount,
+                'exempt' => false,
+            ]);
+        });
+    }
+
+    /**
+     * Opt out of the default breakdown for tests that manage breakdowns
+     * themselves (e.g. relationship/count assertions). Runs after configure()'s
+     * hook, removing the auto-created breakdown and clearing the cached relation
+     * so a later lazy-load reflects only the test's own breakdowns.
+     */
+    public function withoutBreakdowns(): static
+    {
+        return $this->afterCreating(function (Invoice $invoice): void {
+            $invoice->breakdowns()->delete();
+            $invoice->unsetRelation('breakdowns');
+        });
     }
 }

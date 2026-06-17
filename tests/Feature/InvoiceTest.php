@@ -180,7 +180,7 @@ it('casts amounts to decimal', function () {
 });
 
 it('can have breakdowns', function () {
-    $invoice = Invoice::factory()->create();
+    $invoice = Invoice::factory()->withoutBreakdowns()->create();
 
     InvoiceBreakdownFactory::new()
         ->forInvoice($invoice)

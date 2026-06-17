@@ -13,7 +13,7 @@ beforeEach(function () {
 });
 
 it('invoice has one registry relationship', function () {
-    $invoice = Invoice::factory()->create();
+    $invoice = Invoice::factory()->withoutBreakdowns()->create();
     $registry = Registry::factory()->forInvoice($invoice)->create();
 
     expect($invoice->registry)->not->toBeNull()
@@ -22,7 +22,7 @@ it('invoice has one registry relationship', function () {
 });
 
 it('invoice can have multiple breakdowns', function () {
-    $invoice = Invoice::factory()->create();
+    $invoice = Invoice::factory()->withoutBreakdowns()->create();
 
     InvoiceBreakdown::factory()
         ->forInvoice($invoice)
@@ -34,7 +34,7 @@ it('invoice can have multiple breakdowns', function () {
 });
 
 it('registry belongs to invoice', function () {
-    $invoice = Invoice::factory()->create();
+    $invoice = Invoice::factory()->withoutBreakdowns()->create();
     $registry = Registry::factory()->forInvoice($invoice)->create();
 
     expect($registry->invoice)->not->toBeNull()
@@ -43,7 +43,7 @@ it('registry belongs to invoice', function () {
 });
 
 it('breakdown belongs to invoice', function () {
-    $invoice = Invoice::factory()->create();
+    $invoice = Invoice::factory()->withoutBreakdowns()->create();
     $breakdown = InvoiceBreakdown::factory()->forInvoice($invoice)->create();
 
     expect($breakdown->invoice)->not->toBeNull()
@@ -52,7 +52,7 @@ it('breakdown belongs to invoice', function () {
 });
 
 it('deleting invoice cascades to registry', function () {
-    $invoice = Invoice::factory()->create();
+    $invoice = Invoice::factory()->withoutBreakdowns()->create();
     $registry = Registry::factory()->forInvoice($invoice)->create();
 
     $registryId = $registry->id;
@@ -62,7 +62,7 @@ it('deleting invoice cascades to registry', function () {
 });
 
 it('deleting invoice cascades to breakdowns', function () {
-    $invoice = Invoice::factory()->create();
+    $invoice = Invoice::factory()->withoutBreakdowns()->create();
 
     InvoiceBreakdown::factory()
         ->forInvoice($invoice)
@@ -78,7 +78,7 @@ it('deleting invoice cascades to breakdowns', function () {
 });
 
 it('can eager load invoice relationships', function () {
-    $invoice = Invoice::factory()->create();
+    $invoice = Invoice::factory()->withoutBreakdowns()->create();
 
     Registry::factory()->forInvoice($invoice)->create();
     InvoiceBreakdown::factory()->forInvoice($invoice)->count(2)->create();
@@ -92,7 +92,7 @@ it('can eager load invoice relationships', function () {
 });
 
 it('can query invoices through registry', function () {
-    $invoice = Invoice::factory()->create(['number' => 'REL-001']);
+    $invoice = Invoice::factory()->withoutBreakdowns()->create(['number' => 'REL-001']);
     Registry::factory()->forInvoice($invoice)->submitted()->create();
 
     $foundInvoice = Invoice::whereHas('registry', function ($query) {
@@ -104,7 +104,7 @@ it('can query invoices through registry', function () {
 });
 
 it('can query invoices through breakdowns', function () {
-    $invoice = Invoice::factory()->create(['number' => 'REL-002']);
+    $invoice = Invoice::factory()->withoutBreakdowns()->create(['number' => 'REL-002']);
     InvoiceBreakdown::factory()->forInvoice($invoice)->iva21()->create();
 
     $foundInvoice = Invoice::whereHas('breakdowns', function ($query) {
@@ -116,7 +116,7 @@ it('can query invoices through breakdowns', function () {
 });
 
 it('can create complete invoice with all relationships', function () {
-    $invoice = Invoice::factory()->create();
+    $invoice = Invoice::factory()->withoutBreakdowns()->create();
 
     $registry = Registry::factory()
         ->forInvoice($invoice)
@@ -144,7 +144,7 @@ it('can create complete invoice with all relationships', function () {
 });
 
 it('maintains referential integrity with foreign keys', function () {
-    $invoice = Invoice::factory()->create();
+    $invoice = Invoice::factory()->withoutBreakdowns()->create();
     $registry = Registry::factory()->forInvoice($invoice)->create();
 
     expect($registry->invoice_id)->toBe($invoice->id)
@@ -152,7 +152,7 @@ it('maintains referential integrity with foreign keys', function () {
 });
 
 it('can count related models', function () {
-    $invoice = Invoice::factory()->create();
+    $invoice = Invoice::factory()->withoutBreakdowns()->create();
 
     InvoiceBreakdown::factory()->forInvoice($invoice)->count(3)->create();
     Registry::factory()->forInvoice($invoice)->create();

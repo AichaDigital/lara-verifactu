@@ -2,10 +2,12 @@
 
 declare(strict_types=1);
 
+use AichaDigital\LaraVerifactu\Contracts\InvoiceBreakdownContract;
 use AichaDigital\LaraVerifactu\Contracts\InvoiceContract;
 use AichaDigital\LaraVerifactu\Contracts\RecipientContract;
 use AichaDigital\LaraVerifactu\Enums\InvoiceTypeEnum;
 use AichaDigital\LaraVerifactu\Enums\RegimeTypeEnum;
+use AichaDigital\LaraVerifactu\Enums\TaxTypeEnum;
 use AichaDigital\LaraVerifactu\Services\XmlBuilder;
 use AichaDigital\LaraVerifactu\Support\PreviousRegistry;
 use AichaDigital\LaraVerifactu\Support\RegistryChain;
@@ -120,6 +122,21 @@ it('escapes XML special characters in text values', function () {
 });
 
 // Helper function to create mock invoice for XML tests
+function xmlMockBreakdown(): InvoiceBreakdownContract
+{
+    $breakdown = Mockery::mock(InvoiceBreakdownContract::class);
+    $breakdown->shouldReceive('getTaxType')->andReturn(TaxTypeEnum::IVA);
+    $breakdown->shouldReceive('getTaxRate')->andReturn(21.0);
+    $breakdown->shouldReceive('getBaseAmount')->andReturn(100.0);
+    $breakdown->shouldReceive('getTaxAmount')->andReturn(21.0);
+    $breakdown->shouldReceive('getSurchargeRate')->andReturn(null);
+    $breakdown->shouldReceive('getSurchargeAmount')->andReturn(null);
+    $breakdown->shouldReceive('isExempt')->andReturn(false);
+    $breakdown->shouldReceive('getExemptionReason')->andReturn(null);
+
+    return $breakdown;
+}
+
 function createMockInvoiceForXml(array $overrides = []): InvoiceContract
 {
     $defaults = [
@@ -130,7 +147,7 @@ function createMockInvoiceForXml(array $overrides = []): InvoiceContract
         'description' => 'Servicios profesionales',
         'total_amount' => '121.00',
         'total_tax_amount' => '21.00',
-        'breakdowns' => collect([]),
+        'breakdowns' => collect([xmlMockBreakdown()]),
     ];
 
     $data = array_merge($defaults, $overrides);

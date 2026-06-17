@@ -66,6 +66,14 @@ final class XmlBuilder implements XmlBuilderContract
     private const DATE_WINDOWED_SURCHARGE_RATES = ['0.00', '2.00', '5.00', '7.50'];
 
     /**
+     * AEAT importe-coherence margin (Validaciones doc §16/§17): ±10,00 EUR,
+     * expressed in cents to compare integer amounts derived from the same 2-decimal
+     * formatting the XML emits. Beyond it AEAT does not reject — it accepts the
+     * record "con errores" (subsanable).
+     */
+    private const TOTAL_TOLERANCE_CENTS = 1000;
+
+    /**
      * @throws XmlException
      */
     public function buildRegistrationXml(InvoiceContract $invoice, RegistryChain $chain): string
@@ -272,8 +280,17 @@ final class XmlBuilder implements XmlBuilderContract
 
         $alta->appendChild($this->buildDesglose($dom, $invoice));
 
-        $alta->appendChild($this->sfElement($dom, 'CuotaTotal', $this->formatAmount($invoice->getTaxAmount(), 'CuotaTotal')));
-        $alta->appendChild($this->sfElement($dom, 'ImporteTotal', $this->formatAmount($invoice->getTotalAmount(), 'ImporteTotal')));
+        // Validate the totals' form (formatAmount: finite, <= 12 integer digits)
+        // before their coherence, so a malformed total fails on its own field
+        // rather than as an incoherence. Then the coherence guard (AEAT 1210/2005,
+        // 1216/2006) runs after every per-line breakdown guard.
+        $cuotaTotal = $this->formatAmount($invoice->getTaxAmount(), 'CuotaTotal');
+        $importeTotal = $this->formatAmount($invoice->getTotalAmount(), 'ImporteTotal');
+
+        $this->assertTotalsCoherent($invoice);
+
+        $alta->appendChild($this->sfElement($dom, 'CuotaTotal', $cuotaTotal));
+        $alta->appendChild($this->sfElement($dom, 'ImporteTotal', $importeTotal));
 
         $alta->appendChild($this->buildEncadenamiento($dom, $chain->previous));
         $alta->appendChild($this->buildSistemaInformatico($dom));
@@ -560,6 +577,76 @@ final class XmlBuilder implements XmlBuilderContract
         }
 
         return $importe;
+    }
+
+    /**
+     * Importe coherence guard (AEAT 1210/2005, 1216/2006): CuotaTotal and
+     * ImporteTotal must match the breakdown sums within AEAT's ±10,00 EUR margin.
+     * Beyond it AEAT does not reject — it accepts the record "con errores"
+     * (subsanable) — so failing loud here keeps the consumer from shipping a
+     * record it would have to amend. Exempt breakdowns emit only
+     * BaseImponibleOimporteNoSujeto, so they contribute base only. The ImporteTotal
+     * regime exclusions (ClaveRegimen 03/05/06/08/09) never apply: the core is
+     * always regime 01 (guard #4).
+     *
+     * Sums are accumulated in cents from the same 2-decimal formatting the XML
+     * emits, so the comparison matches what AEAT validates line by line.
+     */
+    private function assertTotalsCoherent(InvoiceContract $invoice): void
+    {
+        $baseCents = 0;
+        $taxCents = 0;
+        $surchargeCents = 0;
+
+        foreach ($invoice->getBreakdowns() as $breakdown) {
+            $baseCents += $this->toCents($breakdown->getBaseAmount());
+
+            if ($breakdown->isExempt()) {
+                continue;
+            }
+
+            $taxCents += $this->toCents($breakdown->getTaxAmount());
+            $surchargeCents += $this->toCents($breakdown->getSurchargeAmount() ?? 0.0);
+        }
+
+        $sumCuotaCents = $taxCents + $surchargeCents;
+        $sumImporteCents = $baseCents + $taxCents + $surchargeCents;
+
+        if (abs($this->toCents($invoice->getTaxAmount()) - $sumCuotaCents) > self::TOTAL_TOLERANCE_CENTS) {
+            throw ValidationException::invalidInvoiceData(
+                'cuota_total',
+                sprintf(
+                    'CuotaTotal %s differs from the breakdown sum %s by more than 10,00 EUR (AEAT 1216/2006; AEAT would accept the record AceptadoConErrores, not reject it)',
+                    $this->fromCents($this->toCents($invoice->getTaxAmount())),
+                    $this->fromCents($sumCuotaCents)
+                )
+            );
+        }
+
+        if (abs($this->toCents($invoice->getTotalAmount()) - $sumImporteCents) > self::TOTAL_TOLERANCE_CENTS) {
+            throw ValidationException::invalidInvoiceData(
+                'importe_total',
+                sprintf(
+                    'ImporteTotal %s differs from the breakdown sum %s by more than 10,00 EUR (AEAT 1210/2005; AEAT would accept the record AceptadoConErrores, not reject it)',
+                    $this->fromCents($this->toCents($invoice->getTotalAmount())),
+                    $this->fromCents($sumImporteCents)
+                )
+            );
+        }
+    }
+
+    /**
+     * Convert an amount to integer cents using the same 2-decimal rounding the XML
+     * emits via number_format(), so the coherence sums match the emitted values.
+     */
+    private function toCents(float $amount): int
+    {
+        return (int) str_replace('.', '', number_format($amount, 2, '.', ''));
+    }
+
+    private function fromCents(int $cents): string
+    {
+        return number_format($cents / 100, 2, '.', '');
     }
 
     private function buildDestinatarios(DOMDocument $dom, RecipientContract $recipient): DOMElement
