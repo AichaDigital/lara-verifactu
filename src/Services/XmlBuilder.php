@@ -152,9 +152,24 @@ final class XmlBuilder implements XmlBuilderContract
         $idFactura->appendChild($this->sfElement($dom, 'FechaExpedicionFactura', $invoice->getIssueDatetime()->format('d-m-Y')));
 
         $alta->appendChild($this->sfElement($dom, 'NombreRazonEmisor', $this->companyName()));
-        $alta->appendChild($this->sfElement($dom, 'TipoFactura', $invoice->getType()->value));
 
-        if ($invoice->getType()->isRectificative()) {
+        // TipoFactura guard (#7): the v1.0 core set is {F1, F2, F3, R1, R5} per
+        // the coverage matrix (L2). R2/R3/R4 (Art. 80.3/80.4/Resto) are post-1.0
+        // and XSD-valid, so validate() would not catch them — reject fail-loud
+        // here, before any TipoFactura is emitted and before the rectificative
+        // block, so an R2/R3/R4 fails on TipoFactura rather than TipoRectificativa.
+        $type = $invoice->getType();
+
+        if (! $type->isSupportedInV10Core()) {
+            throw ValidationException::invalidInvoiceData(
+                'tipo_factura',
+                "TipoFactura {$type->value} is outside the v1.0 core {F1, F2, F3, R1, R5}; R2/R3/R4 (Art. 80.3/80.4/Resto) are post-1.0"
+            );
+        }
+
+        $alta->appendChild($this->sfElement($dom, 'TipoFactura', $type->value));
+
+        if ($type->isRectificative()) {
             $alta->appendChild($this->sfElement($dom, 'TipoRectificativa', $this->rectificationTypeCode($invoice)));
 
             $rectified = $invoice->getRectifiedInvoices();

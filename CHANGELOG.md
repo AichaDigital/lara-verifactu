@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed (BREAKING)
 
+- Made `XmlBuilder` reject post-1.0 `TipoFactura` codes fail loud (AID-185). It
+  now throws `ValidationException` for any `TipoFactura` outside the v1.0 core
+  {F1, F2, F3, R1, R5}; R2/R3/R4 (Art. 80.3/80.4/"Resto") are XSD-valid but
+  post-1.0, so `validate()` alone would not catch them. The codes remain in
+  `InvoiceTypeEnum` for XSD conformance; added
+  `InvoiceTypeEnum::isSupportedInV10Core()`.
 - Made `XmlBuilder` fail loud for data outside the v1.0 honest core instead of
   silently emitting a default the AEAT would reject (AID-179). It now throws
   `ValidationException` for: `Impuesto` ∉ {01,02,03} (05 Otros is post-1.0);
