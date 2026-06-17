@@ -31,11 +31,11 @@ beforeEach(function () {
     $this->builder = new XmlBuilder;
 });
 
-function magnitudeBreakdown(float $baseAmount, float $taxAmount): InvoiceBreakdownContract
+function magnitudeBreakdown(float $baseAmount, float $taxAmount, float $taxRate = 21.0): InvoiceBreakdownContract
 {
     $breakdown = Mockery::mock(InvoiceBreakdownContract::class);
     $breakdown->shouldReceive('getTaxType')->andReturn(TaxTypeEnum::IVA);
-    $breakdown->shouldReceive('getTaxRate')->andReturn(21.0);
+    $breakdown->shouldReceive('getTaxRate')->andReturn($taxRate);
     $breakdown->shouldReceive('getBaseAmount')->andReturn($baseAmount);
     $breakdown->shouldReceive('getTaxAmount')->andReturn($taxAmount);
     $breakdown->shouldReceive('getSurchargeRate')->andReturn(null);
@@ -91,21 +91,24 @@ it('throws ValidationException when an amount exceeds ImporteSgn12.2Type (13 int
 });
 
 it('accepts an amount at the 12 integer-digit boundary and validates against the XSD', function () {
-    // Base 0 so the 12-digit boundary lands on the cuota and the declared totals
-    // (CuotaTotal = ImporteTotal = cuota) stay coherent with the desglose.
-    $breakdown = magnitudeBreakdown(baseAmount: 0.0, taxAmount: 999999999999.99);
-    $invoice = magnitudeInvoice(taxAmount: 999999999999.99, totalAmount: 999999999999.99, breakdown: $breakdown);
+    // With the coherence guards (AID-193/196) only ImporteTotal can reach the
+    // 12-digit boundary: CuotaTotal = base + cuota would otherwise overflow to 13.
+    // A 0% line of base 999999999999.99 puts BaseImponible and ImporteTotal at the
+    // boundary with a coherent zero cuota.
+    $breakdown = magnitudeBreakdown(baseAmount: 999999999999.99, taxAmount: 0.0, taxRate: 0.0);
+    $invoice = magnitudeInvoice(taxAmount: 0.0, totalAmount: 999999999999.99, breakdown: $breakdown);
 
     $xml = $this->builder->buildRegistrationXml($invoice, magnitudeChain());
 
     expect($this->builder->validate($xml))->toBeTrue()
-        ->and($xml)->toContain('<sf:CuotaTotal>999999999999.99</sf:CuotaTotal>')
+        ->and($xml)->toContain('<sf:BaseImponibleOimporteNoSujeto>999999999999.99</sf:BaseImponibleOimporteNoSujeto>')
         ->and($xml)->toContain('<sf:ImporteTotal>999999999999.99</sf:ImporteTotal>');
 });
 
 it('does not count the sign: a negative amount at the 12-digit boundary is accepted', function () {
-    $breakdown = magnitudeBreakdown(baseAmount: 0.0, taxAmount: -999999999999.99);
-    $invoice = magnitudeInvoice(taxAmount: -999999999999.99, totalAmount: -999999999999.99, breakdown: $breakdown);
+    // Negative boundary on ImporteTotal via a 0% line (coherent zero cuota).
+    $breakdown = magnitudeBreakdown(baseAmount: -999999999999.99, taxAmount: 0.0, taxRate: 0.0);
+    $invoice = magnitudeInvoice(taxAmount: 0.0, totalAmount: -999999999999.99, breakdown: $breakdown);
 
     expect(fn () => $this->builder->buildRegistrationXml($invoice, magnitudeChain()))
         ->not->toThrow(ValidationException::class);

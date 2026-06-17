@@ -33,13 +33,13 @@ beforeEach(function () {
     $this->builder = new XmlBuilder;
 });
 
-function rateBreakdown(float $taxRate, ?float $surchargeRate = null, ?float $surchargeAmount = null): InvoiceBreakdownContract
+function rateBreakdown(float $taxRate, ?float $surchargeRate = null, ?float $surchargeAmount = null, float $taxAmount = 21.0): InvoiceBreakdownContract
 {
     $breakdown = Mockery::mock(InvoiceBreakdownContract::class);
     $breakdown->shouldReceive('getTaxType')->andReturn(TaxTypeEnum::IVA);
     $breakdown->shouldReceive('getTaxRate')->andReturn($taxRate);
     $breakdown->shouldReceive('getBaseAmount')->andReturn(100.0);
-    $breakdown->shouldReceive('getTaxAmount')->andReturn(21.0);
+    $breakdown->shouldReceive('getTaxAmount')->andReturn($taxAmount);
     $breakdown->shouldReceive('getSurchargeRate')->andReturn($surchargeRate);
     $breakdown->shouldReceive('getSurchargeAmount')->andReturn($surchargeAmount);
     $breakdown->shouldReceive('isExempt')->andReturn(false);
@@ -50,6 +50,12 @@ function rateBreakdown(float $taxRate, ?float $surchargeRate = null, ?float $sur
 
 function rateInvoice(InvoiceBreakdownContract $breakdown): InvoiceContract
 {
+    // Derive coherent totals from the breakdown so the AID-193/196 guards pass for
+    // valid-rate cases (invalid rates throw at formatRate before the totals matter).
+    $surcharge = $breakdown->getSurchargeAmount() ?? 0.0;
+    $cuotaTotal = $breakdown->getTaxAmount() + $surcharge;
+    $importeTotal = $breakdown->getBaseAmount() + $cuotaTotal;
+
     $invoice = Mockery::mock(InvoiceContract::class);
     $invoice->shouldReceive('getIssuerTaxId')->andReturn('89890001K');
     $invoice->shouldReceive('getSerie')->andReturn(null);
@@ -60,8 +66,8 @@ function rateInvoice(InvoiceBreakdownContract $breakdown): InvoiceContract
     $invoice->shouldReceive('getInvoiceType')->andReturn(InvoiceTypeEnum::COMPLETE);
     $invoice->shouldReceive('getDescription')->andReturn('Servicios de hosting junio 2026');
     $invoice->shouldReceive('getRegimeType')->andReturn(RegimeTypeEnum::GENERAL);
-    $invoice->shouldReceive('getTaxAmount')->andReturn(21.0);
-    $invoice->shouldReceive('getTotalAmount')->andReturn(121.0);
+    $invoice->shouldReceive('getTaxAmount')->andReturn($cuotaTotal);
+    $invoice->shouldReceive('getTotalAmount')->andReturn($importeTotal);
     $recipient = Mockery::mock(RecipientContract::class);
     $recipient->shouldReceive('getNif')->andReturn('12345678Z');
     $recipient->shouldReceive('getName')->andReturn('Cliente Ejemplo');
@@ -85,7 +91,8 @@ function rateChain(): RegistryChain
 }
 
 it('accepts a tax rate at the 3 integer-digit boundary and validates against the XSD', function () {
-    $xml = $this->builder->buildRegistrationXml(rateInvoice(rateBreakdown(taxRate: 999.99)), rateChain());
+    // Coherent cuota (base 100 × 999.99% = 999.99) so the per-line guard (AID-196) passes.
+    $xml = $this->builder->buildRegistrationXml(rateInvoice(rateBreakdown(taxRate: 999.99, taxAmount: 999.99)), rateChain());
 
     expect($this->builder->validate($xml))->toBeTrue()
         ->and($xml)->toContain('<sf:TipoImpositivo>999.99</sf:TipoImpositivo>');
