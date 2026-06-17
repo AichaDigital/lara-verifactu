@@ -92,4 +92,18 @@ enum RegimeTypeEnum: string
     {
         return $this !== self::GENERAL;
     }
+
+    /**
+     * v1.0 honest-core allow-list (default-deny). Only the general regime (01)
+     * is core; every special regime is post-1.0 (matrix L8A "01 core; rest post").
+     *
+     * This deliberately rejects the regimes that force a non-S1 CalificacionOperacion
+     * — 04 (gold investment, reverse charge / rule 1147), 08 (→N2, rule 1252),
+     * 10 (→N1, rule 1205), 20 (→N2, rule 1293) — since the core only emits S1.
+     * Widen this set as specific domestic specials are validated for v1.0.
+     */
+    public function isSupportedInV10Core(): bool
+    {
+        return $this === self::GENERAL;
+    }
 }

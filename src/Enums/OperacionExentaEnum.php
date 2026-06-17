@@ -33,4 +33,14 @@ enum OperacionExentaEnum: string
             self::E6 => 'Exenta por otros',
         };
     }
+
+    /**
+     * v1.0 honest-core allow-list. E5 (art. 25) is excluded: AEAT rule 1289
+     * requires it to carry an IDOtro recipient, and IDOtro (foreign/non-NIF) is
+     * post-1.0, so E5 cannot be emitted correctly in the domestic core.
+     */
+    public function isSupportedInV10Core(): bool
+    {
+        return $this !== self::E5;
+    }
 }

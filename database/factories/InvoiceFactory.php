@@ -41,9 +41,14 @@ class InvoiceFactory extends Factory
             'serie' => $this->faker->regexify('[A-Z]{2}'),
             'number' => $this->faker->unique()->numerify('INV-####'),
             'issue_datetime' => Carbon::now(),
+            // Default to a non-rectificative, non-substitute type: rectificative
+            // types require a rectification_type (S/I) and SUBSTITUTE (F3) requires
+            // substituted-invoice metadata. Use the ->rectification() / ->substitute()
+            // states for those. Emitting a rectificative here with a null
+            // rectification_type produces XML the honest core rejects (AID-179).
             'type' => $this->faker->randomElement(array_values(array_filter(
                 InvoiceTypeEnum::cases(),
-                fn (InvoiceTypeEnum $t): bool => $t !== InvoiceTypeEnum::SUBSTITUTE,
+                fn (InvoiceTypeEnum $t): bool => $t !== InvoiceTypeEnum::SUBSTITUTE && ! $t->isRectificative(),
             ))),
             'simplified' => false,
             'rectification_type' => null,

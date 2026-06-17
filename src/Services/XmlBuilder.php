@@ -8,7 +8,10 @@ use AichaDigital\LaraVerifactu\Contracts\InvoiceBreakdownContract;
 use AichaDigital\LaraVerifactu\Contracts\InvoiceContract;
 use AichaDigital\LaraVerifactu\Contracts\RecipientContract;
 use AichaDigital\LaraVerifactu\Contracts\XmlBuilderContract;
+use AichaDigital\LaraVerifactu\Enums\CalificacionOperacionEnum;
 use AichaDigital\LaraVerifactu\Enums\InvoiceTypeEnum;
+use AichaDigital\LaraVerifactu\Enums\OperacionExentaEnum;
+use AichaDigital\LaraVerifactu\Enums\RectificativeTypeEnum;
 use AichaDigital\LaraVerifactu\Exceptions\ValidationException;
 use AichaDigital\LaraVerifactu\Exceptions\XmlException;
 use AichaDigital\LaraVerifactu\Support\CancellationRecord;
@@ -312,8 +315,31 @@ final class XmlBuilder implements XmlBuilderContract
     {
         $detalle = $dom->createElementNS(self::SF_NS, 'sf:DetalleDesglose');
 
-        $detalle->appendChild($this->sfElement($dom, 'Impuesto', $breakdown->getTaxType()->value));
-        $detalle->appendChild($this->sfElement($dom, 'ClaveRegimen', $invoice->getRegimeType()->value));
+        // Impuesto guard (#3): only the indirect taxes of the v1.0 core
+        // {01 IVA, 02 IPSI, 03 IGIC} are supported; 05 (Otros) is post-1.0.
+        $taxType = $breakdown->getTaxType();
+
+        if (! $taxType->isIndirectTax()) {
+            throw ValidationException::invalidInvoiceData(
+                'impuesto',
+                "Impuesto {$taxType->value} is outside the v1.0 core {01, 02, 03}; 05 (Otros) is post-1.0"
+            );
+        }
+
+        // ClaveRegimen guard (#4): positive allow-list (only the general regime
+        // 01 is core). Rejects, among others, regimes 04/08/10/20 that force a
+        // non-S1 CalificacionOperacion (rules 1147/1252/1205/1293).
+        $regime = $invoice->getRegimeType();
+
+        if (! $regime->isSupportedInV10Core()) {
+            throw ValidationException::invalidInvoiceData(
+                'clave_regimen',
+                "ClaveRegimen {$regime->value} is outside the v1.0 core (only the general regime 01 is supported; special regimes are post-1.0)"
+            );
+        }
+
+        $detalle->appendChild($this->sfElement($dom, 'Impuesto', $taxType->value));
+        $detalle->appendChild($this->sfElement($dom, 'ClaveRegimen', $regime->value));
 
         if ($breakdown->isExempt()) {
             $detalle->appendChild($this->sfElement($dom, 'OperacionExenta', $this->exemptionCode($breakdown)));
@@ -322,8 +348,11 @@ final class XmlBuilder implements XmlBuilderContract
             return $detalle;
         }
 
-        // S1: subject and not exempt, without reverse charge
-        $detalle->appendChild($this->sfElement($dom, 'CalificacionOperacion', 'S1'));
+        // CalificacionOperacion guard (#1): S1 (subject, not exempt, no reverse
+        // charge) is the only value in the v1.0 core. No breakdown input expresses
+        // a calificación, so S1 is the only possible value; the regimes that would
+        // force S2/N1/N2 are already rejected by the ClaveRegimen guard above.
+        $detalle->appendChild($this->sfElement($dom, 'CalificacionOperacion', CalificacionOperacionEnum::S1->value));
         $detalle->appendChild($this->sfElement($dom, 'TipoImpositivo', $this->formatRate($breakdown->getTaxRate(), 'TipoImpositivo')));
         $detalle->appendChild($this->sfElement($dom, 'BaseImponibleOimporteNoSujeto', $this->formatAmount($breakdown->getBaseAmount(), 'BaseImponibleOimporteNoSujeto')));
         $detalle->appendChild($this->sfElement($dom, 'CuotaRepercutida', $this->formatAmount($breakdown->getTaxAmount(), 'CuotaRepercutida')));
@@ -353,15 +382,28 @@ final class XmlBuilder implements XmlBuilderContract
      * Build Destinatarios with a single IDDestinatario (PersonaFisicaJuridicaType)
      */
     /**
-     * Normalize the rectification type to the AEAT ClaveTipoRectificativaType.
+     * Resolve and validate the AEAT ClaveTipoRectificativaType (L3).
      *
-     * 'S' (sustitución) passes through; anything else — including legacy
-     * adapter codes like 'R1' or null — maps to 'I' (incremental, por
-     * diferencias), the common rectification modality.
+     * TipoRectificativa guard (#6): the value must be S (por sustitución) or I
+     * (por diferencias). Anything else — including legacy adapter codes like
+     * 'R1' or null — is rejected fail-loud instead of silently collapsing to 'I'.
+     * tryFrom() is null-checked first (strict_types=1 would TypeError on null).
      */
     private function rectificationTypeCode(InvoiceContract $invoice): string
     {
-        return $invoice->getRectificationType() === 'S' ? 'S' : 'I';
+        $raw = $invoice->getRectificationType();
+        $type = $raw !== null ? RectificativeTypeEnum::tryFrom($raw) : null;
+
+        if (! $type instanceof RectificativeTypeEnum) {
+            throw ValidationException::invalidInvoiceData(
+                'rectification_type',
+                $raw === null
+                    ? 'TipoRectificativa is required for a rectificative invoice and must be S (sustitución) or I (diferencias)'
+                    : "TipoRectificativa '{$raw}' is invalid; only S (sustitución) or I (diferencias) are allowed"
+            );
+        }
+
+        return $type->value;
     }
 
     /**
@@ -441,26 +483,20 @@ final class XmlBuilder implements XmlBuilderContract
 
         $idDestinatario->appendChild($this->sfElement($dom, 'NombreRazon', $recipient->getName() ?? ''));
 
+        // IDType / IDOtro guard (#5): the v1.0 domestic core only identifies
+        // recipients by Spanish NIF. The IDOtro branch (foreign / non-NIF, with
+        // its IDType) is post-1.0 — reject it fail-loud instead of defaulting
+        // IDType to '02'.
         $nif = $recipient->getNif();
 
-        if ($nif !== null && $nif !== '') {
-            $idDestinatario->appendChild($this->sfElement($dom, 'NIF', $nif));
-
-            return $destinatarios;
+        if ($nif === null || $nif === '') {
+            throw ValidationException::invalidInvoiceData(
+                'recipient_nif',
+                'Recipient identification via IDOtro (foreign / non-NIF) is post-1.0; the v1.0 core requires a Spanish NIF'
+            );
         }
 
-        $idOtro = $dom->createElementNS(self::SF_NS, 'sf:IDOtro');
-        $idDestinatario->appendChild($idOtro);
-
-        $country = $recipient->getCountry();
-
-        if ($country !== null && $country !== '') {
-            $idOtro->appendChild($this->sfElement($dom, 'CodigoPais', $country));
-        }
-
-        $idType = $recipient->getIdType();
-        $idOtro->appendChild($this->sfElement($dom, 'IDType', $idType !== null ? $idType->value : '02'));
-        $idOtro->appendChild($this->sfElement($dom, 'ID', $recipient->getId() ?? ''));
+        $idDestinatario->appendChild($this->sfElement($dom, 'NIF', $nif));
 
         return $destinatarios;
     }
@@ -470,13 +506,23 @@ final class XmlBuilder implements XmlBuilderContract
      */
     private function exemptionCode(InvoiceBreakdownContract $breakdown): string
     {
+        // OperacionExenta guard (#2): require an explicit, core-supported cause.
+        // tryFrom() must be null-checked first — under strict_types=1 a null
+        // argument raises TypeError (which buildRegistrationXml would wrap as an
+        // XmlException, not the ValidationException we want). Never default to E1.
         $reason = $breakdown->getExemptionReason();
+        $cause = $reason !== null ? OperacionExentaEnum::tryFrom($reason) : null;
 
-        if ($reason !== null && preg_match('/^E[1-6]$/', $reason) === 1) {
-            return $reason;
+        if (! $cause instanceof OperacionExentaEnum || ! $cause->isSupportedInV10Core()) {
+            throw ValidationException::invalidInvoiceData(
+                'exemption_reason',
+                $reason === null
+                    ? 'An exempt breakdown requires an explicit OperacionExenta cause (E1-E4 or E6)'
+                    : "OperacionExenta '{$reason}' is not supported in the v1.0 core (valid core causes: E1-E4, E6; E5 requires IDOtro, post-1.0)"
+            );
         }
 
-        return 'E1';
+        return $cause->value;
     }
 
     private function sfElement(DOMDocument $dom, string $name, string $value): DOMElement
