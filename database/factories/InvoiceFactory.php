@@ -6,7 +6,6 @@ namespace AichaDigital\LaraVerifactu\Database\Factories;
 
 use AichaDigital\LaraVerifactu\Enums\IdTypeEnum;
 use AichaDigital\LaraVerifactu\Enums\InvoiceTypeEnum;
-use AichaDigital\LaraVerifactu\Enums\OperationTypeEnum;
 use AichaDigital\LaraVerifactu\Enums\RegimeTypeEnum;
 use AichaDigital\LaraVerifactu\Models\Invoice;
 use Carbon\Carbon;
@@ -62,7 +61,6 @@ class InvoiceFactory extends Factory
             'recipient_name' => $this->faker->company(),
             'recipient_country' => 'ES',
             'regime_type' => RegimeTypeEnum::GENERAL,
-            'operation_key' => OperationTypeEnum::NORMAL,
             'description' => $this->faker->sentence(),
             'metadata' => null,
         ];

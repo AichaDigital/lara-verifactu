@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace AichaDigital\LaraVerifactu\Contracts;
 
 use AichaDigital\LaraVerifactu\Enums\InvoiceTypeEnum;
-use AichaDigital\LaraVerifactu\Enums\OperationTypeEnum;
 use AichaDigital\LaraVerifactu\Enums\RegimeTypeEnum;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
@@ -174,11 +173,6 @@ interface InvoiceContract
      * Get the tax regime type.
      */
     public function getRegimeType(): RegimeTypeEnum;
-
-    /**
-     * Get the operation key.
-     */
-    public function getOperationKey(): OperationTypeEnum;
 
     /**
      * Get the invoice description (optional).

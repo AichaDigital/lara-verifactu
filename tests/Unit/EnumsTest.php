@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 use AichaDigital\LaraVerifactu\Enums\IdTypeEnum;
 use AichaDigital\LaraVerifactu\Enums\InvoiceTypeEnum;
-use AichaDigital\LaraVerifactu\Enums\OperationTypeEnum;
 use AichaDigital\LaraVerifactu\Enums\RegimeTypeEnum;
 use AichaDigital\LaraVerifactu\Enums\RegistryStatusEnum;
 use AichaDigital\LaraVerifactu\Enums\TaxTypeEnum;
@@ -166,38 +165,6 @@ describe('IdTypeEnum', function () {
         expect(IdTypeEnum::RESIDENCE_CERTIFICATE->isForeignId())->toBeTrue();
         expect(IdTypeEnum::OTHER->isForeignId())->toBeTrue();
         expect(IdTypeEnum::NOT_REGISTERED->isForeignId())->toBeFalse();
-    });
-});
-
-// ========================================
-// OperationTypeEnum Tests
-// ========================================
-
-describe('OperationTypeEnum', function () {
-    it('has correct values for all cases', function () {
-        expect(OperationTypeEnum::NORMAL->value)->toBe('01');
-        expect(OperationTypeEnum::INTRA_COMMUNITY_ACQUISITION->value)->toBe('02');
-        expect(OperationTypeEnum::IMPORT->value)->toBe('03');
-        expect(OperationTypeEnum::REVERSE_CHARGE->value)->toBe('04');
-        expect(OperationTypeEnum::NOT_SUBJECT_ARTICLE_7_14->value)->toBe('05');
-        expect(OperationTypeEnum::NOT_SUBJECT_ARTICLE_7_14_OTHER->value)->toBe('06');
-        expect(OperationTypeEnum::EXEMPT->value)->toBe('07');
-    });
-
-    it('returns correct description for each type', function () {
-        expect(OperationTypeEnum::NORMAL->getDescription())->toBe('Operación normal');
-        expect(OperationTypeEnum::IMPORT->getDescription())->toBe('Importación');
-        expect(OperationTypeEnum::EXEMPT->getDescription())->toBe('Exenta');
-    });
-
-    it('identifies subject to tax operations correctly', function () {
-        expect(OperationTypeEnum::NORMAL->isSubjectToTax())->toBeTrue();
-        expect(OperationTypeEnum::INTRA_COMMUNITY_ACQUISITION->isSubjectToTax())->toBeTrue();
-        expect(OperationTypeEnum::IMPORT->isSubjectToTax())->toBeTrue();
-        expect(OperationTypeEnum::REVERSE_CHARGE->isSubjectToTax())->toBeTrue();
-        expect(OperationTypeEnum::NOT_SUBJECT_ARTICLE_7_14->isSubjectToTax())->toBeFalse();
-        expect(OperationTypeEnum::NOT_SUBJECT_ARTICLE_7_14_OTHER->isSubjectToTax())->toBeFalse();
-        expect(OperationTypeEnum::EXEMPT->isSubjectToTax())->toBeFalse();
     });
 });
 

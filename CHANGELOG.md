@@ -36,8 +36,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `RECTIFICATIVE_SUMMARY_SIMPLIFIED` → `RECTIFICATIVE_SIMPLIFIED_INVOICES`;
     fixed `isSimplified()` to F2/R5 only (R2 was wrongly included).
   - `OperationTypeEnum`: marked legacy (not an official AEAT list; ignored by
-    the XML builder). Scheduled for removal with the `operation_key` column in
-    AID-186.
+    the XML builder). Removed in this release together with the `operation_key`
+    column (AID-186, see Removed below).
 
 ### Added
 
@@ -49,12 +49,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sync with the official XSD enumerations (would have caught the 12/13 and
   IRPF=04 defects in CI).
 
+### Removed (BREAKING)
+
+- Removed the dead `OperationTypeEnum` enum, the `operation_key` column (dropped
+  via a new migration) and `getOperationKey()` from `InvoiceContract` and the
+  `Invoice` model (AID-186). The enum mapped to no official AEAT list and the XML
+  builder never read it, so it only let consumers express a non-S1 intent that
+  was silently discarded — contrary to the fail-loud honest core.
+
 ### Upgrade notes
 
 - BREAKING for code referencing the removed/renamed enum cases — there are no
   aliases, so stale references fail loudly. Any persisted `regime_type` of
   `12`/`13` or `tax_type` of `04` was already invalid for AEAT and will no
   longer hydrate through the model cast; clean such rows if present.
+- BREAKING for custom `InvoiceContract` implementations: `getOperationKey()` was
+  removed — delete the method (and any `OperationTypeEnum` import) from your
+  model. The `operation_key` column is dropped by a migration; rolling back that
+  migration restores the column schema (default `'01'`) but not prior row values.
 
 ## [0.11.0] - 2026-06-16
 
