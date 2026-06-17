@@ -30,7 +30,6 @@ use Illuminate\Support\Collection;
  * @property string $number
  * @property Carbon $issue_datetime
  * @property InvoiceTypeEnum $type
- * @property bool $simplified
  * @property string|null $rectification_type
  * @property float $base_amount
  * @property float $tax_amount
@@ -72,7 +71,6 @@ class Invoice extends Model implements InvoiceContract
         'number',
         'issue_datetime',
         'type',
-        'simplified',
         'rectification_type',
         'base_amount',
         'tax_amount',
@@ -95,7 +93,6 @@ class Invoice extends Model implements InvoiceContract
      */
     protected $casts = [
         'issue_datetime' => 'datetime',
-        'simplified' => 'boolean',
         'base_amount' => 'decimal:2',
         'tax_amount' => 'decimal:2',
         'total_amount' => 'decimal:2',
@@ -222,7 +219,7 @@ class Invoice extends Model implements InvoiceContract
      */
     public function isSimplified(): bool
     {
-        return $this->simplified;
+        return $this->getType()->isSimplified();
     }
 
     /**
