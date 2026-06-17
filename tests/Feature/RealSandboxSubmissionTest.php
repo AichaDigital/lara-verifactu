@@ -138,7 +138,7 @@ it('submits a real substitution (S) rectification with ImporteRectificacion to t
     $rectification = Invoice::factory()->create([
         'serie' => null,
         'number' => 'TESTR-' . now()->format('YmdHis') . '-' . strtoupper(substr(uniqid(), -5)),
-        'type' => InvoiceTypeEnum::RECTIFICATIVE_SUMMARY_SIMPLIFIED, // R5: rectifies a simplified invoice, no Destinatarios required (AEAT rule 1189)
+        'type' => InvoiceTypeEnum::RECTIFICATIVE_SIMPLIFIED_INVOICES, // R5: rectifies a simplified invoice, no Destinatarios required (AEAT rule 1189)
         'rectification_type' => 'S',
         'simplified' => true,
         'recipient_nif' => null,
