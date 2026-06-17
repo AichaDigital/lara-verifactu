@@ -47,7 +47,6 @@ function createSandboxInvoice(): Invoice
         'serie' => null,
         'number' => 'TEST-' . now()->format('YmdHis') . '-' . strtoupper(substr(uniqid(), -5)),
         'type' => InvoiceTypeEnum::SIMPLIFIED, // F2: no recipient validation
-        'simplified' => true,
         'recipient_nif' => null,
         'recipient_id_type' => null,
         'recipient_id' => null,
@@ -140,7 +139,6 @@ it('submits a real substitution (S) rectification with ImporteRectificacion to t
         'number' => 'TESTR-' . now()->format('YmdHis') . '-' . strtoupper(substr(uniqid(), -5)),
         'type' => InvoiceTypeEnum::RECTIFICATIVE_SIMPLIFIED_INVOICES, // R5: rectifies a simplified invoice, no Destinatarios required (AEAT rule 1189)
         'rectification_type' => 'S',
-        'simplified' => true,
         'recipient_nif' => null,
         'recipient_id_type' => null,
         'recipient_id' => null,
@@ -205,7 +203,6 @@ it('submits a real F3 substitution-of-simplified invoice with FacturasSustituida
         'serie' => null,
         'number' => 'TESTF3-' . now()->format('YmdHis') . '-' . strtoupper(substr(uniqid(), -5)),
         'type' => InvoiceTypeEnum::SUBSTITUTE,
-        'simplified' => false,
         'recipient_nif' => (string) getenv('VERIFACTU_COMPANY_TAX_ID'),
         'recipient_id_type' => IdTypeEnum::NIF,
         'recipient_id' => null,

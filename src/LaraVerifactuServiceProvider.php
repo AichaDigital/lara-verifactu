@@ -52,6 +52,11 @@ class LaraVerifactuServiceProvider extends PackageServiceProvider
                 '2026_01_25_000001_consolidate_issue_datetime_in_verifactu_invoices',
                 '2026_06_10_000001_add_hash_generated_at_to_verifactu_registries_table',
                 '2026_06_10_000002_add_registry_type_to_verifactu_registries_table',
+                // AID-186 shipped this drop but never registered it here, so
+                // publishMigrations() never copied it to consumers (tests load
+                // the whole folder, which masked the gap). Registered now.
+                '2026_06_17_000001_drop_operation_key_from_verifactu_invoices',
+                '2026_06_17_000002_drop_simplified_from_verifactu_invoices',
             ])
             ->hasCommand(RegisterInvoiceCommand::class)
             ->hasCommand(RetryFailedCommand::class)

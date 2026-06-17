@@ -84,7 +84,6 @@ $invoice = Invoice::create([
     'issue_date' => now(),
     'issue_time' => now(),
     'type' => InvoiceTypeEnum::COMPLETE,
-    'simplified' => false,
     'base_amount' => 100.00,
     'tax_amount' => 21.00,
     'total_amount' => 121.00,

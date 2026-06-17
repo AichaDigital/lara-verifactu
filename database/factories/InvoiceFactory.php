@@ -40,16 +40,12 @@ class InvoiceFactory extends Factory
             'serie' => $this->faker->regexify('[A-Z]{2}'),
             'number' => $this->faker->unique()->numerify('INV-####'),
             'issue_datetime' => Carbon::now(),
-            // Default to a non-rectificative, non-substitute type: rectificative
-            // types require a rectification_type (S/I) and SUBSTITUTE (F3) requires
-            // substituted-invoice metadata. Use the ->rectification() / ->substitute()
-            // states for those. Emitting a rectificative here with a null
-            // rectification_type produces XML the honest core rejects (AID-179).
-            'type' => $this->faker->randomElement(array_values(array_filter(
-                InvoiceTypeEnum::cases(),
-                fn (InvoiceTypeEnum $t): bool => $t !== InvoiceTypeEnum::SUBSTITUTE && ! $t->isRectificative(),
-            ))),
-            'simplified' => false,
+            // Default to F1 (factura completa): a deterministic, AEAT-coherent
+            // base case with a recipient. Use ->simplified() for F2 (which nulls
+            // the recipient per rule 1190), ->rectification() for R1, and
+            // ->substitute() for F3. A random simplified default would emit a
+            // simplified invoice carrying a recipient, contradicting rule 1190.
+            'type' => InvoiceTypeEnum::COMPLETE,
             'rectification_type' => null,
             'base_amount' => $baseAmount,
             'tax_amount' => $taxAmount,
@@ -67,12 +63,15 @@ class InvoiceFactory extends Factory
     }
 
     /**
-     * Indicate that the invoice is simplified.
+     * Indicate that the invoice is simplified (F2).
+     *
+     * Simplified-ness derives from `type` (AID-187), so this sets the TipoFactura
+     * to F2 and nulls the recipient (AEAT rule 1190: F2/R5 forbid Destinatarios).
      */
     public function simplified(): static
     {
         return $this->state(fn (array $attributes) => [
-            'simplified' => true,
+            'type' => InvoiceTypeEnum::SIMPLIFIED,
             'recipient_nif' => null,
             'recipient_id_type' => null,
             'recipient_id' => null,

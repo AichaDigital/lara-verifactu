@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed (BREAKING)
 
+- Made `Invoice::isSimplified()` derive from `type` (AID-187): `type` is now the
+  single source of truth for simplified-ness, deriving from `InvoiceTypeEnum`
+  (F2/R5) instead of a separate stored `simplified` boolean that could disagree
+  with it (e.g. `type=F2` with `simplified=false`). The `InvoiceFactory` default
+  is now the deterministic `COMPLETE` (F1) — it previously emitted a random F1/F2
+  with a recipient, which under the new derivation would be a simplified invoice
+  carrying a recipient (contrary to AEAT rule 1190). The `simplified()` state now
+  sets `type=F2`.
 - Made `XmlBuilder` reject post-1.0 `TipoFactura` codes fail loud (AID-185). It
   now throws `ValidationException` for any `TipoFactura` outside the v1.0 core
   {F1, F2, F3, R1, R5}; R2/R3/R4 (Art. 80.3/80.4/"Resto") are XSD-valid but
@@ -57,14 +65,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed (BREAKING)
 
+- Removed the stored `simplified` boolean column (dropped via a new migration)
+  and its `$fillable` / `$casts` / `@property` entries on the `Invoice` model
+  (AID-187). `type` is authoritative; any row where `simplified` disagreed with
+  `type` now follows `type`. `toArray()` / JSON no longer include a `simplified`
+  key — call `isSimplified()` (kept on `InvoiceContract`) instead.
 - Removed the dead `OperationTypeEnum` enum, the `operation_key` column (dropped
   via a new migration) and `getOperationKey()` from `InvoiceContract` and the
   `Invoice` model (AID-186). The enum mapped to no official AEAT list and the XML
   builder never read it, so it only let consumers express a non-S1 intent that
   was silently discarded — contrary to the fail-loud honest core.
 
+### Fixed
+
+- Registered the `drop_operation_key` (AID-186) and `drop_simplified` (AID-187)
+  migrations in `LaraVerifactuServiceProvider::hasMigrations()`. AID-186 shipped
+  the drop but never listed it, so `publishMigrations()` never copied it to
+  consumers (the test suite loads the whole migrations folder, which masked the
+  gap) — a published install would have kept the obsolete `operation_key` column.
+
 ### Upgrade notes
 
+- BREAKING for code writing the `simplified` column directly: the column no
+  longer exists and mass-assigning it is silently ignored. Replace
+  `'simplified' => true` with `'type' => InvoiceTypeEnum::SIMPLIFIED` (or
+  `RECTIFICATIVE_SIMPLIFIED_INVOICES`); read simplified-ness via
+  `$invoice->isSimplified()` or `$invoice->getType()->isSimplified()`.
+  `Invoice::toArray()` / JSON no longer include a `simplified` key.
 - BREAKING for code referencing the removed/renamed enum cases — there are no
   aliases, so stale references fail loudly. Any persisted `regime_type` of
   `12`/`13` or `tax_type` of `04` was already invalid for AEAT and will no
