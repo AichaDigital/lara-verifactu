@@ -12,6 +12,7 @@ use AichaDigital\LaraVerifactu\Enums\CalificacionOperacionEnum;
 use AichaDigital\LaraVerifactu\Enums\InvoiceTypeEnum;
 use AichaDigital\LaraVerifactu\Enums\OperacionExentaEnum;
 use AichaDigital\LaraVerifactu\Enums\RectificativeTypeEnum;
+use AichaDigital\LaraVerifactu\Enums\TaxTypeEnum;
 use AichaDigital\LaraVerifactu\Exceptions\ValidationException;
 use AichaDigital\LaraVerifactu\Exceptions\XmlException;
 use AichaDigital\LaraVerifactu\Support\CancellationRecord;
@@ -37,6 +38,32 @@ final class XmlBuilder implements XmlBuilderContract
     private const ID_VERSION = '1.0';
 
     private const HASH_TYPE_SHA256 = '01';
+
+    /**
+     * Stable TipoRecargoEquivalencia values allowed per TipoImpositivo, keyed by
+     * the formatted rate (AEAT rules 1162/1163/1164). These carry no date window:
+     * 21% admits the general 5,2 and the tobacco 1,75; 10% admits 1,4; 4% admits
+     * 0,5. The rule does not key by Impuesto, so it applies across the core
+     * indirect taxes. The 5% pair {0,5 ; 0,62} is intentionally absent — it is
+     * date-windowed (rules 1167/1168/1194) and out of the v1.0 core.
+     *
+     * @var array<string, list<string>>
+     */
+    private const SURCHARGE_BY_TAX_RATE = [
+        '21.00' => ['5.20', '1.75'],
+        '10.00' => ['1.40'],
+        '4.00' => ['0.50'],
+    ];
+
+    /**
+     * TipoImpositivo values whose surcharge magnitude is fixed by date-windowed
+     * AEAT rules (1165-1170/1277, plus 1167/1168 for 5%). They require
+     * effective-date logic that is post-1.0, so a surcharge on these rates is
+     * rejected with a distinct, explicit message rather than a generic mismatch.
+     *
+     * @var list<string>
+     */
+    private const DATE_WINDOWED_SURCHARGE_RATES = ['0.00', '2.00', '5.00', '7.50'];
 
     /**
      * @throws XmlException
@@ -374,7 +401,7 @@ final class XmlBuilder implements XmlBuilderContract
         $detalle->appendChild($this->sfElement($dom, 'ClaveRegimen', $regime->value));
 
         if ($breakdown->isExempt()) {
-            $detalle->appendChild($this->sfElement($dom, 'OperacionExenta', $this->exemptionCode($breakdown)));
+            $detalle->appendChild($this->sfElement($dom, 'OperacionExenta', $this->exemptionCode($breakdown, $taxType)));
             $detalle->appendChild($this->sfElement($dom, 'BaseImponibleOimporteNoSujeto', $this->formatAmount($breakdown->getBaseAmount(), 'BaseImponibleOimporteNoSujeto')));
 
             return $detalle;
@@ -403,7 +430,36 @@ final class XmlBuilder implements XmlBuilderContract
                 );
             }
 
-            $detalle->appendChild($this->sfElement($dom, 'TipoRecargoEquivalencia', $this->formatRate($surchargeRate, 'TipoRecargoEquivalencia')));
+            // Validate the Tipo2.2Type form first (overflow / sign / non-finite),
+            // so a malformed surcharge fails on its own field before the magnitude
+            // guard below reasons about the formatted value.
+            $surchargeFormatted = $this->formatRate($surchargeRate, 'TipoRecargoEquivalencia');
+
+            // Surcharge magnitude guard (#9): AEAT rules 1162/1163/1164. The
+            // TipoRecargoEquivalencia must be one of the stable values allowed for
+            // the TipoImpositivo. Date-windowed rates (5/0/2/7,5% — rules
+            // 1167/1168 and 1165-1170/1277) need effective-date logic and are
+            // post-1.0, so a surcharge on them is rejected fail-loud.
+            $rateFormatted = number_format($breakdown->getTaxRate(), 2, '.', '');
+            $allowedSurcharges = self::SURCHARGE_BY_TAX_RATE[$rateFormatted] ?? null;
+
+            if ($allowedSurcharges === null) {
+                throw ValidationException::invalidInvoiceData(
+                    'surcharge',
+                    in_array($rateFormatted, self::DATE_WINDOWED_SURCHARGE_RATES, true)
+                        ? "TipoRecargoEquivalencia for TipoImpositivo {$rateFormatted} requires date-windowed transitional VAT rules (AEAT 1165-1170/1277) not supported by the v1.0 core"
+                        : "TipoImpositivo {$rateFormatted} has no equivalence-surcharge magnitude in the v1.0 core (stable rates: 21, 10, 4; AEAT rules 1162/1163/1164)"
+                );
+            }
+
+            if (! in_array($surchargeFormatted, $allowedSurcharges, true)) {
+                throw ValidationException::invalidInvoiceData(
+                    'surcharge',
+                    "TipoRecargoEquivalencia {$surchargeFormatted} is not valid for TipoImpositivo {$rateFormatted} (AEAT rules 1162/1163/1164); allowed: " . implode(', ', $allowedSurcharges)
+                );
+            }
+
+            $detalle->appendChild($this->sfElement($dom, 'TipoRecargoEquivalencia', $surchargeFormatted));
             $detalle->appendChild($this->sfElement($dom, 'CuotaRecargoEquivalencia', $this->formatAmount($surchargeAmount, 'CuotaRecargoEquivalencia')));
         }
 
@@ -536,7 +592,7 @@ final class XmlBuilder implements XmlBuilderContract
     /**
      * Map breakdown exemption to an OperacionExentaType code (E1-E6)
      */
-    private function exemptionCode(InvoiceBreakdownContract $breakdown): string
+    private function exemptionCode(InvoiceBreakdownContract $breakdown, TaxTypeEnum $taxType): string
     {
         // OperacionExenta guard (#2): require an explicit, core-supported cause.
         // tryFrom() must be null-checked first — under strict_types=1 a null
@@ -551,6 +607,19 @@ final class XmlBuilder implements XmlBuilderContract
                 $reason === null
                     ? 'An exempt breakdown requires an explicit OperacionExenta cause (E1-E4 or E6)'
                     : "OperacionExenta '{$reason}' is not supported in the v1.0 core (valid core causes: E1-E4, E6; E5 requires IDOtro, post-1.0)"
+            );
+        }
+
+        // OperacionExenta × Impuesto guard (AEAT rule 1199): with Impuesto 01
+        // (IVA) or 03 (IGIC) and ClaveRegimen 01 (the core regime, enforced by
+        // guard #4), causes E2 (art. 21) and E3 (art. 22) cannot be used. They
+        // stay valid for IPSI (02), which rule 1199 does not name. The enum
+        // allow-list is tax-agnostic, so this contextual check lives here.
+        if (($taxType === TaxTypeEnum::IVA || $taxType === TaxTypeEnum::IGIC)
+            && ($cause === OperacionExentaEnum::E2 || $cause === OperacionExentaEnum::E3)) {
+            throw ValidationException::invalidInvoiceData(
+                'exemption_reason',
+                "OperacionExenta {$cause->value} cannot be used with Impuesto {$taxType->value} under the general regime (AEAT rule 1199); E2/E3 (art. 21/22) are valid only for IPSI in the v1.0 core"
             );
         }
 
