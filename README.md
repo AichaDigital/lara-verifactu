@@ -39,9 +39,64 @@ and submits registration and cancellation records to the AEAT web service.
 
 ### Regulatory deadlines
 
-- **July 29, 2025**: mandatory for invoicing software vendors
-- **January 1, 2026**: mandatory for companies
-- **July 1, 2026**: mandatory for freelancers
+The adaptation deadline for obligated taxpayers was extended to **2027** by
+[Real Decreto-ley 15/2025](https://www.boe.es/buscar/doc.php?id=BOE-A-2025-24446)
+(2 December 2025), which amended the final provision of RD 1007/2023:
+
+- **July 29, 2025**: invoicing software / SIF must already meet the requirements.
+- **January 1, 2027**: mandatory for Corporate Income Tax payers (was 2026).
+- **July 1, 2027**: mandatory for the remaining obligated parties, including
+  freelancers (was 2026).
+
+## Support matrix (v1.0 honest core)
+
+The package implements an **honest core**: it emits only what it can produce
+correctly and **rejects fail-loud** (a `ValidationException`) anything it cannot,
+rather than sending XSD-valid XML the AEAT would reject — or accept *con errores*
+(subsanable).
+
+### Core — supported and emitted
+
+| Area | Supported in the core |
+|------|-----------------------|
+| `TipoFactura` | F1, F2, F3, R1, R5 |
+| `Impuesto` | 01 IVA, 02 IPSI, 03 IGIC |
+| `ClaveRegimen` | 01 (general regime) |
+| `CalificacionOperacion` | S1 |
+| `OperacionExenta` | E1, E4, E6 (E2/E3 only with IPSI; rule 1199) |
+| Recargo de equivalencia | 21% → 5,2 / 1,75 · 10% → 1,4 · 4% → 0,5 |
+| Anulación | `RegistroAnulacion` + `SinRegistroPrevio` / `RechazoPrevio` + `GeneradoPor` / `Generador` |
+| Rectificativas | R1 (`S`/`I`), F3 substitution of simplified invoices |
+| Coherence guards (fail-loud) | `ImporteTotal`/`CuotaTotal` (±10 €), per-line `CuotaRepercutida` (±10 €), `Macrodato` (≥ 100 M), F2 ≤ 3.000 €, date validity |
+
+### Rejected fail-loud (post-1.0)
+
+- `TipoFactura` R2 / R3 / R4 (Art. 80.3 / 80.4 / Resto)
+- `Impuesto` 05 (Otros)
+- `ClaveRegimen` ≠ 01 (special regimes)
+- `OperacionExenta` E2 / E3 with IVA or IGIC, and E5 (requires `IDOtro`)
+- Recipient / `Generador` identified by `IDOtro` (foreign, non-NIF)
+- Date-windowed surcharge rates (5 %, 0 %, 2 %, 7,5 % — rules 1165-1170 / 1277)
+
+### Out of scope
+
+- **TicketBAI** (Basque Country) — a different system.
+- **SII del IGIC** (Canary libros registro, remitted to the ATC) — see the note.
+
+### Notes
+
+- **IGIC**: Veri*Factu (RD 1007/2023) applies to Canary issuers, with references
+  to IVA read as IGIC; IGIC (`Impuesto=03`) is emitted in the Veri*Factu flow to
+  the **AEAT** like any other tax. The separate **SII del IGIC** — the Canary
+  libros-registro reporting to the **Agencia Tributaria Canaria (ATC)** — is a
+  different obligation and is out of scope here.
+  ([AEAT ámbitos de aplicación](https://sede.agenciatributaria.gob.es/Sede/iva/sistemas-informaticos-facturacion-verifactu/preguntas-frecuentes/cuestiones-generales-ambitos-aplicacion.html),
+  [BOE RD 1007/2023](https://www.boe.es/buscar/act.php?id=BOE-A-2023-24840),
+  [SII del IGIC — ATC](https://www3.gobiernodecanarias.org/tributos/atc/en/w/suministro-inmediato-de-informacion-del-igic-sii-1))
+- **XSD vs official lists**: the XSD `OperacionExentaType` accepts E7/E8, but AEAT
+  list L10 documents only E1-E6 (the enum models E1-E6). The XSD admits
+  `ClaveRegimen` 21 (IGIC simplified), absent from list L8A. Neither is emitted by
+  the core.
 
 ## Requirements
 

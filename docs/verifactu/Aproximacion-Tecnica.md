@@ -4,7 +4,7 @@
 
 El paquete debe proporcionar una implementación completa del sistema Verifactu de la AEAT para aplicaciones Laravel, con enfoque en arquitectura agnóstica que permita su integración tanto en proyectos nuevos como en sistemas de facturación existentes.
 
-Fecha de entrada en vigor obligatoria: 29 de julio de 2025 para software, 1 de enero de 2026 para empresas, 1 de julio de 2026 para autónomos.
+Fechas de entrada en vigor (la obligatoriedad de los obligados tributarios se prorrogó a 2027 por el Real Decreto-ley 15/2025, BOE-A-2025-24446): 29 de julio de 2025 para el software/SIF; 1 de enero de 2027 para los contribuyentes del Impuesto sobre Sociedades; 1 de julio de 2027 para el resto de obligados (incluidos autónomos).
 
 ## Principio arquitectónico fundamental: Agnosticismo de datos
 
