@@ -6,6 +6,7 @@ namespace AichaDigital\LaraVerifactu\Jobs;
 
 use AichaDigital\LaraVerifactu\Models\Invoice;
 use AichaDigital\LaraVerifactu\Services\InvoiceRegistrar;
+use AichaDigital\LaraVerifactu\Support\AeatLogSanitizer;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -120,9 +121,9 @@ class ProcessInvoiceRegistrationJob implements ShouldQueue
             Log::channel(config('verifactu.logging.channel', 'single'))
                 ->error('Failed to register invoice via queue', [
                     'invoice_id' => $this->invoiceId,
-                    'error' => $e->getMessage(),
-                    'trace' => $e->getTraceAsString(),
+                    'error' => AeatLogSanitizer::redactText($e->getMessage()),
                     'attempt' => $this->attempts(),
+                    ...AeatLogSanitizer::traceContext($e),
                 ]);
 
             // Release lock before re-throwing

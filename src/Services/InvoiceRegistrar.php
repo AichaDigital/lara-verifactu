@@ -17,6 +17,7 @@ use AichaDigital\LaraVerifactu\Exceptions\AeatException;
 use AichaDigital\LaraVerifactu\Exceptions\ValidationException;
 use AichaDigital\LaraVerifactu\Exceptions\VerifactuException;
 use AichaDigital\LaraVerifactu\Models\Registry;
+use AichaDigital\LaraVerifactu\Support\AeatLogSanitizer;
 use AichaDigital\LaraVerifactu\Support\AeatResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -168,7 +169,7 @@ final class InvoiceRegistrar
                     Log::channel(config('verifactu.logging.channel', 'single'))
                         ->error('Registry submission failed', [
                             'registry_number' => $registry->getRegistryNumber(),
-                            'error' => $response->getErrorMessage(),
+                            'error' => AeatLogSanitizer::redactText((string) $response->getErrorMessage()),
                         ]);
 
                     // Dispatch failure event
@@ -182,8 +183,8 @@ final class InvoiceRegistrar
                 Log::channel(config('verifactu.logging.channel', 'single'))
                     ->error('Exception during AEAT submission', [
                         'registry_number' => $registry->getRegistryNumber(),
-                        'error' => $e->getMessage(),
-                        'trace' => $e->getTraceAsString(),
+                        'error' => AeatLogSanitizer::redactText($e->getMessage()),
+                        ...AeatLogSanitizer::traceContext($e),
                     ]);
 
                 // Dispatch failure event
