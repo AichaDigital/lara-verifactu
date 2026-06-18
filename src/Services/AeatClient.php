@@ -10,6 +10,7 @@ use AichaDigital\LaraVerifactu\Exceptions\AeatAuthenticationException;
 use AichaDigital\LaraVerifactu\Exceptions\AeatConnectionException;
 use AichaDigital\LaraVerifactu\Exceptions\AeatException;
 use AichaDigital\LaraVerifactu\Exceptions\ValidationException;
+use AichaDigital\LaraVerifactu\Support\AeatLogSanitizer;
 use AichaDigital\LaraVerifactu\Support\AeatResponse;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
@@ -218,7 +219,7 @@ final class AeatClient implements AeatClientContract
     }
 
     /**
-     * Log raw SOAP exchange for debugging
+     * Log the SOAP exchange — opt-in and always redacted (see AeatLogSanitizer).
      */
     private function logSoapExchange(): void
     {
@@ -226,12 +227,10 @@ final class AeatClient implements AeatClientContract
             return;
         }
 
-        Log::debug('AEAT SOAP Request', [
-            'request' => $this->client->__getLastRequest(),
-        ]);
-        Log::debug('AEAT SOAP Response', [
-            'response' => $this->client->__getLastResponse(),
-        ]);
+        AeatLogSanitizer::logExchange(
+            $this->client->__getLastRequest(),
+            $this->client->__getLastResponse()
+        );
     }
 
     /**
@@ -244,7 +243,7 @@ final class AeatClient implements AeatClientContract
         Log::channel(config('verifactu.logging.channel', 'verifactu'))
             ->error('SOAP Fault from AEAT', [
                 'code' => $e->faultcode,
-                'message' => $e->faultstring,
+                'message' => AeatLogSanitizer::redactText((string) $e->faultstring),
             ]);
 
         // Check for authentication errors

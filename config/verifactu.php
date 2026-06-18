@@ -263,8 +263,18 @@ return [
 
     'logging' => [
         'channel' => env('VERIFACTU_LOG_CHANNEL', 'verifactu'),
-        'level' => env('VERIFACTU_LOG_LEVEL', 'debug'),
+        'level' => env('VERIFACTU_LOG_LEVEL', 'info'),
         'days' => env('VERIFACTU_LOG_DAYS', 90),
+
+        // Opt-in: log the SOAP request/response exchange. Even when enabled the
+        // payload is ALWAYS passed through AeatLogSanitizer — fiscal personal
+        // data (NIF, names, amounts, dates, signature) is masked. There is no
+        // configuration to log the raw payload. Keep disabled in production.
+        'log_soap_payload' => env('VERIFACTU_LOG_SOAP_PAYLOAD', false),
+
+        // Opt-in: include full stack traces in error logs. Traces can reveal
+        // internal filesystem paths; keep disabled outside active debugging.
+        'debug' => env('VERIFACTU_LOG_DEBUG', false),
     ],
 
     /*
