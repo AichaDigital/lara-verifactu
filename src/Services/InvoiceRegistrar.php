@@ -52,7 +52,7 @@ final class InvoiceRegistrar
         return DB::transaction(function () use ($invoice, $submitToAeat) {
             // Step 1: Create registry
             Log::channel(config('verifactu.logging.channel', 'single'))
-                ->info('Creating registry for invoice', [
+                ->debug('Creating registry for invoice', [
                     'invoice_number' => $invoice->getNumber(),
                     'serie' => $invoice->getSerie(),
                 ]);
@@ -87,7 +87,7 @@ final class InvoiceRegistrar
     {
         return DB::transaction(function () use ($invoice, $submitToAeat) {
             Log::channel(config('verifactu.logging.channel', 'single'))
-                ->info('Creating cancellation registry for invoice', [
+                ->debug('Creating cancellation registry for invoice', [
                     'invoice_number' => $invoice->getNumber(),
                     'serie' => $invoice->getSerie(),
                 ]);
@@ -117,7 +117,7 @@ final class InvoiceRegistrar
         return DB::transaction(function () use ($registry) {
             try {
                 Log::channel(config('verifactu.logging.channel', 'single'))
-                    ->info('Submitting registry to AEAT', [
+                    ->debug('Submitting registry to AEAT', [
                         'registry_number' => $registry->getRegistryNumber(),
                     ]);
 
@@ -128,7 +128,7 @@ final class InvoiceRegistrar
                     // Idempotency check: skip if already sent
                     if ($registry->status === RegistryStatusEnum::SENT) {
                         Log::channel(config('verifactu.logging.channel', 'single'))
-                            ->info('Registry already sent, skipping', [
+                            ->debug('Registry already sent, skipping', [
                                 'registry_number' => $registry->getRegistryNumber(),
                                 'csv' => $registry->aeat_csv,
                             ]);

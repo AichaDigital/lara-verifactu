@@ -69,7 +69,7 @@ class SubmitRegistryToAeatJob implements ShouldQueue
         // Idempotency check: skip if already sent successfully
         if ($registry->status === RegistryStatusEnum::SENT) {
             Log::channel(config('verifactu.logging.channel', 'single'))
-                ->info('Registry already sent, skipping job', [
+                ->debug('Registry already sent, skipping job', [
                     'registry_id' => $this->registryId,
                     'registry_number' => $registry->registry_number,
                     'csv' => $registry->aeat_csv,

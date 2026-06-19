@@ -97,7 +97,7 @@ class ProcessInvoiceRegistrationJob implements ShouldQueue
             // Check if already registered
             if ($invoice->registry()->exists()) {
                 Log::channel(config('verifactu.logging.channel', 'single'))
-                    ->info('Invoice already has a registry, skipping', [
+                    ->debug('Invoice already has a registry, skipping', [
                         'invoice_id' => $this->invoiceId,
                         'invoice_number' => $invoice->number,
                     ]);

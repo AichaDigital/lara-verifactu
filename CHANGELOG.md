@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Demoted redundant `->info()` logs to `->debug()` (AID-208): intermediate steps
+  ("Creating registry for invoice", "Creating cancellation registry",
+  "Submitting registry to AEAT") and idempotency skips ("Registry already sent,
+  skipping", "Invoice already has a registry, skipping") no longer emit at the
+  default `info` level. Real transitions (registry submitted/sent, invoice
+  registered) and all warning/error/critical logs are unchanged.
+
+### Documentation
+
+- Documented the logging privacy posture (AID-208): third-party fiscal PII in
+  the SOAP payload is redacted and opt-in (AID-198); the issuer's own
+  operational identifiers (invoice number/serie, registry number, ids, AEAT CSV)
+  are kept for support traceability and controlled via `VERIFACTU_LOG_LEVEL`
+  (recommend `warning` for restricted environments). No field-level redaction of
+  these operational identifiers in v1.0.
+
 ## [1.0.0-rc1] - 2026-06-19
 
 ### Changed (BREAKING)
