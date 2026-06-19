@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-rc1] - 2026-06-19
+
 ### Changed (BREAKING)
 
 - Made `XmlBuilder` enforce Destinatarios × TipoFactura (AID-194, AEAT rules
@@ -61,6 +63,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- End-to-end AEAT Pruebas Externas validation for the full v1.0 core
+  (AID-203/AID-204): added F1 and R1 (rectificación por diferencias) scenarios
+  to `RealSandboxSubmissionTest` alongside the existing F2/F3/R5-S and
+  cancellation, and fixed a doubled-breakdown bug (an explicit breakdown stacked
+  on the `InvoiceFactory` default added in AID-193) that had silently broken the
+  skipped suite. All six scenarios validated live against AEAT on 2026-06-19
+  (EstadoEnvio = Correcto). The sandbox tests stay skipped without a certificate.
 - `CalificacionOperacionEnum` (L9), `OperacionExentaEnum` (L10) and
   `RectificativeTypeEnum` (L3) — typed definitions for the lists previously
   carried as hardcode / regex / raw string. Wiring into the builder lands in
@@ -106,6 +115,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   removed — delete the method (and any `OperationTypeEnum` import) from your
   model. The `operation_key` column is dropped by a migration; rolling back that
   migration restores the column schema (default `'01'`) but not prior row values.
+
+### Security
+
+- Redacted AEAT SOAP traffic before it reaches the logs (AID-198). `AeatClient`
+  no longer dumps the raw SOAP request/response on every send. A new
+  `AeatLogSanitizer` masks fiscal personal data (NIF, names, amounts, dates,
+  signature material, CSV — a denylist derived from the official XSD) while
+  preserving codes/enums; it fails closed (placeholder, never the raw payload)
+  and rejects `DOCTYPE` input (XXE). Payload logging is now opt-in
+  (`VERIFACTU_LOG_SOAP_PAYLOAD`, default off) and, even when enabled, is always
+  redacted on the `verifactu` channel — there is no raw-payload mode. Full stack
+  traces are gated behind `VERIFACTU_LOG_DEBUG` (default off); SOAP
+  `faultstring` and AEAT error text are passed through the redactor. The default
+  log level moved from `debug` to `info`.
 
 ## [0.11.0] - 2026-06-16
 
@@ -471,7 +494,8 @@ This release introduces **critical fiscal compliance features** required for pro
 - **PHPStan: Level 8 ✅ (12 legitimate framework false positives baselined)**
 - **Code Style: PSR-12 ✅**
 
-[Unreleased]: https://github.com/aichadigital/lara-verifactu/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/aichadigital/lara-verifactu/compare/v1.0.0-rc1...HEAD
+[1.0.0-rc1]: https://github.com/aichadigital/lara-verifactu/compare/v0.11.0...v1.0.0-rc1
 [0.11.0]: https://github.com/aichadigital/lara-verifactu/compare/v0.10.0...v0.11.0
 [0.1.0]: https://github.com/aichadigital/lara-verifactu/releases/tag/v0.1.0
 
