@@ -239,3 +239,126 @@ it('submits a real F3 substitution-of-simplified invoice with FacturasSustituida
     expect($registry->status)->toBe(RegistryStatusEnum::SENT)
         ->and($registry->aeat_csv)->not->toBeNull();
 })->skip(! $certificateAvailable, 'Real AEAT sandbox certificate not available');
+
+/*
+ * F1 — complete invoice WITH recipient, end-to-end against AEAT Pruebas Externas.
+ *
+ * F1 is part of the v1.0 honest-core support matrix (F1, F2, F3, R1, R5) and was
+ * the missing standalone scenario. F1 requires a recipient: AEAT rule 1189 makes
+ * Destinatarios mandatory for F1/F3/R1/R2/R3/R4.
+ *
+ * Regression triage if this fails:
+ *  - rule 1189 / Destinatarios -> recipient handling regressed
+ *  - F1 base/quota guards      -> XmlBuilder coherence guards regressed
+ */
+function createSandboxCompleteInvoice(): Invoice
+{
+    $invoice = Invoice::factory()->create([
+        'serie' => null,
+        'number' => 'TESTF1-' . now()->format('YmdHis') . '-' . strtoupper(substr(uniqid(), -5)),
+        'type' => InvoiceTypeEnum::COMPLETE, // F1
+        'recipient_nif' => (string) getenv('VERIFACTU_COMPANY_TAX_ID'),
+        'recipient_id_type' => IdTypeEnum::NIF,
+        'recipient_id' => null,
+        'recipient_name' => (string) getenv('VERIFACTU_COMPANY_NAME'),
+        'recipient_country' => 'ES',
+        'base_amount' => 100.00,
+        'tax_amount' => 21.00,
+        'total_amount' => 121.00,
+        'description' => 'Factura completa F1 - prueba lara-verifactu',
+    ]);
+
+    InvoiceBreakdown::factory()->create([
+        'invoice_id' => $invoice->id,
+        'tax_rate' => 21.00,
+        'base_amount' => 100.00,
+        'tax_amount' => 21.00,
+        'exempt' => false,
+    ]);
+
+    return $invoice->refresh();
+}
+
+it('submits a real F1 complete invoice with recipient to the AEAT sandbox', function () {
+    $registry = app(InvoiceRegistrar::class)->register(createSandboxCompleteInvoice(), submitToAeat: true);
+
+    $registry->refresh();
+
+    dump([
+        'status' => $registry->status->value,
+        'csv' => $registry->aeat_csv,
+        'error' => $registry->aeat_error,
+    ]);
+
+    expect($registry->status)->toBe(RegistryStatusEnum::SENT)
+        ->and($registry->aeat_csv)->not->toBeNull();
+})->skip(! $certificateAvailable, 'Real AEAT sandbox certificate not available');
+
+/*
+ * R1 — rectificación por diferencias (TipoRectificativa I) of a prior F1,
+ * end-to-end against AEAT Pruebas Externas.
+ *
+ * R1 is part of the v1.0 honest core (F1, F2, F3, R1, R5). It requires a
+ * recipient (rule 1189) and references the rectified invoice via
+ * FacturasRectificadas. "Por diferencias" (I) carries the delta in the normal
+ * Desglose and, unlike substitution (S, exercised by the R5 scenario), emits
+ * NO ImporteRectificacion. Together R1-I here and R5-S above cover both
+ * TipoRectificativa variants against the sandbox.
+ *
+ * Regression triage if this fails:
+ *  - rule 1189 / Destinatarios       -> recipient handling regressed
+ *  - TipoRectificativa / FacturasRectificadas -> XmlBuilder rectification regressed
+ */
+it('submits a real R1 rectification por diferencias (I) referencing an F1 to the AEAT sandbox', function () {
+    $registrar = app(InvoiceRegistrar::class);
+
+    // 1) Original F1 accepted by AEAT first.
+    $original = createSandboxCompleteInvoice();
+    $originalRegistry = $registrar->register($original, submitToAeat: true);
+    $originalRegistry->refresh();
+    dump(['original_status' => $originalRegistry->status->value, 'original_csv' => $originalRegistry->aeat_csv, 'original_error' => $originalRegistry->aeat_error]);
+    expect($originalRegistry->status)->toBe(RegistryStatusEnum::SENT);
+
+    // 2) R1 'I' (por diferencias) referencing it, WITH recipient (rule 1189),
+    //    carrying only the corrected delta. No ImporteRectificacion for 'I'.
+    $rectification = Invoice::factory()->create([
+        'serie' => null,
+        'number' => 'TESTR1-' . now()->format('YmdHis') . '-' . strtoupper(substr(uniqid(), -5)),
+        'type' => InvoiceTypeEnum::RECTIFICATIVE, // R1
+        'rectification_type' => 'I',
+        'recipient_nif' => (string) getenv('VERIFACTU_COMPANY_TAX_ID'),
+        'recipient_id_type' => IdTypeEnum::NIF,
+        'recipient_id' => null,
+        'recipient_name' => (string) getenv('VERIFACTU_COMPANY_NAME'),
+        'recipient_country' => 'ES',
+        'base_amount' => 2.00,
+        'tax_amount' => 0.42,
+        'total_amount' => 2.42,
+        'description' => 'Rectificativa R1 por diferencias I - prueba lara-verifactu',
+        'metadata' => [
+            'rectified_invoices' => [
+                ['number' => $original->number, 'issue_date' => $original->getIssueDatetime()->toDateString()],
+            ],
+        ],
+    ]);
+
+    InvoiceBreakdown::factory()->create([
+        'invoice_id' => $rectification->id,
+        'tax_rate' => 21.00,
+        'base_amount' => 2.00,
+        'tax_amount' => 0.42,
+        'exempt' => false,
+    ]);
+
+    $registry = $registrar->register($rectification->refresh(), submitToAeat: true);
+    $registry->refresh();
+
+    dump([
+        'status' => $registry->status->value,
+        'csv' => $registry->aeat_csv,
+        'error' => $registry->aeat_error,
+    ]);
+
+    expect($registry->status)->toBe(RegistryStatusEnum::SENT)
+        ->and($registry->aeat_csv)->not->toBeNull();
+})->skip(! $certificateAvailable, 'Real AEAT sandbox certificate not available');
