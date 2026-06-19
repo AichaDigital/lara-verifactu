@@ -254,6 +254,31 @@ If you discover a security vulnerability, please email
 commit certificates or credentials; keep your `.p12` outside the project
 tree with restrictive permissions.
 
+### Logging & privacy
+
+Third-party fiscal PII never reaches the logs unredacted. The SOAP
+request/response payload (NIF, names, amounts, dates, signature) is **not
+logged by default**; enable it with `VERIFACTU_LOG_SOAP_PAYLOAD=true` and even
+then it is **always passed through a redactor** — there is no raw-payload mode.
+Full stack traces and AEAT error text are gated behind `VERIFACTU_LOG_DEBUG`
+and a redactor respectively.
+
+What the logs *do* carry are the issuer's own operational identifiers —
+`invoice_number`, `invoice_serie`, `registry_number`, `invoice_id` and the AEAT
+`csv` (cotejo) code. These are the issuer's references to its own operations,
+not third-party personal data, and they are kept on purpose for support and
+operational audit ("what happened to invoice FA-2026-001 / CSV A-xxx?"). They
+are controlled by the log level (`VERIFACTU_LOG_LEVEL`, default `info`):
+
+- Intermediate steps and idempotency skips are logged at `debug` (off by
+  default); real transitions (submitted to AEAT, registered) at `info`;
+  failures at `warning`/`error`/`critical`.
+- For restricted environments (a shared SIEM, external support without strict
+  access/retention controls) set `VERIFACTU_LOG_LEVEL=warning` so only failures
+  are persisted. Field-level redaction of these operational ids is intentionally
+  not done in v1.0; it would only be warranted if your logs leave to an
+  uncontrolled third party.
+
 ## Changelog
 
 See [CHANGELOG.md](CHANGELOG.md).
