@@ -43,7 +43,7 @@ beforeEach(function () {
 
 function createSandboxInvoice(): Invoice
 {
-    $invoice = Invoice::factory()->create([
+    $invoice = Invoice::factory()->withoutBreakdowns()->create([
         'serie' => null,
         'number' => 'TEST-' . now()->format('YmdHis') . '-' . strtoupper(substr(uniqid(), -5)),
         'type' => InvoiceTypeEnum::SIMPLIFIED, // F2: no recipient validation
@@ -134,7 +134,7 @@ it('submits a real substitution (S) rectification with ImporteRectificacion to t
 
     // 2) Substitution (S) rectification referencing the original, carrying
     //    ImporteRectificacion (base + tax of the substituted invoice).
-    $rectification = Invoice::factory()->create([
+    $rectification = Invoice::factory()->withoutBreakdowns()->create([
         'serie' => null,
         'number' => 'TESTR-' . now()->format('YmdHis') . '-' . strtoupper(substr(uniqid(), -5)),
         'type' => InvoiceTypeEnum::RECTIFICATIVE_SIMPLIFIED_INVOICES, // R5: rectifies a simplified invoice, no Destinatarios required (AEAT rule 1189)
@@ -199,7 +199,7 @@ it('submits a real F3 substitution-of-simplified invoice with FacturasSustituida
     expect($simplifiedRegistry->status)->toBe(RegistryStatusEnum::SENT);
 
     // 2) F3 substituting it, WITH recipient (rule 1189) and FacturasSustituidas.
-    $f3 = Invoice::factory()->create([
+    $f3 = Invoice::factory()->withoutBreakdowns()->create([
         'serie' => null,
         'number' => 'TESTF3-' . now()->format('YmdHis') . '-' . strtoupper(substr(uniqid(), -5)),
         'type' => InvoiceTypeEnum::SUBSTITUTE,
@@ -253,7 +253,7 @@ it('submits a real F3 substitution-of-simplified invoice with FacturasSustituida
  */
 function createSandboxCompleteInvoice(): Invoice
 {
-    $invoice = Invoice::factory()->create([
+    $invoice = Invoice::factory()->withoutBreakdowns()->create([
         'serie' => null,
         'number' => 'TESTF1-' . now()->format('YmdHis') . '-' . strtoupper(substr(uniqid(), -5)),
         'type' => InvoiceTypeEnum::COMPLETE, // F1
@@ -321,7 +321,7 @@ it('submits a real R1 rectification por diferencias (I) referencing an F1 to the
 
     // 2) R1 'I' (por diferencias) referencing it, WITH recipient (rule 1189),
     //    carrying only the corrected delta. No ImporteRectificacion for 'I'.
-    $rectification = Invoice::factory()->create([
+    $rectification = Invoice::factory()->withoutBreakdowns()->create([
         'serie' => null,
         'number' => 'TESTR1-' . now()->format('YmdHis') . '-' . strtoupper(substr(uniqid(), -5)),
         'type' => InvoiceTypeEnum::RECTIFICATIVE, // R1
