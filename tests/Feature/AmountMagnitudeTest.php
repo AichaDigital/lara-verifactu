@@ -41,6 +41,7 @@ function magnitudeBreakdown(float $baseAmount, float $taxAmount, float $taxRate 
     $breakdown->shouldReceive('getSurchargeRate')->andReturn(null);
     $breakdown->shouldReceive('getSurchargeAmount')->andReturn(null);
     $breakdown->shouldReceive('isExempt')->andReturn(false);
+    $breakdown->shouldReceive('getCalificacion')->andReturn(null);
     $breakdown->shouldReceive('getExemptionReason')->andReturn(null);
 
     return $breakdown;

@@ -526,10 +526,42 @@ final class XmlBuilder implements XmlBuilderContract
             return $detalle;
         }
 
-        // CalificacionOperacion guard (#1): S1 (subject, not exempt, no reverse
-        // charge) is the only value in the v1.0 core. No breakdown input expresses
-        // a calificación, so S1 is the only possible value; the regimes that would
-        // force S2/N1/N2 are already rejected by the ClaveRegimen guard above.
+        // CalificacionOperacion guard (#1): the v1.0 core supports S1 (subject,
+        // not exempt, no reverse charge) and N2 (no sujeta por reglas de
+        // localización — AID-223, intra-EU B2B services). A null calificación
+        // defaults to S1. S2/N1 are post-1.0 and rejected fail-loud — never mapped.
+        $calificacion = $breakdown->getCalificacion() ?? CalificacionOperacionEnum::S1;
+
+        if ($calificacion !== CalificacionOperacionEnum::S1 && $calificacion !== CalificacionOperacionEnum::N2) {
+            throw ValidationException::invalidInvoiceData(
+                'calificacion_operacion',
+                "CalificacionOperacion {$calificacion->value} is outside the v1.0 core {S1, N2}; S2/N1 are post-1.0"
+            );
+        }
+
+        // N2 branch (XSD sequence: CalificacionOperacion then
+        // BaseImponibleOimporteNoSujeto; no TipoImpositivo/CuotaRepercutida/recargo
+        // — AEAT rule 1237). Fail-loud if the input carries a rate/cuota/surcharge:
+        // that means a taxed line was mislabeled N2, so reject rather than silently
+        // drop the fiscal amounts.
+        if ($calificacion === CalificacionOperacionEnum::N2) {
+            if (number_format($breakdown->getTaxRate(), 2, '.', '') !== '0.00'
+                || $this->toCents($breakdown->getTaxAmount()) !== 0
+                || $breakdown->getSurchargeRate() !== null
+                || $breakdown->getSurchargeAmount() !== null) {
+                throw ValidationException::invalidInvoiceData(
+                    'calificacion_operacion',
+                    'An N2 (no sujeta por reglas de localización) line must carry no TipoImpositivo, CuotaRepercutida or recargo (AEAT rule 1237)'
+                );
+            }
+
+            $detalle->appendChild($this->sfElement($dom, 'CalificacionOperacion', CalificacionOperacionEnum::N2->value));
+            $detalle->appendChild($this->sfElement($dom, 'BaseImponibleOimporteNoSujeto', $this->formatAmount($breakdown->getBaseAmount(), 'BaseImponibleOimporteNoSujeto')));
+
+            return $detalle;
+        }
+
+        // S1 path: subject, not exempt, no reverse charge.
         $detalle->appendChild($this->sfElement($dom, 'CalificacionOperacion', CalificacionOperacionEnum::S1->value));
         $detalle->appendChild($this->sfElement($dom, 'TipoImpositivo', $this->formatRate($breakdown->getTaxRate(), 'TipoImpositivo')));
         $detalle->appendChild($this->sfElement($dom, 'BaseImponibleOimporteNoSujeto', $this->formatAmount($breakdown->getBaseAmount(), 'BaseImponibleOimporteNoSujeto')));
@@ -816,7 +848,9 @@ final class XmlBuilder implements XmlBuilderContract
         foreach ($invoice->getBreakdowns() as $breakdown) {
             $baseCents += $this->toCents($breakdown->getBaseAmount());
 
-            if ($breakdown->isExempt()) {
+            // Exempt and N2 (no sujeta por localización) lines carry base only —
+            // no cuota/recargo (rule 1237). They contribute to base, not tax.
+            if ($breakdown->isExempt() || $breakdown->getCalificacion() === CalificacionOperacionEnum::N2) {
                 continue;
             }
 

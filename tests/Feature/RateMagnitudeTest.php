@@ -43,6 +43,7 @@ function rateBreakdown(float $taxRate, ?float $surchargeRate = null, ?float $sur
     $breakdown->shouldReceive('getSurchargeRate')->andReturn($surchargeRate);
     $breakdown->shouldReceive('getSurchargeAmount')->andReturn($surchargeAmount);
     $breakdown->shouldReceive('isExempt')->andReturn(false);
+    $breakdown->shouldReceive('getCalificacion')->andReturn(null);
     $breakdown->shouldReceive('getExemptionReason')->andReturn(null);
 
     return $breakdown;

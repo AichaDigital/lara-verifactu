@@ -5,6 +5,7 @@ declare(strict_types=1);
 use AichaDigital\LaraVerifactu\Contracts\InvoiceBreakdownContract;
 use AichaDigital\LaraVerifactu\Contracts\InvoiceContract;
 use AichaDigital\LaraVerifactu\Contracts\RecipientContract;
+use AichaDigital\LaraVerifactu\Enums\CalificacionOperacionEnum;
 use AichaDigital\LaraVerifactu\Enums\InvoiceTypeEnum;
 use AichaDigital\LaraVerifactu\Enums\RegimeTypeEnum;
 use AichaDigital\LaraVerifactu\Enums\TaxTypeEnum;
@@ -45,6 +46,7 @@ function flBreakdown(array $overrides = []): InvoiceBreakdownContract
         'getSurchargeAmount' => null,
         'isExempt' => false,
         'getExemptionReason' => null,
+        'getCalificacion' => null,
     ];
 
     $breakdown = Mockery::mock(InvoiceBreakdownContract::class);
@@ -462,5 +464,49 @@ describe('Destinatarios × TipoFactura guard (#8)', function () {
 
         expect(fn () => $this->builder->buildRegistrationXml($invoice, flChain()))
             ->toThrow(ValidationException::class, 'rule 1189');
+    });
+});
+
+describe('CalificacionOperacion guard (#1) — AID-223', function () {
+    it('rejects S2 (con inversión del sujeto pasivo) as post-1.0', function () {
+        $invoice = flInvoice(breakdown: flBreakdown(['getCalificacion' => CalificacionOperacionEnum::S2]));
+
+        expect(fn () => $this->builder->buildRegistrationXml($invoice, flChain()))
+            ->toThrow(ValidationException::class, 'S1, N2');
+    });
+
+    it('rejects N1 (no sujeta artículo 7/14) as post-1.0', function () {
+        $invoice = flInvoice(breakdown: flBreakdown(['getCalificacion' => CalificacionOperacionEnum::N1]));
+
+        expect(fn () => $this->builder->buildRegistrationXml($invoice, flChain()))
+            ->toThrow(ValidationException::class, 'S1, N2');
+    });
+
+    it('accepts N2 (no sujeta por reglas de localización) for an intra-EU service', function () {
+        $invoice = flInvoice(
+            ['getTaxAmount' => 0.0, 'getTotalAmount' => 100.0],
+            breakdown: flBreakdown([
+                'getCalificacion' => CalificacionOperacionEnum::N2,
+                'getTaxRate' => 0.0,
+                'getTaxAmount' => 0.0,
+            ]),
+        );
+
+        $xml = $this->builder->buildRegistrationXml($invoice, flChain());
+
+        expect($this->builder->validate($xml))->toBeTrue()
+            ->and($xml)->toContain('<sf:CalificacionOperacion>N2</sf:CalificacionOperacion>')
+            ->and($xml)->not->toContain('<sf:CuotaRepercutida>');
+    });
+
+    it('rejects an N2 line that carries a TipoImpositivo/CuotaRepercutida (rule 1237)', function () {
+        $invoice = flInvoice(breakdown: flBreakdown([
+            'getCalificacion' => CalificacionOperacionEnum::N2,
+            'getTaxRate' => 21.0,
+            'getTaxAmount' => 21.0,
+        ]));
+
+        expect(fn () => $this->builder->buildRegistrationXml($invoice, flChain()))
+            ->toThrow(ValidationException::class, 'rule 1237');
     });
 });

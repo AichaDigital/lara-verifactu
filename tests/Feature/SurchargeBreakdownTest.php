@@ -43,6 +43,7 @@ function surchargeBreakdown(?float $surchargeRate, ?float $surchargeAmount): Inv
     $breakdown->shouldReceive('getSurchargeRate')->andReturn($surchargeRate);
     $breakdown->shouldReceive('getSurchargeAmount')->andReturn($surchargeAmount);
     $breakdown->shouldReceive('isExempt')->andReturn(false);
+    $breakdown->shouldReceive('getCalificacion')->andReturn(null);
     $breakdown->shouldReceive('getExemptionReason')->andReturn(null);
 
     return $breakdown;

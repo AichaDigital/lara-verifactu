@@ -47,6 +47,7 @@ function coherenceTaxedBreakdown(float $base, float $taxRate, float $taxAmount, 
     $breakdown->shouldReceive('getSurchargeRate')->andReturn($surchargeRate);
     $breakdown->shouldReceive('getSurchargeAmount')->andReturn($surchargeAmount);
     $breakdown->shouldReceive('isExempt')->andReturn(false);
+    $breakdown->shouldReceive('getCalificacion')->andReturn(null);
     $breakdown->shouldReceive('getExemptionReason')->andReturn(null);
 
     return $breakdown;
@@ -62,6 +63,7 @@ function coherenceExemptBreakdown(float $base, string $reason = 'E1'): InvoiceBr
     $breakdown->shouldReceive('getSurchargeRate')->andReturn(null);
     $breakdown->shouldReceive('getSurchargeAmount')->andReturn(null);
     $breakdown->shouldReceive('isExempt')->andReturn(true);
+    $breakdown->shouldReceive('getCalificacion')->andReturn(null);
     $breakdown->shouldReceive('getExemptionReason')->andReturn($reason);
 
     return $breakdown;

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AichaDigital\LaraVerifactu\Contracts;
 
+use AichaDigital\LaraVerifactu\Enums\CalificacionOperacionEnum;
 use AichaDigital\LaraVerifactu\Enums\TaxTypeEnum;
 
 /**
@@ -53,4 +54,13 @@ interface InvoiceBreakdownContract
      * Get the exemption reason (if exempt).
      */
     public function getExemptionReason(): ?string;
+
+    /**
+     * Get the operation classification (AEAT list L9 / CalificacionOperacion).
+     *
+     * Null means S1 (subject, not exempt, no reverse charge) — the default when
+     * a breakdown does not express a calificación. The v1.0 core supports S1 and
+     * N2 (no sujeta por reglas de localización); S2/N1 are rejected fail-loud.
+     */
+    public function getCalificacion(): ?CalificacionOperacionEnum;
 }

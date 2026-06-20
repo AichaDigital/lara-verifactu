@@ -6,6 +6,7 @@ namespace AichaDigital\LaraVerifactu\Models;
 
 use AichaDigital\LaraVerifactu\Contracts\InvoiceBreakdownContract;
 use AichaDigital\LaraVerifactu\Database\Factories\InvoiceBreakdownFactory;
+use AichaDigital\LaraVerifactu\Enums\CalificacionOperacionEnum;
 use AichaDigital\LaraVerifactu\Enums\TaxTypeEnum;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -28,6 +29,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property float|null $surcharge_amount
  * @property bool $exempt
  * @property string|null $exemption_reason
+ * @property CalificacionOperacionEnum|null $calificacion
  * @property array<string, mixed>|null $metadata
  * @property Carbon $created_at
  * @property Carbon $updated_at
@@ -58,6 +60,7 @@ class InvoiceBreakdown extends Model implements InvoiceBreakdownContract
         'surcharge_amount',
         'exempt',
         'exemption_reason',
+        'calificacion',
         'metadata',
     ];
 
@@ -75,6 +78,7 @@ class InvoiceBreakdown extends Model implements InvoiceBreakdownContract
         'exempt' => 'boolean',
         'metadata' => 'array',
         'tax_type' => TaxTypeEnum::class,
+        'calificacion' => CalificacionOperacionEnum::class,
     ];
 
     /**
@@ -154,5 +158,13 @@ class InvoiceBreakdown extends Model implements InvoiceBreakdownContract
     public function getExemptionReason(): ?string
     {
         return $this->exemption_reason;
+    }
+
+    /**
+     * Get the operation classification (L9). Null ⇒ S1 (default).
+     */
+    public function getCalificacion(): ?CalificacionOperacionEnum
+    {
+        return $this->calificacion;
     }
 }

@@ -54,6 +54,7 @@ function surchargeMagnitudeBreakdown(float $taxRate, ?float $surchargeRate, ?flo
         $surchargeAmount ?? ($surchargeRate !== null ? round($base * $surchargeRate / 100, 2) : null)
     );
     $breakdown->shouldReceive('isExempt')->andReturn(false);
+    $breakdown->shouldReceive('getCalificacion')->andReturn(null);
     $breakdown->shouldReceive('getExemptionReason')->andReturn(null);
 
     return $breakdown;
