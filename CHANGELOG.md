@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Intra-EU B2B service invoices (AID-223): `CalificacionOperacion` **N2** (no
+  sujeta por reglas de localización) and the **`IDOtro`** recipient block for a
+  foreign counterpart. A Spanish issuer's service to an EU VAT-registered company
+  now emits N2 + `IDOtro` (NIF-IVA 02, no `CodigoPais`) instead of being rejected
+  fail-loud — the case AEAT rejected as error 1100 (a foreign VAT emitted as
+  `<NIF>`). S2/N1, E5, OSS, intra-community goods and `IDType` 07 stay rejected
+  fail-loud. `Impuesto`/`ClaveRegimen` remain 01 (general regime).
+
+### Changed (BREAKING)
+
+- `InvoiceBreakdownContract` gains `getCalificacion(): ?CalificacionOperacionEnum`
+  (AID-223). Implementers must add the method; `null` preserves the previous S1
+  behavior. Accepted within the 1.0 release candidate, before the public API
+  locks at 1.0.0 — a breakdown's fiscal classification belongs on the contract,
+  not behind an optional capability.
+
 ### Changed
 
 - Demoted redundant `->info()` logs to `->debug()` (AID-208): intermediate steps
