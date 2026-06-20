@@ -10,6 +10,7 @@ use AichaDigital\LaraVerifactu\Contracts\RecipientContract;
 use AichaDigital\LaraVerifactu\Contracts\XmlBuilderContract;
 use AichaDigital\LaraVerifactu\Enums\CalificacionOperacionEnum;
 use AichaDigital\LaraVerifactu\Enums\GeneradoPorEnum;
+use AichaDigital\LaraVerifactu\Enums\IdTypeEnum;
 use AichaDigital\LaraVerifactu\Enums\InvoiceTypeEnum;
 use AichaDigital\LaraVerifactu\Enums\OperacionExentaEnum;
 use AichaDigital\LaraVerifactu\Enums\RectificativeTypeEnum;
@@ -907,22 +908,74 @@ final class XmlBuilder implements XmlBuilderContract
 
         $idDestinatario->appendChild($this->sfElement($dom, 'NombreRazon', $recipient->getName() ?? ''));
 
-        // IDType / IDOtro guard (#5): the v1.0 domestic core only identifies
-        // recipients by Spanish NIF. The IDOtro branch (foreign / non-NIF, with
-        // its IDType) is post-1.0 — reject it fail-loud instead of defaulting
-        // IDType to '02'.
+        // IDDestinatario is a choice (PersonaFisicaJuridicaType): a Spanish NIF,
+        // or the IDOtro block for a foreign / non-NIF counterpart (AID-223).
         $nif = $recipient->getNif();
 
-        if ($nif === null || $nif === '') {
+        if ($nif !== null && $nif !== '') {
+            $idDestinatario->appendChild($this->sfElement($dom, 'NIF', $nif));
+
+            return $destinatarios;
+        }
+
+        $idDestinatario->appendChild($this->buildIdOtro($dom, $recipient));
+
+        return $destinatarios;
+    }
+
+    /**
+     * Build the IDOtro block (XSD sequence: CodigoPais? → IDType → ID) for a
+     * foreign / non-NIF recipient (AID-223). AEAT rules:
+     *  - 1111: CodigoPais is required when IDType != 02 (NIF-IVA); for 02 it is
+     *    optional (the country is the VAT prefix) and is omitted here.
+     *  - 1126/1131: CodigoPais=ES only fits IDType 03/07, and 07 (No Censado) is a
+     *    Spanish, non-censused natural person — a domestic edge, outside the
+     *    intra-EU scope, so it is rejected fail-loud.
+     *
+     * TODO(AID-223): pin the rule 1156 (IDOtro+02 × TipoFactura) allow-list against
+     * the official Validaciones_Errores_Veri-Factu.pdf before tagging rc2; the
+     * validated case here is F1.
+     */
+    private function buildIdOtro(DOMDocument $dom, RecipientContract $recipient): DOMElement
+    {
+        $idType = $recipient->getIdType();
+        $id = $recipient->getId();
+
+        if (! $idType instanceof IdTypeEnum || $id === null || $id === '') {
             throw ValidationException::invalidInvoiceData(
-                'recipient_nif',
-                'Recipient identification via IDOtro (foreign / non-NIF) is post-1.0; the v1.0 core requires a Spanish NIF'
+                'recipient',
+                'A non-NIF recipient must carry an IDType and an ID for the IDOtro block'
             );
         }
 
-        $idDestinatario->appendChild($this->sfElement($dom, 'NIF', $nif));
+        if ($idType === IdTypeEnum::NOT_REGISTERED) {
+            throw ValidationException::invalidInvoiceData(
+                'recipient_id_type',
+                'IDType 07 (No Censado) requires CodigoPais=ES and a Spanish NIF (AEAT 1126/1131); it is a domestic case, outside the intra-EU IDOtro scope'
+            );
+        }
 
-        return $destinatarios;
+        $idOtro = $dom->createElementNS(self::SF_NS, 'sf:IDOtro');
+
+        // CodigoPais: required for every IDType except 02 (rule 1111), and it must
+        // not be ES for these foreign types (rule 1126 limits ES to 03/07).
+        if ($idType !== IdTypeEnum::NIF) {
+            $country = $recipient->getCountry();
+
+            if ($country === null || $country === '' || strtoupper($country) === 'ES') {
+                throw ValidationException::invalidInvoiceData(
+                    'recipient_country',
+                    "IDType {$idType->value} requires a non-ES CodigoPais in the IDOtro block (AEAT rules 1111/1126)"
+                );
+            }
+
+            $idOtro->appendChild($this->sfElement($dom, 'CodigoPais', strtoupper($country)));
+        }
+
+        $idOtro->appendChild($this->sfElement($dom, 'IDType', $idType->value));
+        $idOtro->appendChild($this->sfElement($dom, 'ID', $id));
+
+        return $idOtro;
     }
 
     /**

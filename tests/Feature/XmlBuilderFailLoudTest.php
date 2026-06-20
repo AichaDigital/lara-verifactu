@@ -6,6 +6,7 @@ use AichaDigital\LaraVerifactu\Contracts\InvoiceBreakdownContract;
 use AichaDigital\LaraVerifactu\Contracts\InvoiceContract;
 use AichaDigital\LaraVerifactu\Contracts\RecipientContract;
 use AichaDigital\LaraVerifactu\Enums\CalificacionOperacionEnum;
+use AichaDigital\LaraVerifactu\Enums\IdTypeEnum;
 use AichaDigital\LaraVerifactu\Enums\InvoiceTypeEnum;
 use AichaDigital\LaraVerifactu\Enums\RegimeTypeEnum;
 use AichaDigital\LaraVerifactu\Enums\TaxTypeEnum;
@@ -508,5 +509,58 @@ describe('CalificacionOperacion guard (#1) — AID-223', function () {
 
         expect(fn () => $this->builder->buildRegistrationXml($invoice, flChain()))
             ->toThrow(ValidationException::class, 'rule 1237');
+    });
+});
+
+function flForeignRecipient(?IdTypeEnum $idType, ?string $id, ?string $country): RecipientContract
+{
+    $recipient = Mockery::mock(RecipientContract::class);
+    $recipient->shouldReceive('getNif')->andReturn(null);
+    $recipient->shouldReceive('getName')->andReturn('Foreign Co');
+    $recipient->shouldReceive('getIdType')->andReturn($idType);
+    $recipient->shouldReceive('getId')->andReturn($id);
+    $recipient->shouldReceive('getCountry')->andReturn($country);
+
+    return $recipient;
+}
+
+describe('IDOtro recipient guard — AID-223', function () {
+    it('emits IDOtro for a foreign NIF-IVA (02) recipient without CodigoPais', function () {
+        $invoice = flInvoice(recipient: flForeignRecipient(IdTypeEnum::NIF, 'DE129273398', 'DE'));
+
+        $xml = $this->builder->buildRegistrationXml($invoice, flChain());
+
+        expect($this->builder->validate($xml))->toBeTrue()
+            ->and($xml)->toContain('<sf:IDType>02</sf:IDType>')
+            ->and($xml)->toContain('<sf:ID>DE129273398</sf:ID>')
+            ->and($xml)->not->toContain('<sf:CodigoPais>');
+    });
+
+    it('requires a non-ES CodigoPais for IDType 04', function () {
+        $invoice = flInvoice(recipient: flForeignRecipient(IdTypeEnum::OFFICIAL_DOC, 'X-123', null));
+
+        expect(fn () => $this->builder->buildRegistrationXml($invoice, flChain()))
+            ->toThrow(ValidationException::class, 'non-ES CodigoPais');
+    });
+
+    it('rejects CodigoPais=ES for IDType 04', function () {
+        $invoice = flInvoice(recipient: flForeignRecipient(IdTypeEnum::OFFICIAL_DOC, 'X-123', 'ES'));
+
+        expect(fn () => $this->builder->buildRegistrationXml($invoice, flChain()))
+            ->toThrow(ValidationException::class, 'non-ES CodigoPais');
+    });
+
+    it('rejects IDType 07 (No Censado) as a domestic case', function () {
+        $invoice = flInvoice(recipient: flForeignRecipient(IdTypeEnum::NOT_REGISTERED, '12345678Z', 'ES'));
+
+        expect(fn () => $this->builder->buildRegistrationXml($invoice, flChain()))
+            ->toThrow(ValidationException::class, 'No Censado');
+    });
+
+    it('rejects a non-NIF recipient with no IDType/ID', function () {
+        $invoice = flInvoice(recipient: flForeignRecipient(null, null, 'DE'));
+
+        expect(fn () => $this->builder->buildRegistrationXml($invoice, flChain()))
+            ->toThrow(ValidationException::class, 'IDOtro block');
     });
 });
