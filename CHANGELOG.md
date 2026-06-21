@@ -15,7 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now emits N2 + `IDOtro` (NIF-IVA 02, no `CodigoPais`) instead of being rejected
   fail-loud — the case AEAT rejected as error 1100 (a foreign VAT emitted as
   `<NIF>`). S2/N1, E5, OSS, intra-community goods and `IDType` 07 stay rejected
-  fail-loud. `Impuesto`/`ClaveRegimen` remain 01 (general regime).
+  fail-loud. `Impuesto`/`ClaveRegimen` remain 01 (general regime). Validated
+  end-to-end against AEAT Pruebas Externas on 2026-06-21 (EstadoEnvio Correcto,
+  CSV `A-UA5R9QVEXRTWYQ`).
 
 ### Changed (BREAKING)
 
