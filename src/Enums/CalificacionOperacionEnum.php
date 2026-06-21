@@ -7,8 +7,9 @@ namespace AichaDigital\LaraVerifactu\Enums;
 /**
  * CalificacionOperacion — AEAT list L9 / XSD CalificacionOperacionType.
  *
- * Operation classification for a breakdown detail. In the v1.0 honest core only
- * S1 is supported; S2/N1/N2 are post-1.0 (fail-loud rejection handled by AID-179).
+ * Operation classification for a breakdown detail. In the v1.0 honest core S1 and
+ * N2 (no sujeta por reglas de localización — intra-EU B2B services, AID-223) are
+ * supported; S2/N1 are post-1.0 (fail-loud rejection in XmlBuilder).
  */
 enum CalificacionOperacionEnum: string
 {

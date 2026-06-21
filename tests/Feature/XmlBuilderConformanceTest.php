@@ -5,6 +5,8 @@ declare(strict_types=1);
 use AichaDigital\LaraVerifactu\Contracts\InvoiceBreakdownContract;
 use AichaDigital\LaraVerifactu\Contracts\InvoiceContract;
 use AichaDigital\LaraVerifactu\Contracts\RecipientContract;
+use AichaDigital\LaraVerifactu\Enums\CalificacionOperacionEnum;
+use AichaDigital\LaraVerifactu\Enums\IdTypeEnum;
 use AichaDigital\LaraVerifactu\Enums\InvoiceTypeEnum;
 use AichaDigital\LaraVerifactu\Enums\RegimeTypeEnum;
 use AichaDigital\LaraVerifactu\Enums\TaxTypeEnum;
@@ -44,6 +46,7 @@ function conformanceBreakdown(): InvoiceBreakdownContract
     $breakdown->shouldReceive('getSurchargeAmount')->andReturn(null);
     $breakdown->shouldReceive('isExempt')->andReturn(false);
     $breakdown->shouldReceive('getExemptionReason')->andReturn(null);
+    $breakdown->shouldReceive('getCalificacion')->andReturn(null);
 
     return $breakdown;
 }
@@ -89,6 +92,177 @@ it('builds a first-record registration XML that validates against the official X
         ->and($xml)->toContain('<sf:TipoHuella>01</sf:TipoHuella>')
         ->and($xml)->toContain('<sf:Huella>' . str_repeat('A', 64) . '</sf:Huella>')
         ->and($xml)->toContain('<sf:FechaHoraHusoGenRegistro>2026-06-01T10:00:30+02:00</sf:FechaHoraHusoGenRegistro>');
+});
+
+/**
+ * AID-223: a Spanish issuer's intra-EU B2B service breakdown is "no sujeta por
+ * reglas de localización" → CalificacionOperacion N2. Per AEAT rule 1237, an N2
+ * IVA line must NOT carry TipoImpositivo/CuotaRepercutida — only
+ * BaseImponibleOimporteNoSujeto. Recipient is a Spanish NIF here to isolate the
+ * calificación from the IDOtro slice.
+ */
+function intraEuN2Invoice(): InvoiceContract
+{
+    $breakdown = Mockery::mock(InvoiceBreakdownContract::class);
+    $breakdown->shouldReceive('getTaxType')->andReturn(TaxTypeEnum::IVA);
+    $breakdown->shouldReceive('getTaxRate')->andReturn(0.0);
+    $breakdown->shouldReceive('getBaseAmount')->andReturn(100.0);
+    $breakdown->shouldReceive('getTaxAmount')->andReturn(0.0);
+    $breakdown->shouldReceive('getSurchargeRate')->andReturn(null);
+    $breakdown->shouldReceive('getSurchargeAmount')->andReturn(null);
+    $breakdown->shouldReceive('isExempt')->andReturn(false);
+    $breakdown->shouldReceive('getExemptionReason')->andReturn(null);
+    $breakdown->shouldReceive('getCalificacion')->andReturn(CalificacionOperacionEnum::N2);
+
+    $invoice = Mockery::mock(InvoiceContract::class);
+    $invoice->shouldReceive('getIssuerTaxId')->andReturn('89890001K');
+    $invoice->shouldReceive('getSerie')->andReturn(null);
+    $invoice->shouldReceive('getNumber')->andReturn('FAC-2026-N2');
+    $invoice->shouldReceive('getInvoiceNumber')->andReturn('FAC-2026-N2');
+    $invoice->shouldReceive('getIssueDatetime')->andReturn(Carbon::parse('2026-06-01 10:00:00'));
+    $invoice->shouldReceive('getType')->andReturn(InvoiceTypeEnum::COMPLETE);
+    $invoice->shouldReceive('getInvoiceType')->andReturn(InvoiceTypeEnum::COMPLETE);
+    $invoice->shouldReceive('getDescription')->andReturn('Hosting B2B intra-UE junio 2026');
+    $invoice->shouldReceive('getRegimeType')->andReturn(RegimeTypeEnum::GENERAL);
+    $invoice->shouldReceive('getTaxAmount')->andReturn(0.0);
+    $invoice->shouldReceive('getTotalAmount')->andReturn(100.0);
+    $recipient = Mockery::mock(RecipientContract::class);
+    $recipient->shouldReceive('getNif')->andReturn('12345678Z');
+    $recipient->shouldReceive('getName')->andReturn('Cliente Ejemplo');
+    $recipient->shouldReceive('getIdType')->andReturn(null);
+    $recipient->shouldReceive('getId')->andReturn(null);
+    $recipient->shouldReceive('getCountry')->andReturn('ES');
+    $invoice->shouldReceive('hasRecipient')->andReturn(true);
+    $invoice->shouldReceive('getRecipient')->andReturn($recipient);
+    $invoice->shouldReceive('getBreakdowns')->andReturn(collect([$breakdown]));
+
+    return $invoice;
+}
+
+it('builds an N2 (no sujeta por reglas de localización) breakdown that validates against the XSD without TipoImpositivo/CuotaRepercutida (AID-223)', function () {
+    $chain = new RegistryChain(
+        hash: str_repeat('A', 64),
+        generatedAt: Carbon::parse('2026-06-01T10:00:30+02:00'),
+        previous: null,
+    );
+
+    $xml = $this->builder->buildRegistrationXml(intraEuN2Invoice(), $chain);
+
+    expect($this->builder->validate($xml))->toBeTrue()
+        ->and($xml)->toContain('<sf:CalificacionOperacion>N2</sf:CalificacionOperacion>')
+        ->and($xml)->toContain('<sf:BaseImponibleOimporteNoSujeto>100.00</sf:BaseImponibleOimporteNoSujeto>')
+        ->and($xml)->not->toContain('<sf:TipoImpositivo>')
+        ->and($xml)->not->toContain('<sf:CuotaRepercutida>');
+});
+
+/**
+ * AID-223: a foreign EU recipient with a VAT-IVA number (no Spanish NIF) is
+ * identified via the IDOtro block — IDType 02 (NIF-IVA), the VAT number as ID.
+ * Per AEAT rule 1111, CodigoPais is omitted for IDType 02 (the country is the
+ * VAT prefix). Emitting the VAT as a <NIF> is what AEAT rejected (error 1100).
+ */
+function intraEuIdOtroInvoice(): InvoiceContract
+{
+    $recipient = Mockery::mock(RecipientContract::class);
+    $recipient->shouldReceive('getNif')->andReturn(null);
+    $recipient->shouldReceive('getName')->andReturn('Muster GmbH');
+    $recipient->shouldReceive('getIdType')->andReturn(IdTypeEnum::NIF);
+    $recipient->shouldReceive('getId')->andReturn('DE129273398');
+    $recipient->shouldReceive('getCountry')->andReturn('DE');
+
+    $invoice = Mockery::mock(InvoiceContract::class);
+    $invoice->shouldReceive('getIssuerTaxId')->andReturn('89890001K');
+    $invoice->shouldReceive('getSerie')->andReturn(null);
+    $invoice->shouldReceive('getNumber')->andReturn('FAC-2026-IDO');
+    $invoice->shouldReceive('getInvoiceNumber')->andReturn('FAC-2026-IDO');
+    $invoice->shouldReceive('getIssueDatetime')->andReturn(Carbon::parse('2026-06-01 10:00:00'));
+    $invoice->shouldReceive('getType')->andReturn(InvoiceTypeEnum::COMPLETE);
+    $invoice->shouldReceive('getInvoiceType')->andReturn(InvoiceTypeEnum::COMPLETE);
+    $invoice->shouldReceive('getDescription')->andReturn('Hosting B2B intra-UE junio 2026');
+    $invoice->shouldReceive('getRegimeType')->andReturn(RegimeTypeEnum::GENERAL);
+    $invoice->shouldReceive('getTaxAmount')->andReturn(21.0);
+    $invoice->shouldReceive('getTotalAmount')->andReturn(121.0);
+    $invoice->shouldReceive('hasRecipient')->andReturn(true);
+    $invoice->shouldReceive('getRecipient')->andReturn($recipient);
+    $invoice->shouldReceive('getBreakdowns')->andReturn(collect([conformanceBreakdown()]));
+
+    return $invoice;
+}
+
+it('builds a foreign recipient via IDOtro (NIF-IVA 02) that validates against the XSD with no CodigoPais (AID-223)', function () {
+    $chain = new RegistryChain(
+        hash: str_repeat('A', 64),
+        generatedAt: Carbon::parse('2026-06-01T10:00:30+02:00'),
+        previous: null,
+    );
+
+    $xml = $this->builder->buildRegistrationXml(intraEuIdOtroInvoice(), $chain);
+
+    expect($this->builder->validate($xml))->toBeTrue()
+        ->and($xml)->toContain('<sf:IDOtro>')
+        ->and($xml)->toContain('<sf:IDType>02</sf:IDType>')
+        ->and($xml)->toContain('<sf:ID>DE129273398</sf:ID>')
+        ->and($xml)->not->toContain('<sf:CodigoPais>');
+});
+
+/**
+ * AID-223 / AID-129: the full real case that AEAT rejected — a Spanish issuer's
+ * intra-EU B2B service to a German VAT-registered company. The recipient is
+ * identified via IDOtro (NIF-IVA 02), and the operation is N2 (no sujeta por
+ * reglas de localización). No <NIF>, no CodigoPais (02), no TipoImpositivo /
+ * CuotaRepercutida (N2). This is the XSD-conformance proof for the closed loop.
+ */
+it('builds the full intra-EU B2B case (N2 + IDOtro 02) that validates against the XSD (AID-223/AID-129)', function () {
+    $breakdown = Mockery::mock(InvoiceBreakdownContract::class);
+    $breakdown->shouldReceive('getTaxType')->andReturn(TaxTypeEnum::IVA);
+    $breakdown->shouldReceive('getTaxRate')->andReturn(0.0);
+    $breakdown->shouldReceive('getBaseAmount')->andReturn(100.0);
+    $breakdown->shouldReceive('getTaxAmount')->andReturn(0.0);
+    $breakdown->shouldReceive('getSurchargeRate')->andReturn(null);
+    $breakdown->shouldReceive('getSurchargeAmount')->andReturn(null);
+    $breakdown->shouldReceive('isExempt')->andReturn(false);
+    $breakdown->shouldReceive('getExemptionReason')->andReturn(null);
+    $breakdown->shouldReceive('getCalificacion')->andReturn(CalificacionOperacionEnum::N2);
+
+    $recipient = Mockery::mock(RecipientContract::class);
+    $recipient->shouldReceive('getNif')->andReturn(null);
+    $recipient->shouldReceive('getName')->andReturn('Muster GmbH');
+    $recipient->shouldReceive('getIdType')->andReturn(IdTypeEnum::NIF);
+    $recipient->shouldReceive('getId')->andReturn('DE129273398');
+    $recipient->shouldReceive('getCountry')->andReturn('DE');
+
+    $invoice = Mockery::mock(InvoiceContract::class);
+    $invoice->shouldReceive('getIssuerTaxId')->andReturn('89890001K');
+    $invoice->shouldReceive('getSerie')->andReturn(null);
+    $invoice->shouldReceive('getNumber')->andReturn('FAC-2026-EU');
+    $invoice->shouldReceive('getInvoiceNumber')->andReturn('FAC-2026-EU');
+    $invoice->shouldReceive('getIssueDatetime')->andReturn(Carbon::parse('2026-06-01 10:00:00'));
+    $invoice->shouldReceive('getType')->andReturn(InvoiceTypeEnum::COMPLETE);
+    $invoice->shouldReceive('getInvoiceType')->andReturn(InvoiceTypeEnum::COMPLETE);
+    $invoice->shouldReceive('getDescription')->andReturn('Hosting B2B intra-UE junio 2026');
+    $invoice->shouldReceive('getRegimeType')->andReturn(RegimeTypeEnum::GENERAL);
+    $invoice->shouldReceive('getTaxAmount')->andReturn(0.0);
+    $invoice->shouldReceive('getTotalAmount')->andReturn(100.0);
+    $invoice->shouldReceive('hasRecipient')->andReturn(true);
+    $invoice->shouldReceive('getRecipient')->andReturn($recipient);
+    $invoice->shouldReceive('getBreakdowns')->andReturn(collect([$breakdown]));
+
+    $chain = new RegistryChain(
+        hash: str_repeat('A', 64),
+        generatedAt: Carbon::parse('2026-06-01T10:00:30+02:00'),
+        previous: null,
+    );
+
+    $xml = $this->builder->buildRegistrationXml($invoice, $chain);
+
+    expect($this->builder->validate($xml))->toBeTrue()
+        ->and($xml)->toContain('<sf:IDType>02</sf:IDType>')
+        ->and($xml)->toContain('<sf:ID>DE129273398</sf:ID>')
+        ->and($xml)->toContain('<sf:CalificacionOperacion>N2</sf:CalificacionOperacion>')
+        ->and($xml)->toContain('<sf:BaseImponibleOimporteNoSujeto>100.00</sf:BaseImponibleOimporteNoSujeto>')
+        ->and($xml)->not->toContain('<sf:CodigoPais>')
+        ->and($xml)->not->toContain('<sf:TipoImpositivo>')
+        ->and($xml)->not->toContain('<sf:CuotaRepercutida>');
 });
 
 it('builds a chained registration XML with RegistroAnterior that validates against the official XSD', function () {

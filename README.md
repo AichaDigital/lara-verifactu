@@ -62,7 +62,8 @@ rather than sending XSD-valid XML the AEAT would reject — or accept *con error
 | `TipoFactura` | F1, F2, F3, R1, R5 |
 | `Impuesto` | 01 IVA, 02 IPSI, 03 IGIC |
 | `ClaveRegimen` | 01 (general regime) |
-| `CalificacionOperacion` | S1 |
+| `CalificacionOperacion` | S1; **N2** (no sujeta por reglas de localización — intra-EU B2B services) |
+| Recipient (`Destinatario`) | Spanish `NIF`; **`IDOtro`** for a foreign counterpart (NIF-IVA 02 without `CodigoPais`; 04 / 06 with a non-ES `CodigoPais`) |
 | `OperacionExenta` | E1, E4, E6 (E2/E3 only with IPSI; rule 1199) |
 | Recargo de equivalencia | 21% → 5,2 / 1,75 · 10% → 1,4 · 4% → 0,5 |
 | Anulación | `RegistroAnulacion` + `SinRegistroPrevio` / `RechazoPrevio` + `GeneradoPor` / `Generador` |
@@ -74,8 +75,10 @@ rather than sending XSD-valid XML the AEAT would reject — or accept *con error
 - `TipoFactura` R2 / R3 / R4 (Art. 80.3 / 80.4 / Resto)
 - `Impuesto` 05 (Otros)
 - `ClaveRegimen` ≠ 01 (special regimes)
-- `OperacionExenta` E2 / E3 with IVA or IGIC, and E5 (requires `IDOtro`)
-- Recipient / `Generador` identified by `IDOtro` (foreign, non-NIF)
+- `CalificacionOperacion` S2 / N1 (inversión del sujeto pasivo / no sujeta art. 7, 14)
+- `OperacionExenta` E2 / E3 with IVA or IGIC, and E5 (intra-community supply of goods)
+- `Generador` identified by `IDOtro` in the anulación block (the recipient `IDOtro` is now core)
+- Recipient `IDType` 07 (No Censado — Spanish non-censused, a domestic edge)
 - Date-windowed surcharge rates (5 %, 0 %, 2 %, 7,5 % — rules 1165-1170 / 1277)
 
 ### Out of scope

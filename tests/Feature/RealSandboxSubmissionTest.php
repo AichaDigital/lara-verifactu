@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use AichaDigital\LaraVerifactu\Contracts\QrGeneratorContract;
+use AichaDigital\LaraVerifactu\Enums\CalificacionOperacionEnum;
 use AichaDigital\LaraVerifactu\Enums\IdTypeEnum;
 use AichaDigital\LaraVerifactu\Enums\InvoiceTypeEnum;
 use AichaDigital\LaraVerifactu\Enums\RegistryStatusEnum;
@@ -351,6 +352,62 @@ it('submits a real R1 rectification por diferencias (I) referencing an F1 to the
     ]);
 
     $registry = $registrar->register($rectification->refresh(), submitToAeat: true);
+    $registry->refresh();
+
+    dump([
+        'status' => $registry->status->value,
+        'csv' => $registry->aeat_csv,
+        'error' => $registry->aeat_error,
+    ]);
+
+    expect($registry->status)->toBe(RegistryStatusEnum::SENT)
+        ->and($registry->aeat_csv)->not->toBeNull();
+})->skip(! $certificateAvailable, 'Real AEAT sandbox certificate not available');
+
+/*
+ * AID-223 / AID-129 — intra-EU B2B service (N2 + IDOtro), end-to-end against AEAT
+ * Pruebas Externas. The case that was rejected as error 1100 (a foreign VAT
+ * emitted as <NIF>): a Spanish issuer's service to a German VAT-registered
+ * company. Recipient via IDOtro (NIF-IVA 02, no CodigoPais); operation N2 (no
+ * sujeta por reglas de localización), so no TipoImpositivo/CuotaRepercutida.
+ *
+ * Regression triage if this fails:
+ *  - "1100 NIF"            -> IDOtro emission regressed (foreign VAT sent as NIF)
+ *  - calificación / 1237   -> N2 branch in buildDetalleDesglose regressed
+ *  - rule 1189 / 1156      -> recipient / IDOtro+02 × TipoFactura handling
+ */
+function createSandboxIntraEuInvoice(): Invoice
+{
+    $invoice = Invoice::factory()->withoutBreakdowns()->create([
+        'serie' => null,
+        'number' => 'TESTEU-' . now()->format('YmdHis') . '-' . strtoupper(substr(uniqid(), -5)),
+        'type' => InvoiceTypeEnum::COMPLETE, // F1
+        'recipient_nif' => null,
+        'recipient_id_type' => IdTypeEnum::NIF, // 02 (NIF-IVA) via IDOtro
+        'recipient_id' => 'DE129273398',
+        'recipient_name' => 'Muster GmbH',
+        'recipient_country' => 'DE',
+        'base_amount' => 100.00,
+        'tax_amount' => 0.00,
+        'total_amount' => 100.00,
+        'description' => 'Servicio B2B intracomunitario N2 + IDOtro - lara-verifactu AID-223',
+    ]);
+
+    InvoiceBreakdown::factory()->create([
+        'invoice_id' => $invoice->id,
+        'tax_rate' => 0.00,
+        'base_amount' => 100.00,
+        'tax_amount' => 0.00,
+        'exempt' => false,
+        'calificacion' => CalificacionOperacionEnum::N2,
+    ]);
+
+    return $invoice->refresh();
+}
+
+it('submits a real intra-EU B2B service (N2 + IDOtro 02) to the AEAT sandbox (AID-223)', function () {
+    $registry = app(InvoiceRegistrar::class)->register(createSandboxIntraEuInvoice(), submitToAeat: true);
+
     $registry->refresh();
 
     dump([

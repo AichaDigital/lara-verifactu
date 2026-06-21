@@ -43,6 +43,7 @@ function exemptBreakdown(TaxTypeEnum $taxType, string $exemptionReason): Invoice
     $breakdown->shouldReceive('getSurchargeRate')->andReturn(null);
     $breakdown->shouldReceive('getSurchargeAmount')->andReturn(null);
     $breakdown->shouldReceive('isExempt')->andReturn(true);
+    $breakdown->shouldReceive('getCalificacion')->andReturn(null);
     $breakdown->shouldReceive('getExemptionReason')->andReturn($exemptionReason);
 
     return $breakdown;
