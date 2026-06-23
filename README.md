@@ -1,13 +1,15 @@
 # Lara Verifactu
 
-[![Latest Version on Packagist](https://img.shields.io/packagist/v/aichadigital/lara-verifactu.svg?style=flat-square)](https://packagist.org/packages/aichadigital/lara-verifactu)
+<!-- AI-BADGES:START profile=essential -->
+[![Latest Version](https://img.shields.io/packagist/v/aichadigital/lara-verifactu.svg?style=flat-square)](https://packagist.org/packages/aichadigital/lara-verifactu)
 [![Total Downloads](https://img.shields.io/packagist/dt/aichadigital/lara-verifactu.svg?style=flat-square)](https://packagist.org/packages/aichadigital/lara-verifactu)
-[![GitHub Tests Action Status](https://img.shields.io/github/actions/workflow/status/AichaDigital/lara-verifactu/run-tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/AichaDigital/lara-verifactu/actions?query=workflow%3Arun-tests+branch%3Amain)
-[![GitHub Code Style Action Status](https://img.shields.io/github/actions/workflow/status/AichaDigital/lara-verifactu/fix-php-code-style-issues.yml?branch=main&label=code%20style&style=flat-square)](https://github.com/AichaDigital/lara-verifactu/actions?query=workflow%3A"Fix+PHP+code+style+issues"+branch%3Amain)
-[![PHPStan Level 8](https://img.shields.io/badge/PHPStan-level%208-brightgreen.svg?style=flat-square)](https://phpstan.org/)
-[![PHP Version](https://img.shields.io/packagist/php-v/aichadigital/lara-verifactu.svg?style=flat-square)](https://packagist.org/packages/aichadigital/lara-verifactu)
-[![Laravel Version](https://img.shields.io/badge/Laravel-12.x%20%7C%2013.x-red.svg?style=flat-square)](https://laravel.com)
-[![License](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE.md)
+[![Tests](https://img.shields.io/github/actions/workflow/status/AichaDigital/lara-verifactu/run-tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/AichaDigital/lara-verifactu/actions?query=workflow%3Arun-tests+branch%3Amain)
+[![Code Style](https://img.shields.io/github/actions/workflow/status/AichaDigital/lara-verifactu/fix-php-code-style-issues.yml?branch=main&label=code%20style&style=flat-square)](https://github.com/AichaDigital/lara-verifactu/actions?query=workflow%3A%22Fix+PHP+code+style+issues%22+branch%3Amain)
+[![PHPStan level 8](https://img.shields.io/badge/PHPStan-level%208-brightgreen.svg?style=flat-square&logo=php)](https://phpstan.org/)
+[![PHP Version](https://img.shields.io/packagist/php-v/aichadigital/lara-verifactu.svg?style=flat-square&logo=php)](https://packagist.org/packages/aichadigital/lara-verifactu)
+[![Laravel Version](https://img.shields.io/badge/Laravel-12.x%20%7C%2013.x-red.svg?style=flat-square&logo=laravel)](https://laravel.com)
+[![License](https://img.shields.io/packagist/l/aichadigital/lara-verifactu.svg?style=flat-square)](https://packagist.org/packages/aichadigital/lara-verifactu)
+<!-- AI-BADGES:END -->
 
 Laravel package for **VERI*FACTU (AEAT) compliance** — Spain's invoicing
 records regulation (Real Decreto 1007/2023). It generates AEAT-conformant
