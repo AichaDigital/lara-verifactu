@@ -115,6 +115,30 @@ describe('Getter Methods', function () {
 });
 
 // ========================================
+// Validation Rejection Tests
+// ========================================
+
+it('flags a rejection as a validation rejection failure carrying data', function () {
+    $response = AeatResponse::rejection(
+        errors: ['3002: NIF del IDFactura no identificado'],
+        message: 'Incorrecto',
+        data: ['estado_envio' => 'Incorrecto'],
+    );
+
+    expect($response->isFailure())->toBeTrue()
+        ->and($response->isValidationRejection())->toBeTrue()
+        ->and($response->getData())->toBe(['estado_envio' => 'Incorrecto'])
+        ->and($response->getErrors())->toContain('3002: NIF del IDFactura no identificado');
+});
+
+it('treats a plain failure as transport, not a validation rejection', function () {
+    $response = AeatResponse::failure(errors: ['Invalid response from AEAT server']);
+
+    expect($response->isFailure())->toBeTrue()
+        ->and($response->isValidationRejection())->toBeFalse();
+});
+
+// ========================================
 // toArray Tests
 // ========================================
 
