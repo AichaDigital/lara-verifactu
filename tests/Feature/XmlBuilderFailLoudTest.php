@@ -564,3 +564,37 @@ describe('IDOtro recipient guard — AID-223', function () {
             ->toThrow(ValidationException::class, 'IDOtro block');
     });
 });
+
+describe('IDOtro+02 × TipoFactura invariant — rule 1156 (AID-228)', function () {
+    // AEAT rule 1156 restricts IDOtro + IDType=02 (NIF-IVA) to TipoFactura
+    // F1/F3/R1/R2/R3/R4 (Validaciones_Errores_Veri-Factu.pdf §13). The only types
+    // it forbids are F2/R5 — which already cannot carry a Destinatarios block at
+    // all (rule 1190, guard #8), so an IDOtro+02 over F2/R5 is unreachable and a
+    // dedicated 1156 guard would be dead code. These cases anchor that invariant:
+    // should a future change (e.g. AID-209 item 3 lifting the core guard #7 for
+    // R2/R3/R4) ever weaken the 1190 guard, the forbidden F2/R5 + IDOtro+02
+    // combination would resurface here as a failure.
+
+    it('keeps F2 + IDOtro(02) fail-loud via rule 1190', function () {
+        $invoice = flInvoice([
+            'getType' => InvoiceTypeEnum::SIMPLIFIED,
+            'getInvoiceType' => InvoiceTypeEnum::SIMPLIFIED,
+        ], recipient: flForeignRecipient(IdTypeEnum::NIF, 'DE129273398', 'DE'));
+
+        expect(fn () => $this->builder->buildRegistrationXml($invoice, flChain()))
+            ->toThrow(ValidationException::class, 'rule 1190');
+    });
+
+    it('keeps R5 + IDOtro(02) fail-loud via rule 1190', function () {
+        $invoice = flInvoice([
+            'getType' => InvoiceTypeEnum::RECTIFICATIVE_SIMPLIFIED_INVOICES,
+            'getInvoiceType' => InvoiceTypeEnum::RECTIFICATIVE_SIMPLIFIED_INVOICES,
+            'getRectificationType' => 'I',
+            'getRectifiedInvoices' => [],
+            'getRectificationAmounts' => null,
+        ], recipient: flForeignRecipient(IdTypeEnum::NIF, 'DE129273398', 'DE'));
+
+        expect(fn () => $this->builder->buildRegistrationXml($invoice, flChain()))
+            ->toThrow(ValidationException::class, 'rule 1190');
+    });
+});
