@@ -40,6 +40,8 @@ enum RegistryStatusEnum: string
 
     public function canRetry(): bool
     {
-        return in_array($this, [self::PENDING, self::ERROR, self::REJECTED]);
+        // REJECTED is a validation outcome (AID-257), not a transport retry.
+        // The effective retry frontier is getRetryableRegistries() = status ERROR.
+        return in_array($this, [self::PENDING, self::ERROR]);
     }
 }

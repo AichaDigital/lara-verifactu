@@ -271,6 +271,17 @@ describe('getRetryableRegistries', function () {
 
         expect($retryable)->toHaveCount(1);
     });
+
+    it('does not select a REJECTED registry for retry', function () {
+        $invoice = Invoice::factory()->create();
+        Registry::factory()->create([
+            'invoice_id' => $invoice->id,
+            'status' => RegistryStatusEnum::REJECTED->value,
+            'submission_attempts' => 0,
+        ]);
+
+        expect($this->registryManager->getRetryableRegistries())->toHaveCount(0);
+    });
 });
 
 // ========================================
