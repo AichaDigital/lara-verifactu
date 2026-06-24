@@ -2,7 +2,7 @@
 
 - **Issue:** AID-137 (post-1.0; observed in AID-129 real sandbox runs)
 - **Date:** 2026-06-24
-- **Status:** design v2 — revised after Codex adversarial review (premise correction)
+- **Status:** approved design v2 (after Codex adversarial review). **Blocked by AID-257** (AEAT outcome classification).
 
 ## Problem
 
@@ -31,25 +31,19 @@ re-sent corrected as a new chain link with `Subsanacion=S` + `RechazoPrevio=X`.
 `RechazoPrevio=N`, «ALTA POR RECHAZO DE SUBSANACIÓN» `RechazoPrevio=S` with key
 present, and both «SIN REGISTRO PREVIO» variants `RechazoPrevio=X`).
 
-## Step 0 (NEW prerequisite) — AEAT outcome classification
+## Dependency — AID-257 (blocking)
 
-Without this, `amendRejected` is unreachable and the retry frontier is wrong.
+AID-137 builds on **AID-257** (classify AEAT validation rejections as `REJECTED`,
+not retryable `ERROR`), shipped as PR 1. AID-257 makes a well-formed `Incorrecto`
+response persist `REJECTED` with structured rejection metadata (`EstadoEnvio`,
+per-line `EstadoRegistro`, `CodigoErrorRegistro`/`DescripcionErrorRegistro`) on
+`aeat_response`, keeps transport/SOAP/parse failures as `ERROR`, and leaves
+`getRetryableRegistries()` selecting only `ERROR` (`canRetry()` drops `REJECTED`
+for enum consistency; the effective frontier is the `ERROR` selector).
 
-- **Classify the AEAT outcome** at parse time: a **well-formed AEAT response**
-  carrying `EstadoEnvio=Incorrecto` (or per-line `EstadoRegistro=Incorrecto`) is a
-  **validation rejection** → `REJECTED`. A transport/SOAP/parse failure (no valid
-  response, fault, timeout, malformed body — the `AeatResponse::failure()` path at
-  parser line 29) stays `ERROR`.
-- **Propagate the discriminator.** `AeatResponse` must carry enough to tell the two
-  apart: `EstadoEnvio`, per-line `EstadoRegistro`, and the line codes
-  (`CodigoErrorRegistro` / `DescripcionErrorRegistro`). Today `failure()` drops it.
-- **Branch the persistence.** `InvoiceRegistrar` routes a classified validation
-  rejection to a new `markAsRejected()` (→ `REJECTED`, stores the structured
-  `aeat_response` codes) and keeps `markAsError()` (→ `ERROR`) for transport.
-- **Retry frontier.** The real selector is `getRetryableRegistries()` = `status =
-  ERROR`; once rejections are `REJECTED` they fall out of it automatically.
-  Dropping `REJECTED` from `canRetry()` is kept for enum consistency, but the
-  effective frontier is the `ERROR` selector — note both so neither drifts.
+This spec (PR 2) assumes that base: a `REJECTED` status that is **reachable** and
+**carries inspectable reason codes**. Without AID-257 merged, `amendRejected` is
+unreachable.
 
 ## The `RechazoPrevio` value — verified against the source
 
@@ -107,11 +101,11 @@ Verifactu::amendRejected(
 Guards (fail-loud, in order):
 
 1. `getRegistryType() === REGISTRATION` (not a cancellation).
-2. `getStatus() === REJECTED` (now reachable thanks to Step 0). `ACCEPTED` → error
-   pointing to AID-209.
+2. `getStatus() === REJECTED` (reachable via AID-257). `ACCEPTED` → error pointing
+   to AID-209.
 3. **Rejection proves "not in AEAT"** (precondition for `X`): inspect the persisted
-   `aeat_response` codes; if the reason is duplicate-key / already-registered,
-   fail loud.
+   `aeat_response` codes (from AID-257); if the reason is duplicate-key /
+   already-registered, fail loud.
 4. **`IDFactura` matches the rejected record's persisted historical XML** (Codex
    `[P2#7]`): parse `IDEmisorFactura` / `NumSerieFactura` / `FechaExpedicionFactura`
    from `getXml()` via **namespaced XPath** (`sf:`), comparing `NumSerieFactura`
@@ -158,7 +152,7 @@ linear. Applies to `register()` too; in scope here because amendment adds a link
 No mutation, no inverse column: "already amended" derives from guard 5 + the DB
 index.
 
-### 8. `verifyBlockchain` — DECISION NEEDED (Codex `[P1#3]`)
+### 8. `verifyBlockchain` — verify from persisted XML (Codex `[P1#3]`, DECIDED: in AID-137)
 
 `verifyRegistryHash()` (`RegistryManager:250`) rebuilds the hash from
 `$registry->invoice` (mutable). The amendment flow feeds corrected data, so if the
@@ -167,13 +161,11 @@ rejected historical record. Two parts:
 
 - **In AID-137 regardless:** `amendRejected` takes `$correctedInvoice` as a
   **separate** instance; it must never mutate the rejected record's `Invoice`.
-- **The underlying fix (scope question):** verify from the **persisted historical
-  XML** rather than the mutable `Invoice`, so a corrected invoice can never break
-  an old link's verification. **Recommended: include it in AID-137** — the
-  amendment flow is exactly what surfaces the bug, and leaving it makes
-  `verifyBlockchain` lie after the first subsanación. Alternative: split to its own
-  issue and have AID-137 assume `Invoice` immutability explicitly. Not left
-  ambiguous — needs your call.
+- **The underlying fix (in AID-137):** `verifyRegistryHash()` verifies from the
+  **persisted historical XML** rather than the mutable `Invoice`, so a corrected
+  invoice can never break an old link's verification. The amendment flow is exactly
+  what surfaces the bug; leaving it would make `verifyBlockchain` lie after the
+  first subsanación.
 
 ## Testing
 
@@ -200,11 +192,10 @@ rejected historical record. Two parts:
 
 ## Files touched (anticipated)
 
-- `src/Services/AeatResponseParser.php`, `src/Support/AeatResponse.php` — outcome
-  classification + discriminator (Step 0).
-- `src/Services/InvoiceRegistrar.php` — `markAsRejected()` branch; `amendRejected()`.
-- `src/Services/RegistryManager.php` — `markAsRejected()`; `createRegistry()` +
-  circumstances; locked previous-link selection; `verifyRegistryHash` (if §8 in).
+- `src/Services/InvoiceRegistrar.php` — `amendRejected()` (the `markAsRejected`
+  branch ships in AID-257).
+- `src/Services/RegistryManager.php` — `createRegistry()` + circumstances; locked
+  previous-link selection; `verifyRegistryHash` from persisted XML (§8).
 - `src/Enums/RegistryStatusEnum.php` — `canRetry()` (consistency).
 - `src/Enums/RechazoPrevioEnum.php` — new `{N,S,X}`.
 - `src/Support/RegistrationCircumstances.php` — new value object.
@@ -217,7 +208,8 @@ rejected historical record. Two parts:
 - `src/Verifactu.php` — facade method.
 - Tests under `tests/Feature` + `tests/Unit`.
 
-## Open decision
+## Decisions resolved
 
-§8 `verifyBlockchain`: include the "verify from persisted XML" fix in AID-137
-(recommended) or split it out. Everything else above is settled.
+- §8 `verifyBlockchain` (verify from persisted historical XML): **in AID-137**.
+- AEAT outcome classification (former Step 0): **split to AID-257**, blocking this.
+- Two-PR order: **AID-257** (classification) → **AID-137** (amend-by-rejection).
