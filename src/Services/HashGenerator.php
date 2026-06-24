@@ -34,21 +34,49 @@ final class HashGenerator implements HashGeneratorContract
                 ? $invoice->getSerie() . $invoice->getNumber()
                 : $invoice->getNumber();
 
-            $chain = $this->buildChain([
-                'IDEmisorFactura' => $invoice->getIssuerTaxId(),
-                'NumSerieFactura' => $invoiceNumber,
-                'FechaExpedicionFactura' => $invoice->getIssueDatetime()->format('d-m-Y'),
-                'TipoFactura' => $invoice->getType()->value,
-                'CuotaTotal' => $this->formatAmount($invoice->getTaxAmount()),
-                'ImporteTotal' => $this->formatAmount($invoice->getTotalAmount()),
-                'Huella' => $previousHash,
-                'FechaHoraHusoGenRegistro' => $this->formatTimestamp($generatedAt ?? now()),
-            ]);
-
-            return strtoupper(hash('sha256', $chain));
+            return $this->generateRegistrationFromParts(
+                issuerTaxId: $invoice->getIssuerTaxId(),
+                numSerieFactura: $invoiceNumber,
+                fechaExpedicion: $invoice->getIssueDatetime()->format('d-m-Y'),
+                tipoFactura: $invoice->getType()->value,
+                cuotaTotal: $this->formatAmount($invoice->getTaxAmount()),
+                importeTotal: $this->formatAmount($invoice->getTotalAmount()),
+                previousHash: $previousHash,
+                fechaHoraHusoGen: $this->formatTimestamp($generatedAt ?? now()),
+            );
         } catch (\Throwable $e) {
             throw HashException::cannotGenerateHash($e->getMessage());
         }
+    }
+
+    /**
+     * Registration fingerprint from already-formatted primitive parts. Inputs
+     * must already be AEAT-formatted: fechaExpedicion as d-m-Y, cuota/importe
+     * as 2-decimal dot strings, fechaHoraHusoGen as ISO-8601 with offset.
+     * Calls buildChain() so the AEAT formula lives in exactly one place.
+     */
+    public function generateRegistrationFromParts(
+        string $issuerTaxId,
+        string $numSerieFactura,
+        string $fechaExpedicion,
+        string $tipoFactura,
+        string $cuotaTotal,
+        string $importeTotal,
+        ?string $previousHash,
+        string $fechaHoraHusoGen,
+    ): string {
+        $chain = $this->buildChain([
+            'IDEmisorFactura' => $issuerTaxId,
+            'NumSerieFactura' => $numSerieFactura,
+            'FechaExpedicionFactura' => $fechaExpedicion,
+            'TipoFactura' => $tipoFactura,
+            'CuotaTotal' => $cuotaTotal,
+            'ImporteTotal' => $importeTotal,
+            'Huella' => $previousHash,
+            'FechaHoraHusoGenRegistro' => $fechaHoraHusoGen,
+        ]);
+
+        return strtoupper(hash('sha256', $chain));
     }
 
     /**
@@ -69,18 +97,37 @@ final class HashGenerator implements HashGeneratorContract
         ?DateTimeInterface $generatedAt = null,
     ): string {
         try {
-            $chain = $this->buildChain([
-                'IDEmisorFacturaAnulada' => $issuerTaxId,
-                'NumSerieFacturaAnulada' => $invoiceNumber,
-                'FechaExpedicionFacturaAnulada' => $issueDate->format('d-m-Y'),
-                'Huella' => $previousHash,
-                'FechaHoraHusoGenRegistro' => $this->formatTimestamp($generatedAt ?? now()),
-            ]);
-
-            return strtoupper(hash('sha256', $chain));
+            return $this->generateCancellationFromParts(
+                issuerTaxId: $issuerTaxId,
+                numSerieFactura: $invoiceNumber,
+                fechaExpedicion: $issueDate->format('d-m-Y'),
+                previousHash: $previousHash,
+                fechaHoraHusoGen: $this->formatTimestamp($generatedAt ?? now()),
+            );
         } catch (\Throwable $e) {
             throw HashException::cannotGenerateHash($e->getMessage());
         }
+    }
+
+    /**
+     * Cancellation fingerprint from already-formatted primitive parts.
+     */
+    public function generateCancellationFromParts(
+        string $issuerTaxId,
+        string $numSerieFactura,
+        string $fechaExpedicion,
+        ?string $previousHash,
+        string $fechaHoraHusoGen,
+    ): string {
+        $chain = $this->buildChain([
+            'IDEmisorFacturaAnulada' => $issuerTaxId,
+            'NumSerieFacturaAnulada' => $numSerieFactura,
+            'FechaExpedicionFacturaAnulada' => $fechaExpedicion,
+            'Huella' => $previousHash,
+            'FechaHoraHusoGenRegistro' => $fechaHoraHusoGen,
+        ]);
+
+        return strtoupper(hash('sha256', $chain));
     }
 
     /**
