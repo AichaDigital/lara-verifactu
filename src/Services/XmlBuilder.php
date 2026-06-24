@@ -931,10 +931,14 @@ final class XmlBuilder implements XmlBuilderContract
      *  - 1126/1131: CodigoPais=ES only fits IDType 03/07, and 07 (No Censado) is a
      *    Spanish, non-censused natural person — a domestic edge, outside the
      *    intra-EU scope, so it is rejected fail-loud.
-     *
-     * TODO(AID-223): pin the rule 1156 (IDOtro+02 × TipoFactura) allow-list against
-     * the official Validaciones_Errores_Veri-Factu.pdf before tagging rc2; the
-     * validated case here is F1.
+     *  - 1156: IDOtro+IDType=02 (NIF-IVA) is restricted to TipoFactura
+     *    F1/F3/R1/R2/R3/R4 (Validaciones_Errores_Veri-Factu.pdf §13). The only
+     *    forbidden types are F2/R5, which already cannot carry a Destinatarios
+     *    block at all (rule 1190, guard #8 in buildAlta), so an IDOtro+02 over
+     *    F2/R5 never reaches this method — a dedicated 1156 guard here would be
+     *    dead code. The invariant is anchored by the AID-228 regression tests;
+     *    the live case (F1) is validated against the AEAT sandbox (CSV
+     *    A-UA5R9QVEXRTWYQ).
      */
     private function buildIdOtro(DOMDocument $dom, RecipientContract $recipient): DOMElement
     {
