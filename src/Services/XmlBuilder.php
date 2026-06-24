@@ -19,6 +19,7 @@ use AichaDigital\LaraVerifactu\Exceptions\ValidationException;
 use AichaDigital\LaraVerifactu\Exceptions\XmlException;
 use AichaDigital\LaraVerifactu\Support\CancellationRecord;
 use AichaDigital\LaraVerifactu\Support\PreviousRegistry;
+use AichaDigital\LaraVerifactu\Support\RegistrationCircumstances;
 use AichaDigital\LaraVerifactu\Support\RegistryChain;
 use Carbon\Carbon;
 use DOMDocument;
@@ -87,8 +88,11 @@ final class XmlBuilder implements XmlBuilderContract
     /**
      * @throws XmlException
      */
-    public function buildRegistrationXml(InvoiceContract $invoice, RegistryChain $chain): string
-    {
+    public function buildRegistrationXml(
+        InvoiceContract $invoice,
+        RegistryChain $chain,
+        ?RegistrationCircumstances $circumstances = null
+    ): string {
         try {
             $dom = $this->createDomDocument();
             $root = $this->createEnvelope($dom);
@@ -96,7 +100,7 @@ final class XmlBuilder implements XmlBuilderContract
             $registroFactura = $dom->createElementNS(self::LR_NS, 'sfLR:RegistroFactura');
             $root->appendChild($registroFactura);
 
-            $registroFactura->appendChild($this->buildRegistroAlta($dom, $invoice, $chain));
+            $registroFactura->appendChild($this->buildRegistroAlta($dom, $invoice, $chain, $circumstances));
 
             return $this->formatXml($dom);
         } catch (ValidationException $e) {
@@ -189,8 +193,12 @@ final class XmlBuilder implements XmlBuilderContract
     /**
      * Build RegistroAlta (RegistroFacturacionAltaType) — XSD sequence order
      */
-    private function buildRegistroAlta(DOMDocument $dom, InvoiceContract $invoice, RegistryChain $chain): DOMElement
-    {
+    private function buildRegistroAlta(
+        DOMDocument $dom,
+        InvoiceContract $invoice,
+        RegistryChain $chain,
+        ?RegistrationCircumstances $circumstances = null
+    ): DOMElement {
         $alta = $dom->createElementNS(self::SF_NS, 'sf:RegistroAlta');
 
         // Date validity guard (AEAT 1112 / 1152): FechaExpedicionFactura cannot be
@@ -207,6 +215,20 @@ final class XmlBuilder implements XmlBuilderContract
         $idFactura->appendChild($this->sfElement($dom, 'FechaExpedicionFactura', $invoice->getIssueDatetime()->format('d-m-Y')));
 
         $alta->appendChild($this->sfElement($dom, 'NombreRazonEmisor', $this->companyName()));
+
+        // Subsanación circumstances (AID-137). XSD sequence
+        // (SuministroInformacion.xsd:105): Subsanacion then RechazoPrevio, after
+        // NombreRazonEmisor and before TipoFactura. Emitted only when flagged;
+        // a normal alta passes null/empty circumstances and emits neither.
+        if ($circumstances !== null) {
+            if ($circumstances->subsanacion) {
+                $alta->appendChild($this->sfElement($dom, 'Subsanacion', 'S'));
+            }
+
+            if ($circumstances->rechazoPrevio !== null) {
+                $alta->appendChild($this->sfElement($dom, 'RechazoPrevio', $circumstances->rechazoPrevio->value));
+            }
+        }
 
         // TipoFactura guard (#7): the v1.0 core set is {F1, F2, F3, R1, R5} per
         // the coverage matrix (L2). R2/R3/R4 (Art. 80.3/80.4/Resto) are post-1.0

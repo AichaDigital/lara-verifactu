@@ -6,16 +6,25 @@ use AichaDigital\LaraVerifactu\Contracts\InvoiceBreakdownContract;
 use AichaDigital\LaraVerifactu\Contracts\InvoiceContract;
 use AichaDigital\LaraVerifactu\Contracts\RecipientContract;
 use AichaDigital\LaraVerifactu\Enums\InvoiceTypeEnum;
+use AichaDigital\LaraVerifactu\Enums\RechazoPrevioEnum;
 use AichaDigital\LaraVerifactu\Enums\RegimeTypeEnum;
 use AichaDigital\LaraVerifactu\Enums\TaxTypeEnum;
 use AichaDigital\LaraVerifactu\Services\XmlBuilder;
 use AichaDigital\LaraVerifactu\Support\PreviousRegistry;
+use AichaDigital\LaraVerifactu\Support\RegistrationCircumstances;
 use AichaDigital\LaraVerifactu\Support\RegistryChain;
 use Carbon\Carbon;
 
 beforeEach(function () {
     config()->set('verifactu.company.tax_id', 'B12345678');
     config()->set('verifactu.company.name', 'Empresa Test SL');
+    // System config required for XSD-valid SistemaInformatico (NIFType = 9 chars).
+    config()->set('verifactu.system.vendor_name', 'AichaDigital SL');
+    config()->set('verifactu.system.vendor_nif', 'B70123456');
+    config()->set('verifactu.system.name', 'LaraVerifactu');
+    config()->set('verifactu.system.id', 'LV');
+    config()->set('verifactu.system.version', '1.0');
+    config()->set('verifactu.system.installation_number', '1');
 
     $this->builder = new XmlBuilder;
     $this->chain = new RegistryChain(
@@ -119,6 +128,52 @@ it('escapes XML special characters in text values', function () {
     expect($xml)
         ->toContain('Servicios &lt;hosting&gt; &amp; "dominios"')
         ->not->toContain('<hosting>');
+});
+
+it('omits Subsanacion and RechazoPrevio for a normal alta', function () {
+    $invoice = createMockInvoiceForXml();
+
+    $xml = $this->builder->buildRegistrationXml($invoice, $this->chain);
+
+    expect($xml)
+        ->not->toContain('<sf:Subsanacion>')
+        ->not->toContain('<sf:RechazoPrevio>');
+});
+
+it('emits Subsanacion=S and RechazoPrevio=X before TipoFactura for an amendment', function () {
+    $invoice = createMockInvoiceForXml();
+    $circumstances = new RegistrationCircumstances(
+        subsanacion: true,
+        rechazoPrevio: RechazoPrevioEnum::X,
+    );
+
+    $xml = $this->builder->buildRegistrationXml($invoice, $this->chain, $circumstances);
+
+    expect($xml)
+        ->toContain('<sf:Subsanacion>S</sf:Subsanacion>')
+        ->toContain('<sf:RechazoPrevio>X</sf:RechazoPrevio>');
+
+    // XSD order: NombreRazonEmisor → Subsanacion → RechazoPrevio → TipoFactura.
+    $emisorPos = strpos($xml, '<sf:NombreRazonEmisor>');
+    $subsanacionPos = strpos($xml, '<sf:Subsanacion>');
+    $rechazoPos = strpos($xml, '<sf:RechazoPrevio>');
+    $tipoPos = strpos($xml, '<sf:TipoFactura>');
+
+    expect($emisorPos)->toBeLessThan($subsanacionPos)
+        ->and($subsanacionPos)->toBeLessThan($rechazoPos)
+        ->and($rechazoPos)->toBeLessThan($tipoPos);
+});
+
+it('validates an amendment RegistroAlta against the AEAT XSD', function () {
+    $invoice = createMockInvoiceForXml();
+    $circumstances = new RegistrationCircumstances(
+        subsanacion: true,
+        rechazoPrevio: RechazoPrevioEnum::X,
+    );
+
+    $xml = $this->builder->buildRegistrationXml($invoice, $this->chain, $circumstances);
+
+    expect($this->builder->validate($xml))->toBeTrue();
 });
 
 // Helper function to create mock invoice for XML tests
