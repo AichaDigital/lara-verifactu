@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use AichaDigital\LaraVerifactu\Enums\IdTypeEnum;
 use AichaDigital\LaraVerifactu\Enums\InvoiceTypeEnum;
+use AichaDigital\LaraVerifactu\Enums\RechazoPrevioEnum;
 use AichaDigital\LaraVerifactu\Enums\RegimeTypeEnum;
 use AichaDigital\LaraVerifactu\Enums\RegistryStatusEnum;
 use AichaDigital\LaraVerifactu\Enums\TaxTypeEnum;
@@ -207,5 +208,22 @@ describe('RegimeTypeEnum', function () {
         expect(RegimeTypeEnum::EXPORT->isSpecialRegime())->toBeTrue();
         expect(RegimeTypeEnum::SPECIAL_USED_GOODS->isSpecialRegime())->toBeTrue();
         expect(RegimeTypeEnum::EQUIVALENCE_SURCHARGE->isSpecialRegime())->toBeTrue();
+    });
+});
+
+// ========================================
+// RechazoPrevioEnum Tests
+// ========================================
+
+describe('RechazoPrevioEnum', function () {
+    it('has the XSD-conformant RechazoPrevioType members', function () {
+        expect(RechazoPrevioEnum::N->value)->toBe('N')
+            ->and(RechazoPrevioEnum::S->value)->toBe('S')
+            ->and(RechazoPrevioEnum::X->value)->toBe('X');
+    });
+
+    it('maps the amend-by-rejection case to X (key not in AEAT)', function () {
+        expect(RechazoPrevioEnum::tryFrom('X'))->toBe(RechazoPrevioEnum::X)
+            ->and(RechazoPrevioEnum::tryFrom('Z'))->toBeNull();
     });
 });
