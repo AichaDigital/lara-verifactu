@@ -7,6 +7,7 @@ namespace AichaDigital\LaraVerifactu\Models;
 use AichaDigital\LaraVerifactu\Contracts\InvoiceContract;
 use AichaDigital\LaraVerifactu\Contracts\RegistryContract;
 use AichaDigital\LaraVerifactu\Database\Factories\RegistryFactory;
+use AichaDigital\LaraVerifactu\Enums\RechazoPrevioEnum;
 use AichaDigital\LaraVerifactu\Enums\RegistryStatusEnum;
 use AichaDigital\LaraVerifactu\Enums\RegistryTypeEnum;
 use Carbon\Carbon;
@@ -26,6 +27,9 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property string $registry_number
  * @property Carbon $registry_date
  * @property RegistryTypeEnum $registry_type
+ * @property bool $subsanacion
+ * @property RechazoPrevioEnum|null $rechazo_previo
+ * @property int|null $amends_registry_id
  * @property string $hash
  * @property string|null $previous_hash
  * @property string|null $hash_generated_at
@@ -67,6 +71,9 @@ class Registry extends Model implements RegistryContract
         'registry_number',
         'registry_date',
         'registry_type',
+        'subsanacion',
+        'rechazo_previo',
+        'amends_registry_id',
         'hash',
         'previous_hash',
         'hash_generated_at',
@@ -91,6 +98,9 @@ class Registry extends Model implements RegistryContract
     protected $casts = [
         'registry_date' => 'datetime',
         'registry_type' => RegistryTypeEnum::class,
+        'subsanacion' => 'boolean',
+        'rechazo_previo' => RechazoPrevioEnum::class,
+        'amends_registry_id' => 'integer',
         'submitted_at' => 'datetime',
         'submission_attempts' => 'integer',
         'status' => RegistryStatusEnum::class,

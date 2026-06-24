@@ -7,6 +7,7 @@ use AichaDigital\LaraVerifactu\Contracts\CertificateManagerContract;
 use AichaDigital\LaraVerifactu\Contracts\HashGeneratorContract;
 use AichaDigital\LaraVerifactu\Contracts\QrGeneratorContract;
 use AichaDigital\LaraVerifactu\Contracts\XmlBuilderContract;
+use AichaDigital\LaraVerifactu\Enums\RechazoPrevioEnum;
 use AichaDigital\LaraVerifactu\Enums\RegistryStatusEnum;
 use AichaDigital\LaraVerifactu\Models\Invoice;
 use AichaDigital\LaraVerifactu\Models\Registry;
@@ -382,5 +383,53 @@ describe('submitToAeat outcome routing', function () {
         $registry->refresh();
 
         expect($registry->status)->toBe(RegistryStatusEnum::ERROR);
+    });
+});
+
+// ========================================
+// subsanación columns Tests
+// ========================================
+
+describe('subsanación columns', function () {
+    it('persists subsanacion, rechazo_previo and amends_registry_id with the enum cast', function () {
+        $invoice = Invoice::factory()->create();
+        $rejected = Registry::factory()->create(['invoice_id' => $invoice->id]);
+
+        $amendment = Registry::factory()->create([
+            'invoice_id' => $invoice->id,
+            'subsanacion' => true,
+            'rechazo_previo' => 'X',
+            'amends_registry_id' => $rejected->id,
+        ]);
+
+        $amendment->refresh();
+
+        expect($amendment->subsanacion)->toBeTrue()
+            ->and($amendment->rechazo_previo)->toBe(RechazoPrevioEnum::X)
+            ->and($amendment->amends_registry_id)->toBe($rejected->id);
+    });
+
+    it('rejects a second amendment of the same rejected registry at the DB level', function () {
+        $invoice = Invoice::factory()->create();
+        $rejected = Registry::factory()->create(['invoice_id' => $invoice->id]);
+
+        Registry::factory()->create([
+            'invoice_id' => $invoice->id,
+            'amends_registry_id' => $rejected->id,
+        ]);
+
+        expect(fn () => Registry::factory()->create([
+            'invoice_id' => $invoice->id,
+            'amends_registry_id' => $rejected->id,
+        ]))->toThrow(Illuminate\Database\QueryException::class);
+    });
+
+    it('allows multiple registries with a null amends_registry_id', function () {
+        $invoice = Invoice::factory()->create();
+
+        Registry::factory()->create(['invoice_id' => $invoice->id, 'amends_registry_id' => null]);
+        Registry::factory()->create(['invoice_id' => $invoice->id, 'amends_registry_id' => null]);
+
+        expect(Registry::whereNull('amends_registry_id')->count())->toBe(2);
     });
 });

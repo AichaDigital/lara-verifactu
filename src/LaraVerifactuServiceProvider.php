@@ -58,6 +58,10 @@ class LaraVerifactuServiceProvider extends PackageServiceProvider
                 '2026_06_17_000001_drop_operation_key_from_verifactu_invoices',
                 '2026_06_17_000002_drop_simplified_from_verifactu_invoices',
                 '2026_06_20_000001_add_calificacion_to_verifactu_invoice_breakdowns_table',
+                // AID-137: subsanación («ALTA POR RECHAZO») columns. MUST be
+                // listed here or publishMigrations() never copies it to
+                // consumers (CI does not catch this — tests load the folder).
+                '2026_06_24_000001_add_subsanacion_to_verifactu_registries_table',
             ])
             ->hasCommand(RegisterInvoiceCommand::class)
             ->hasCommand(RetryFailedCommand::class)
