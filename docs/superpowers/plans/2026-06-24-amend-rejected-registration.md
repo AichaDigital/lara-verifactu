@@ -286,10 +286,10 @@ return new class extends Migration
                 ->nullOnDelete();
         });
 
-        // Unique only where not null: one amendment per rejected record, but
-        // any number of rows may have a null amends_registry_id. SQLite (the
-        // default test driver) and Postgres honour a partial unique index;
-        // the where-clause keeps the null rows out of the constraint.
+        // Nullable unique index: one amendment per rejected record, but any
+        // number of rows may have a null amends_registry_id. MySQL and SQLite
+        // both treat multiple NULLs as distinct in a standard unique index, so
+        // the null rows never collide — no WHERE clause is needed.
         Schema::table('verifactu_registries', function (Blueprint $table) {
             $table->unique('amends_registry_id', 'verifactu_registries_amends_unique');
         });
@@ -309,7 +309,7 @@ return new class extends Migration
 };
 ```
 
-> **Note on the unique index:** a plain `->unique()` enforces single-amendment for non-null values; multiple null `amends_registry_id` rows are the norm (every normal registry) and MUST stay allowed. On SQLite a standard unique index already treats multiple `NULL`s as distinct (so they do not collide), which is the behaviour the third test asserts; the index name is pinned so `down()` can drop it. If a target DB ever rejected multiple nulls, convert to a raw partial index (`CREATE UNIQUE INDEX ... WHERE amends_registry_id IS NOT NULL`) — out of scope here since the test suite runs on SQLite.
+> **Note on the unique index:** a plain `->unique()` on a nullable column (a "nullable unique index") enforces single-amendment for non-null values; multiple null `amends_registry_id` rows are the norm (every normal registry) and MUST stay allowed. MySQL and SQLite both treat multiple `NULL`s as distinct in a standard unique index (they never collide), which is the behaviour the third test asserts; the index name is pinned so `down()` can drop it.
 
 - [ ] **Step 4: Register the migration in the ServiceProvider**
 
@@ -363,7 +363,7 @@ git add database/migrations/2026_06_24_000001_add_subsanacion_to_verifactu_regis
 git commit -m "feat: add subsanacion/rechazo_previo/amends_registry_id columns (AID-137)"
 ```
 
-### Task 4: `RegistryContract` accessors — `getRegistryType()` / `getAmendsRegistryId()` (+ model)
+### Task 4: `RegistryContract` accessors — `getRegistryType()` / `getAmendsRegistryId()` / `getId()` (+ model)
 
 **Files:**
 - Modify: `src/Contracts/RegistryContract.php`
@@ -371,7 +371,7 @@ git commit -m "feat: add subsanacion/rechazo_previo/amends_registry_id columns (
 - Test: `tests/Feature/RegistryManagerTest.php`
 
 **Interfaces:**
-- Produces: `RegistryContract::getRegistryType(): RegistryTypeEnum` (used by guard 1 in Task 9) and `RegistryContract::getAmendsRegistryId(): ?int`. The model already casts `registry_type` to the enum and (after Task 3) `amends_registry_id` to int, so the accessors are thin reads.
+- Produces: `RegistryContract::getRegistryType(): RegistryTypeEnum` (guard 1 in Task 9), `RegistryContract::getAmendsRegistryId(): ?int`, and `RegistryContract::getId(): int|string|null` (consistent with `InvoiceContract::getId()`; used by guard 5 and `amends_registry_id` assignment in Task 9). The model already casts `registry_type` to the enum and (after Task 3) `amends_registry_id` to int, so all three accessors are thin reads.
 - Consumes: `RegistryTypeEnum` (existing), the Task 3 column.
 
 - [ ] **Step 1: Write the failing test**
@@ -380,7 +380,7 @@ Add to `tests/Feature/RegistryManagerTest.php`:
 
 ```php
 describe('registry contract accessors', function () {
-    it('exposes the registry type and the amended registry id', function () {
+    it('exposes the registry type, the amended registry id, and the registry id', function () {
         $invoice = Invoice::factory()->create();
         $rejected = Registry::factory()->create([
             'invoice_id' => $invoice->id,
@@ -394,7 +394,9 @@ describe('registry contract accessors', function () {
 
         expect($amendment->getRegistryType())->toBe(RegistryTypeEnum::REGISTRATION)
             ->and($amendment->getAmendsRegistryId())->toBe($rejected->id)
-            ->and($rejected->getAmendsRegistryId())->toBeNull();
+            ->and($rejected->getAmendsRegistryId())->toBeNull()
+            ->and($rejected->getId())->toBe($rejected->id)
+            ->and($amendment->getId())->toBe($amendment->id);
     });
 });
 ```
@@ -408,9 +410,15 @@ Expected: FAIL with `Call to undefined method ... getRegistryType()`.
 
 - [ ] **Step 3: Add the contract methods**
 
-In `src/Contracts/RegistryContract.php`, add the import `use AichaDigital\LaraVerifactu\Enums\RegistryTypeEnum;` (after the existing `use ... RegistryStatusEnum;`) and declare the two methods (e.g. after `getRegistryDate()`):
+In `src/Contracts/RegistryContract.php`, add the import `use AichaDigital\LaraVerifactu\Enums\RegistryTypeEnum;` (after the existing `use ... RegistryStatusEnum;`) and declare the three methods (e.g. after `getRegistryDate()`):
 
 ```php
+    /**
+     * Get the registry primary key, or null when the model has not been persisted yet.
+     * Mirrors InvoiceContract::getId() for guard and FK consistency.
+     */
+    public function getId(): int|string|null;
+
     /**
      * Get the registry type (RegistroAlta vs RegistroAnulacion).
      */
@@ -428,6 +436,14 @@ In `src/Contracts/RegistryContract.php`, add the import `use AichaDigital\LaraVe
 In `src/Models/Registry.php`, add (in the `RegistryContract Implementation` block, e.g. after `getRegistryDate()`):
 
 ```php
+    /**
+     * Get the registry primary key (mirrors InvoiceContract::getId()).
+     */
+    public function getId(): int|string|null
+    {
+        return $this->id;
+    }
+
     /**
      * Get the registry type (RegistroAlta vs RegistroAnulacion).
      */
@@ -456,7 +472,7 @@ Expected: PASS.
 
 ```bash
 git add src/Contracts/RegistryContract.php src/Models/Registry.php tests/Feature/RegistryManagerTest.php
-git commit -m "feat: add getRegistryType/getAmendsRegistryId to RegistryContract (AID-137)"
+git commit -m "feat: add getRegistryType/getAmendsRegistryId/getId to RegistryContract (AID-137)"
 ```
 
 ### Task 5: `XmlBuilder` emits `Subsanacion` / `RechazoPrevio` (circumstances threaded through `buildRegistrationXml` + contract)
@@ -1270,14 +1286,10 @@ beforeEach(function () {
 /**
  * Create a REJECTED initial registration whose persisted XML is real, plus the
  * Invoice it was built from. Returns [$rejected, $invoice].
- *
- * NOTE: reuse the valid-invoice factory recipe the green end-to-end/conformance
- * suite uses (F1 + recipient + one 21% breakdown, issue date >= 2024-10-28). Do
- * not invent invoice fields — mirror an existing passing fixture.
  */
 function rejectedRegistration(RegistryManager $manager): array
 {
-    $invoice = Invoice::factory()->create(); // adjust to the valid-XML recipe
+    $invoice = Invoice::factory()->create();
     $registry = $manager->createRegistry($invoice);
     $registry->update([
         'status' => RegistryStatusEnum::REJECTED->value,
@@ -1318,14 +1330,22 @@ it('amends a rejected registration with Subsanacion=S + RechazoPrevio=X', functi
         ->and($rejected->subsanacion)->toBeFalse();
 });
 
-it('chains the amendment after the last generated link', function () {
+it('chains the amendment after the last generated link, not the rejected record', function () {
     [$rejected, $invoice] = rejectedRegistration($this->registryManager);
     $this->aeatClient->shouldReceive('sendRegistration')->andReturn(new AeatResponse(success: true, code: 'CSV', message: 'Correcto'));
+
+    // Create an INTERVENING normal registry for a different invoice so the chain
+    // advances past the rejected record.
+    $interveningInvoice = Invoice::factory()->create();
+    $intervening = $this->registryManager->createRegistry($interveningInvoice);
 
     $amendment = $this->registrar->amendRejected($rejected, $invoice);
     $amendment->refresh();
 
-    expect($amendment->previous_hash)->toBe($rejected->hash);
+    // The amendment must chain after the last generated record (the intervening
+    // one), NOT after the rejected business record.
+    expect($amendment->previous_hash)->toBe($intervening->hash)
+        ->and($amendment->previous_hash)->not->toBe($rejected->hash);
 });
 
 it('guard 1: rejects amending a cancellation registry', function () {
@@ -1357,11 +1377,37 @@ it('guard 3: rejects when the rejection is a duplicate-key (key exists in AEAT)'
         ->toThrow(VerifactuException::class);
 });
 
+it('guard 3: rejects when lineas is empty (cannot prove key is absent from AEAT)', function () {
+    [$rejected, $invoice] = rejectedRegistration($this->registryManager);
+    $rejected->update([
+        'aeat_response' => [
+            'estado_envio' => 'Incorrecto',
+            'lineas' => [],
+        ],
+    ]);
+
+    expect(fn () => $this->registrar->amendRejected($rejected->fresh(), $invoice))
+        ->toThrow(VerifactuException::class);
+});
+
+it('guard 3: rejects when a line is missing the registro_duplicado key (unknown shape)', function () {
+    [$rejected, $invoice] = rejectedRegistration($this->registryManager);
+    $rejected->update([
+        'aeat_response' => [
+            'estado_envio' => 'Incorrecto',
+            'lineas' => [['codigo' => '3002', 'descripcion' => 'NIF no identificado']],
+        ],
+    ]);
+
+    expect(fn () => $this->registrar->amendRejected($rejected->fresh(), $invoice))
+        ->toThrow(VerifactuException::class);
+});
+
 it('guard 4: rejects when the corrected invoice IDFactura does not match the persisted XML', function () {
     [$rejected, $invoice] = rejectedRegistration($this->registryManager);
 
     // A different invoice (different number) => IDFactura mismatch vs rejected XML.
-    $other = Invoice::factory()->create(['number' => 'DIFFERENT-001']); // adjust to valid recipe
+    $other = Invoice::factory()->create(['number' => 'DIFFERENT-001']);
 
     expect(fn () => $this->registrar->amendRejected($rejected, $other))
         ->toThrow(VerifactuException::class);
@@ -1376,9 +1422,22 @@ it('guard 5: rejects a second amendment of the same rejected registry', function
     expect(fn () => $this->registrar->amendRejected($rejected->fresh(), $invoice))
         ->toThrow(VerifactuException::class);
 });
+
+it('guard 5: rejects a second amendment even when the first amendment has been soft-deleted', function () {
+    [$rejected, $invoice] = rejectedRegistration($this->registryManager);
+    $this->aeatClient->shouldReceive('sendRegistration')->andReturn(new AeatResponse(success: true, code: 'CSV', message: 'Correcto'));
+
+    $firstAmendment = $this->registrar->amendRejected($rejected, $invoice);
+
+    // Soft-delete the first amendment — the withTrashed() guard must still see it.
+    $firstAmendment->delete();
+
+    expect(fn () => $this->registrar->amendRejected($rejected->fresh(), $invoice))
+        ->toThrow(VerifactuException::class);
+});
 ```
 
-> A happy submit needs the CSV set: `markAsSubmitted` reads `$response->getCsv()`, which returns `$this->code`. The `AeatResponse::success(?array $data, ?string $message)` factory does NOT accept `code`, so use the constructor `new AeatResponse(success: true, code: 'CSV-OK', message: 'Correcto')` (confirmed against `src/Support/AeatResponse.php`). Also confirm the valid-invoice factory recipe by running ONE green conformance/end-to-end test and copying its `Invoice::factory()` call — guard 4 + the happy XML both require the rejected record's XML to build cleanly.
+> A happy submit needs the CSV set: `markAsSubmitted` reads `$response->getCsv()`, which returns `$this->code`. The `AeatResponse::success(?array $data, ?string $message)` factory does NOT accept `code`, so use the constructor `new AeatResponse(success: true, code: 'CSV-OK', message: 'Correcto')` (confirmed against `src/Support/AeatResponse.php`). `Invoice::factory()->create()` is the valid-XML recipe (F1 + recipient + 21% breakdown — see `database/factories/InvoiceFactory.php`); guard 4 + the happy XML both require the rejected record's XML to build cleanly.
 
 - [ ] **Step 2: Run tests to verify they fail**
 
@@ -1472,28 +1531,45 @@ In `src/Services/InvoiceRegistrar.php`, add the imports `use AichaDigital\LaraVe
     }
 ```
 
-> `RegistryContract` has no `getId()`. Add `public function getId(): ?int;` to `RegistryContract` and a model accessor returning `$this->id`, OR (simpler, no contract churn) narrow to `Registry` inside the guard: since the guards and DB writes already special-case `$registry instanceof Registry`, read `$rejectedRegistry->id` after asserting it is a `Registry`. **Decide: add `RegistryContract::getId(): ?int`** (consistent with `InvoiceContract::getId()`, and guard 5 + `amends_registry_id` both need the rejected id) — implement it on the model as `return $this->id;`. Wire this in the same task (it is a one-line accessor; not worth a separate task). Update the rejected-id reads above to `getId()` accordingly.
+> `RegistryContract::getId(): int|string|null` is defined in Task 4 alongside `getRegistryType()` and `getAmendsRegistryId()`. Guard 5 and the `amends_registry_id` assignment above call it directly.
 
 Add the two private guard helpers:
 
 ```php
     /**
      * Guard 3 helper: the persisted AEAT rejection (AID-257) must show the key
-     * is not in AEAT. A duplicate-key / already-registered line (registro_duplicado)
-     * means the key exists; a null/empty response cannot prove not-in-AEAT.
+     * is not in AEAT. Fail-loud conditions:
+     *  - null/empty response → cannot prove not-in-AEAT.
+     *  - lineas is not a non-empty array → unknown/malformed shape, cannot prove not-in-AEAT.
+     *  - any line lacks the `registro_duplicado` key → incomplete shape, cannot prove not-in-AEAT.
+     *  - any line has registro_duplicado === true → key exists in AEAT; RechazoPrevio=X invalid.
      */
     private function assertRejectionProvesNotInAeat(RegistryContract $rejected): void
     {
         $response = $rejected->getAeatResponse();
 
-        if ($response === null || ($response['lineas'] ?? null) === null) {
+        if ($response === null) {
             throw VerifactuException::make(
-                'amendRejected: the rejection carries no AEAT line metadata, so the key cannot be proven absent from AEAT'
+                'amendRejected: the rejection carries no AEAT response metadata, so the key cannot be proven absent from AEAT'
             );
         }
 
-        foreach ($response['lineas'] as $line) {
-            if (is_array($line) && ($line['registro_duplicado'] ?? false) === true) {
+        $lines = $response['lineas'] ?? null;
+
+        if (! is_array($lines) || $lines === []) {
+            throw VerifactuException::make(
+                'amendRejected: the rejection lineas are empty or malformed — cannot prove the key is absent from AEAT'
+            );
+        }
+
+        foreach ($lines as $line) {
+            if (! is_array($line) || ! array_key_exists('registro_duplicado', $line)) {
+                throw VerifactuException::make(
+                    'amendRejected: a rejection line is missing the registro_duplicado key — cannot prove the key is absent from AEAT'
+                );
+            }
+
+            if ($line['registro_duplicado'] === true) {
                 throw VerifactuException::make(
                     'amendRejected: rejection is a duplicate-key/already-registered code; the key exists in AEAT, so RechazoPrevio=X is invalid (use the AID-209 flow)'
                 );
@@ -1621,7 +1697,7 @@ Expected: Pint `PASS`, PHPStan `[OK] No errors`.
 - [ ] **Step 3: Commit any pint/phpstan adjustments**
 
 ```bash
-git add -A
+git add src/Enums/RechazoPrevioEnum.php src/Support/RegistrationCircumstances.php src/Services/HashGenerator.php src/Services/RegistryManager.php src/Services/XmlBuilder.php src/Services/InvoiceRegistrar.php src/Verifactu.php src/Contracts/RegistryContract.php src/Contracts/XmlBuilderContract.php src/Contracts/HashGeneratorContract.php src/Models/Registry.php src/LaraVerifactuServiceProvider.php database/migrations/2026_06_24_000001_add_subsanacion_to_verifactu_registries_table.php tests/Unit/EnumsTest.php tests/Unit/XmlBuilderTest.php tests/Unit/HashGeneratorTest.php tests/Unit/RegistrationCircumstancesTest.php tests/Feature/RegistryManagerTest.php tests/Feature/AmendRejectedTest.php tests/Feature/BlockchainReproducibilityTest.php tests/Feature/XmlBuilderConformanceTest.php tests/Feature/XmlBuilderFailLoudTest.php
 git commit -m "chore: pint + phpstan for amend-by-rejection (AID-137)" || echo "nothing to commit"
 ```
 
@@ -1632,7 +1708,7 @@ git commit -m "chore: pint + phpstan for amend-by-rejection (AID-137)" || echo "
 - **Spec coverage:** «ALTA POR RECHAZO» only (Subsanacion=S + RechazoPrevio=X, key provably not in AEAT) — Tasks 1/2/5/6/9. AID-209 variants out of scope (guards 2 + 3 point there). §8 verify-from-persisted-XML, fail-loud, both registry types — Tasks 7 + 8. New columns + `hasMigrations` registration + DB unique index — Task 3. `RegistryContract` accessors — Task 4 (+ `getId()` in Task 9). Immutable rejected record (no inverse column; derived from guard 5 + DB index) — Tasks 3 + 9. ✓
 - **§8 fully pinned (no DESIGN RISK):** typed `generateRegistrationFromParts`/`generateCancellationFromParts` (NOT `array $parts`), wrappers delegate with no behavior change, `verifyRegistryHash` reads persisted XML via `sf:` XPath + columns, dispatches on `registry_type`, fail-loud on null/unparseable/missing-node, never reads `$registry->invoice`. ✓
 - **No forward references:** each task only consumes earlier-task interfaces. Enum (1) → VO (2) → migration/model (3) → contract accessors (4) → builder (5) → manager createRegistry (6) → hash parts (7) → verify (8) → amendRejected (9) → gate (10). ✓
-- **Type consistency:** `RechazoPrevioEnum {N,S,X}`, `RegistrationCircumstances(bool, ?RechazoPrevioEnum)`, `getRegistryType(): RegistryTypeEnum`, `getAmendsRegistryId(): ?int`, `getId(): ?int`, `amendRejected(RegistryContract, InvoiceContract, bool): RegistryContract` — used identically across tasks. ✓
-- **Two residual implementation decisions (flagged inline, not blocking):** (a) `RegistryContract::getId()` added in Task 9 (one-line accessor, consistent with `InvoiceContract::getId()`); (b) Task 8 Step 4 requires auditing the manager-level `verifyBlockchain` fixtures (stale `hashGenerator->verify` mocks + `<xml></xml>` fixtures) and rebuilding them with a real `XmlBuilder` — the plan prescribes reusing the `BlockchainReproducibilityTest` real-builder setup rather than weakening the fail-loud contract. Both are concrete instructions, not open questions.
+- **Type consistency:** `RechazoPrevioEnum {N,S,X}`, `RegistrationCircumstances(bool, ?RechazoPrevioEnum)`, `getRegistryType(): RegistryTypeEnum`, `getAmendsRegistryId(): ?int`, `getId(): int|string|null`, `amendRejected(RegistryContract, InvoiceContract, bool): RegistryContract` — used identically across tasks. ✓
+- **One residual implementation decision (flagged inline, not blocking):** Task 8 Step 4 requires auditing the manager-level `verifyBlockchain` fixtures (stale `hashGenerator->verify` mocks + `<xml></xml>` fixtures) and rebuilding them with a real `XmlBuilder` — the plan prescribes reusing the `BlockchainReproducibilityTest` real-builder setup rather than weakening the fail-loud contract. This is a concrete instruction, not an open question.
 - **Valid-invoice factory recipe:** Tasks 8 and 9 both depend on `Invoice::factory()` producing XSD-valid RegistroAlta XML through the real builder. The plan instructs copying the recipe from an existing green conformance/end-to-end test rather than inventing fields — the one remaining "look it up" step (the factory's exact valid state is not load-bearing to the design and lives in the green suite).
 - **No placeholders:** every step has real code, real commands, and explicit expected output. ✓

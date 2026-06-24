@@ -86,7 +86,7 @@ folder). Columns on `verifactu_registries`:
 
 ### 2. `RegistryContract` accessors
 
-Add `getRegistryType(): RegistryTypeEnum` (guard 1) and `getAmendsRegistryId(): ?int`.
+Add `getId(): int|string|null` (mirrors `InvoiceContract::getId()`; used by guard 5 + `amends_registry_id` FK), `getRegistryType(): RegistryTypeEnum` (guard 1), and `getAmendsRegistryId(): ?int`.
 
 ### 3. `amendRejected` — public API + fail-loud guards
 
@@ -142,10 +142,13 @@ corrected data + `<Subsanacion>S</Subsanacion>` + `<RechazoPrevio>X</RechazoPrev
 `previous_hash` chains after the **last generated link** (`RegistroAnterior` = the
 previous generated SIF record, not the rejected business record); `amends_registry_id`
 is the separate business link. AEAT accepts chaining onto hashes of rejected links
-it never received (AID-129). **Concurrency note** (Codex `[P2]`): previous-link
-selection is not locked, so concurrent registry creation can fork the local chain —
-generation must select+insert under a lock (row lock / serialized) to keep the chain
-linear. Applies to `register()` too; in scope here because amendment adds a link.
+it never received (AID-129). **Concurrency note** (Codex `[P2]`): AID-137's specific
+double-amendment race is fully covered by the DB unique index on `amends_registry_id`
+(§1) — that constraint blocks two concurrent amendments of the same rejected record at
+the database level. The broader chain-fork-under-concurrency problem (unserialised
+`previous_hash` selection in `register()` / `createRegistry()` under parallel writes)
+is a pre-existing global concern not introduced by this amendment flow and is deferred
+to a separate concurrency-hardening issue (AID-258); it is **out of AID-137 scope**.
 
 ### 7. Rejected record stays immutable
 
