@@ -268,3 +268,45 @@ describe('getRetryableRegistries', function () {
         expect($retryable)->toHaveCount(1);
     });
 });
+
+// ========================================
+// markAsRejected Tests
+// ========================================
+
+describe('markAsRejected', function () {
+    it('marks a registry REJECTED and persists the AEAT response metadata', function () {
+        $invoice = Invoice::factory()->create();
+        $registry = Registry::factory()->create([
+            'invoice_id' => $invoice->id,
+            'status' => RegistryStatusEnum::PENDING->value,
+            'submission_attempts' => 0,
+        ]);
+
+        $this->registryManager->markAsRejected(
+            $registry,
+            '3002: NIF del IDFactura no identificado',
+            ['estado_envio' => 'Incorrecto', 'lineas' => [['codigo' => '3002']]],
+        );
+
+        $registry->refresh();
+
+        expect($registry->status)->toBe(RegistryStatusEnum::REJECTED)
+            ->and($registry->aeat_error)->toContain('3002')
+            ->and($registry->aeat_response['estado_envio'])->toBe('Incorrecto')
+            ->and($registry->submission_attempts)->toBe(1);
+    });
+
+    it('never overwrites a SENT registry with REJECTED', function () {
+        $invoice = Invoice::factory()->create();
+        $registry = Registry::factory()->create([
+            'invoice_id' => $invoice->id,
+            'status' => RegistryStatusEnum::SENT->value,
+        ]);
+
+        $this->registryManager->markAsRejected($registry, 'late rejection', null);
+
+        $registry->refresh();
+
+        expect($registry->status)->toBe(RegistryStatusEnum::SENT);
+    });
+});
