@@ -52,10 +52,63 @@ final class AeatResponseParser
             );
         }
 
+        $lineDetails = $this->collectLineDetails($response);
+
+        // A well-formed AEAT rejection: AEAT evaluated the submission and said
+        // Incorrecto (EstadoEnvio present, or per-line EstadoRegistro/errors). A
+        // degenerate object with neither is treated as a transport failure.
+        $isValidationRejection = $submissionStatus !== null || $lineDetails !== [];
+
+        if ($isValidationRejection) {
+            return AeatResponse::rejection(
+                errors: $lineErrors === [] ? ['Submission rejected by AEAT'] : $lineErrors,
+                message: $submissionStatus ?? 'Rejected by AEAT',
+                data: [
+                    'estado_envio' => $submissionStatus,
+                    'lineas' => $lineDetails,
+                ],
+            );
+        }
+
         return AeatResponse::failure(
-            errors: $lineErrors === [] ? ['Submission rejected by AEAT'] : $lineErrors,
+            errors: $lineErrors === [] ? ['Invalid response from AEAT server'] : $lineErrors,
             message: $submissionStatus ?? 'Unknown AEAT response',
         );
+    }
+
+    /**
+     * Collect structured per-line rejection metadata (preserved for AID-137 to
+     * tell a duplicate-key rejection from a genuine not-in-AEAT rejection).
+     *
+     * @return array<int, array{estado_registro: ?string, codigo: ?string, descripcion: ?string, registro_duplicado: bool}>
+     */
+    private function collectLineDetails(object $response): array
+    {
+        if (! property_exists($response, 'RespuestaLinea') || $response->RespuestaLinea === null) {
+            return [];
+        }
+
+        $lines = is_array($response->RespuestaLinea)
+            ? $response->RespuestaLinea
+            : [$response->RespuestaLinea];
+
+        $details = [];
+
+        foreach ($lines as $line) {
+            if (! is_object($line)) {
+                continue;
+            }
+
+            $details[] = [
+                'estado_registro' => $this->stringProperty($line, 'EstadoRegistro'),
+                'codigo' => $this->stringProperty($line, 'CodigoErrorRegistro'),
+                'descripcion' => $this->stringProperty($line, 'DescripcionErrorRegistro'),
+                'registro_duplicado' => property_exists($line, 'RegistroDuplicado')
+                    && $line->RegistroDuplicado !== null,
+            ];
+        }
+
+        return $details;
     }
 
     /**

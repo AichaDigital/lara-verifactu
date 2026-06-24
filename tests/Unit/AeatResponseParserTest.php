@@ -96,3 +96,48 @@ it('returns failure for a non-object response', function () {
 
     expect($result->isFailure())->toBeTrue();
 });
+
+it('classifies a validation rejection and preserves line metadata', function () {
+    $response = (object) [
+        'EstadoEnvio' => 'Incorrecto',
+        'RespuestaLinea' => [
+            (object) [
+                'EstadoRegistro' => 'Incorrecto',
+                'CodigoErrorRegistro' => '3002',
+                'DescripcionErrorRegistro' => 'NIF del IDFactura no identificado',
+            ],
+        ],
+    ];
+
+    $result = $this->parser->parse($response);
+
+    expect($result->isValidationRejection())->toBeTrue()
+        ->and($result->getData()['estado_envio'])->toBe('Incorrecto')
+        ->and($result->getData()['lineas'][0]['codigo'])->toBe('3002')
+        ->and($result->getData()['lineas'][0]['estado_registro'])->toBe('Incorrecto')
+        ->and($result->getData()['lineas'][0]['registro_duplicado'])->toBeFalse();
+});
+
+it('preserves the RegistroDuplicado signal on a duplicate-key rejection', function () {
+    $response = (object) [
+        'EstadoEnvio' => 'Incorrecto',
+        'RespuestaLinea' => (object) [
+            'EstadoRegistro' => 'Incorrecto',
+            'CodigoErrorRegistro' => '3000',
+            'DescripcionErrorRegistro' => 'Registro de facturación duplicado',
+            'RegistroDuplicado' => (object) ['EstadoRegistroDuplicado' => 'Correcta'],
+        ],
+    ];
+
+    $result = $this->parser->parse($response);
+
+    expect($result->isValidationRejection())->toBeTrue()
+        ->and($result->getData()['lineas'][0]['registro_duplicado'])->toBeTrue();
+});
+
+it('treats a non-object response as a transport failure, not a rejection', function () {
+    $result = $this->parser->parse('unexpected');
+
+    expect($result->isFailure())->toBeTrue()
+        ->and($result->isValidationRejection())->toBeFalse();
+});
