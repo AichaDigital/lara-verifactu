@@ -19,6 +19,8 @@ use AichaDigital\LaraVerifactu\Support\RegistrationCircumstances;
 use AichaDigital\LaraVerifactu\Support\PreviousRegistry;
 use AichaDigital\LaraVerifactu\Support\RegistryChain;
 use Carbon\Carbon;
+use DOMDocument;
+use DOMXPath;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -30,6 +32,9 @@ use Illuminate\Support\Facades\DB;
  */
 final class RegistryManager
 {
+    /** AEAT SuministroInformacion namespace — the sf: prefix used in persisted XML. */
+    private const SF_NS = 'https://www2.agenciatributaria.gob.es/static_files/common/internet/dep/aplicaciones/es/aeat/tike/cont/ws/SuministroInformacion.xsd';
+
     public function __construct(
         private readonly HashGeneratorContract $hashGenerator,
         private readonly QrGeneratorContract $qrGenerator,
@@ -250,32 +255,108 @@ final class RegistryManager
     }
 
     /**
-     * Rebuild and compare the hash of a registry using its persisted chain data
+     * Rebuild and compare a registry's hash from its PERSISTED XML (spec §8).
+     *
+     * The hash inputs are read from the immutable historical XML via namespaced
+     * (sf:) XPath plus the previous_hash / hash_generated_at columns — never from
+     * $registry->invoice, which is mutable and would make verification lie after
+     * an amendment feeds corrected data. Fail-loud: a null/unparseable XML or any
+     * missing node returns false (chain invalid). Covers RegistroAlta and
+     * RegistroAnulacion (both had the mutable-invoice bug).
      */
     private function verifyRegistryHash(Registry $registry): bool
     {
-        $generatedAt = $registry->hash_generated_at !== null
-            ? Carbon::parse($registry->hash_generated_at)
-            : null;
+        $xml = $registry->xml;
 
-        if ($registry->registry_type === RegistryTypeEnum::CANCELLATION) {
-            $expected = $this->hashGenerator->generateCancellation(
-                $registry->invoice->getIssuerTaxId(),
-                $registry->invoice->getInvoiceNumber(),
-                $registry->invoice->getIssueDatetime(),
-                $registry->previous_hash,
-                $generatedAt,
+        if ($xml === null || $xml === '') {
+            return false;
+        }
+
+        $previousUseErrors = libxml_use_internal_errors(true);
+
+        try {
+            $dom = new DOMDocument;
+
+            if (! $dom->loadXML($xml)) {
+                return false;
+            }
+
+            $xpath = new DOMXPath($dom);
+            $xpath->registerNamespace('sf', self::SF_NS);
+
+            $generatedAt = $registry->hash_generated_at;
+
+            if ($generatedAt === null) {
+                return false;
+            }
+
+            if ($registry->registry_type === RegistryTypeEnum::CANCELLATION) {
+                $issuer = $this->xpathValue($xpath, '//sf:RegistroAnulacion/sf:IDFactura/sf:IDEmisorFacturaAnulada');
+                $numSerie = $this->xpathValue($xpath, '//sf:RegistroAnulacion/sf:IDFactura/sf:NumSerieFacturaAnulada');
+                $fecha = $this->xpathValue($xpath, '//sf:RegistroAnulacion/sf:IDFactura/sf:FechaExpedicionFacturaAnulada');
+
+                if ($issuer === null || $numSerie === null || $fecha === null) {
+                    return false;
+                }
+
+                $expected = $this->hashGenerator->generateCancellationFromParts(
+                    issuerTaxId: $issuer,
+                    numSerieFactura: $numSerie,
+                    fechaExpedicion: $fecha,
+                    previousHash: $registry->previous_hash,
+                    fechaHoraHusoGen: $generatedAt,
+                );
+
+                return hash_equals($expected, strtoupper($registry->hash));
+            }
+
+            $issuer = $this->xpathValue($xpath, '//sf:RegistroAlta/sf:IDFactura/sf:IDEmisorFactura');
+            $numSerie = $this->xpathValue($xpath, '//sf:RegistroAlta/sf:IDFactura/sf:NumSerieFactura');
+            $fecha = $this->xpathValue($xpath, '//sf:RegistroAlta/sf:IDFactura/sf:FechaExpedicionFactura');
+            $tipo = $this->xpathValue($xpath, '//sf:RegistroAlta/sf:TipoFactura');
+            $cuota = $this->xpathValue($xpath, '//sf:RegistroAlta/sf:CuotaTotal');
+            $importe = $this->xpathValue($xpath, '//sf:RegistroAlta/sf:ImporteTotal');
+
+            if ($issuer === null || $numSerie === null || $fecha === null
+                || $tipo === null || $cuota === null || $importe === null) {
+                return false;
+            }
+
+            $expected = $this->hashGenerator->generateRegistrationFromParts(
+                issuerTaxId: $issuer,
+                numSerieFactura: $numSerie,
+                fechaExpedicion: $fecha,
+                tipoFactura: $tipo,
+                cuotaTotal: $cuota,
+                importeTotal: $importe,
+                previousHash: $registry->previous_hash,
+                fechaHoraHusoGen: $generatedAt,
             );
 
             return hash_equals($expected, strtoupper($registry->hash));
+        } catch (\Throwable) {
+            return false;
+        } finally {
+            libxml_clear_errors();
+            libxml_use_internal_errors($previousUseErrors);
+        }
+    }
+
+    /**
+     * Read the trimmed text of the first node matching $query, or null when the
+     * node is absent (fail-loud: a missing required node invalidates the hash).
+     */
+    private function xpathValue(DOMXPath $xpath, string $query): ?string
+    {
+        $nodes = $xpath->query($query);
+
+        if ($nodes === false || $nodes->length === 0) {
+            return null;
         }
 
-        return $this->hashGenerator->verify(
-            $registry->hash,
-            $registry->invoice,
-            $registry->previous_hash,
-            $generatedAt,
-        );
+        $value = $nodes->item(0)?->textContent;
+
+        return $value !== null ? trim($value) : null;
     }
 
     /**

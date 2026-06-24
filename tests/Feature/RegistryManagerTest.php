@@ -13,8 +13,10 @@ use AichaDigital\LaraVerifactu\Enums\RegistryStatusEnum;
 use AichaDigital\LaraVerifactu\Enums\RegistryTypeEnum;
 use AichaDigital\LaraVerifactu\Models\Invoice;
 use AichaDigital\LaraVerifactu\Models\Registry;
+use AichaDigital\LaraVerifactu\Services\HashGenerator;
 use AichaDigital\LaraVerifactu\Services\InvoiceRegistrar;
 use AichaDigital\LaraVerifactu\Services\RegistryManager;
+use AichaDigital\LaraVerifactu\Services\XmlBuilder;
 use AichaDigital\LaraVerifactu\Support\AeatResponse;
 use Carbon\Carbon;
 
@@ -72,57 +74,59 @@ describe('verifyBlockchain', function () {
             ->and($result['errors'])->toBeEmpty();
     });
 
-    it('returns valid when chain is correct', function () {
-        $this->hashGenerator
-            ->shouldReceive('verify')
-            ->andReturn(true);
+    /**
+     * The two tests below require the REAL XmlBuilder so that verifyRegistryHash
+     * can parse the sf:-namespaced XML it produces. A mocked builder that returns
+     * '<xml/>' (no sf: nodes) now fails-loud — the old hashGenerator->verify mock
+     * is dead and must not be used.
+     */
+    describe('with real XmlBuilder', function () {
+        beforeEach(function () {
+            config()->set('verifactu.company.tax_id', '89890001K');
+            config()->set('verifactu.company.name', 'Empresa Ejemplo SL');
+            config()->set('verifactu.system.vendor_name', 'AichaDigital SL');
+            config()->set('verifactu.system.vendor_nif', 'B70123456');
+            config()->set('verifactu.system.name', 'LaraVerifactu');
+            config()->set('verifactu.system.id', 'LV');
+            config()->set('verifactu.system.version', '1.0');
+            config()->set('verifactu.system.installation_number', '1');
 
-        $invoice1 = Invoice::factory()->create();
-        Registry::factory()->create([
-            'invoice_id' => $invoice1->id,
-            'hash' => 'hash1',
-            'previous_hash' => null,
-            'registry_date' => Carbon::now()->subDays(2),
-        ]);
+            $qrGenerator = Mockery::mock(QrGeneratorContract::class);
+            $qrGenerator->shouldReceive('generateUrl')->andReturn('https://example.test/qr');
+            $qrGenerator->shouldReceive('generateSvg')->andReturn('<svg/>');
+            $qrGenerator->shouldReceive('generatePng')->andReturn('png-binary');
 
-        $invoice2 = Invoice::factory()->create();
-        Registry::factory()->create([
-            'invoice_id' => $invoice2->id,
-            'hash' => 'hash2',
-            'previous_hash' => 'hash1',
-            'registry_date' => Carbon::now()->subDay(),
-        ]);
+            // Override the mock registryManager with a real-builder one.
+            $this->registryManager = new RegistryManager(
+                new HashGenerator,
+                $qrGenerator,
+                new XmlBuilder,
+            );
+        });
 
-        $result = $this->registryManager->verifyBlockchain();
+        it('returns valid when chain is correct', function () {
+            $this->registryManager->createRegistry(Invoice::factory()->create());
+            $this->registryManager->createRegistry(Invoice::factory()->create());
 
-        expect($result['valid'])->toBeTrue();
-    });
+            $result = $this->registryManager->verifyBlockchain();
 
-    it('returns invalid when chain is broken', function () {
-        $this->hashGenerator
-            ->shouldReceive('verify')
-            ->andReturn(true);
+            expect($result['valid'])->toBeTrue()
+                ->and($result['errors'])->toBeEmpty();
+        });
 
-        $invoice1 = Invoice::factory()->create();
-        Registry::factory()->create([
-            'invoice_id' => $invoice1->id,
-            'hash' => 'hash1',
-            'previous_hash' => null,
-            'registry_date' => Carbon::now()->subDays(2),
-        ]);
+        it('returns invalid when chain is broken', function () {
+            $registry = $this->registryManager->createRegistry(Invoice::factory()->create());
 
-        $invoice2 = Invoice::factory()->create();
-        Registry::factory()->create([
-            'invoice_id' => $invoice2->id,
-            'hash' => 'hash2',
-            'previous_hash' => 'wrong_hash', // Should be 'hash1'
-            'registry_date' => Carbon::now()->subDay(),
-        ]);
+            // Corrupt the stored hash so the next registry's previous_hash won't match.
+            $registry->update(['hash' => strtoupper(hash('sha256', 'tampered'))]);
 
-        $result = $this->registryManager->verifyBlockchain();
+            $this->registryManager->createRegistry(Invoice::factory()->create());
 
-        expect($result['valid'])->toBeFalse()
-            ->and($result['errors'])->not->toBeEmpty();
+            $result = $this->registryManager->verifyBlockchain();
+
+            expect($result['valid'])->toBeFalse()
+                ->and($result['errors'])->not->toBeEmpty();
+        });
     });
 });
 
