@@ -9,6 +9,7 @@ class AeatResponse
     /**
      * @param  array<string, mixed>|null  $data
      * @param  array<int, string>|null  $errors
+     * @param  bool  $rejection  True when AEAT semantically rejected the submission (EstadoEnvio/EstadoRegistro=Incorrecto), as opposed to a transport failure.
      */
     public function __construct(
         protected bool $success,
@@ -16,6 +17,7 @@ class AeatResponse
         protected ?string $message = null,
         protected ?array $data = null,
         protected ?array $errors = null,
+        protected bool $rejection = false,
     ) {}
 
     public function isSuccess(): bool
@@ -26,6 +28,11 @@ class AeatResponse
     public function isFailure(): bool
     {
         return ! $this->success;
+    }
+
+    public function isValidationRejection(): bool
+    {
+        return $this->rejection;
     }
 
     public function getCode(): ?string
@@ -86,6 +93,7 @@ class AeatResponse
             'message' => $this->message,
             'data' => $this->data,
             'errors' => $this->errors,
+            'rejection' => $this->rejection,
         ];
     }
 
@@ -111,6 +119,24 @@ class AeatResponse
             code: $code,
             message: $message,
             errors: $errors
+        );
+    }
+
+    /**
+     * A well-formed AEAT response that AEAT evaluated and rejected
+     * (EstadoEnvio/EstadoRegistro=Incorrecto), as opposed to a transport failure.
+     *
+     * @param  array<int, string>|null  $errors
+     * @param  array<string, mixed>|null  $data
+     */
+    public static function rejection(?array $errors = null, ?string $message = null, ?array $data = null): self
+    {
+        return new self(
+            success: false,
+            message: $message,
+            data: $data,
+            errors: $errors,
+            rejection: true,
         );
     }
 }

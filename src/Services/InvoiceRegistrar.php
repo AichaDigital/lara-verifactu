@@ -161,10 +161,18 @@ final class InvoiceRegistrar
                     // Dispatch success event
                     event(new RegistrySubmittedEvent($registry, $response));
                 } else {
-                    $this->registryManager->markAsFailed(
-                        $registry,
-                        $response->getErrorMessage()
-                    );
+                    if ($response->isValidationRejection()) {
+                        $this->registryManager->markAsRejected(
+                            $registry,
+                            $response->getErrorMessage(),
+                            $response->getData()
+                        );
+                    } else {
+                        $this->registryManager->markAsFailed(
+                            $registry,
+                            $response->getErrorMessage()
+                        );
+                    }
 
                     Log::channel(config('verifactu.logging.channel', 'single'))
                         ->error('Registry submission failed', [

@@ -126,9 +126,15 @@ describe('RegistryStatusEnum', function () {
     it('identifies retryable statuses correctly', function () {
         expect(RegistryStatusEnum::PENDING->canRetry())->toBeTrue();
         expect(RegistryStatusEnum::ERROR->canRetry())->toBeTrue();
-        expect(RegistryStatusEnum::REJECTED->canRetry())->toBeTrue();
+        expect(RegistryStatusEnum::REJECTED->canRetry())->toBeFalse();
         expect(RegistryStatusEnum::SENT->canRetry())->toBeFalse();
         expect(RegistryStatusEnum::ACCEPTED->canRetry())->toBeFalse();
+    });
+
+    it('excludes REJECTED from the retryable statuses', function () {
+        expect(RegistryStatusEnum::REJECTED->canRetry())->toBeFalse()
+            ->and(RegistryStatusEnum::PENDING->canRetry())->toBeTrue()
+            ->and(RegistryStatusEnum::ERROR->canRetry())->toBeTrue();
     });
 });
 

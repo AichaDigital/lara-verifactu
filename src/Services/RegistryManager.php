@@ -341,6 +341,38 @@ final class RegistryManager
     }
 
     /**
+     * Mark a registry as a validation rejection (REJECTED) and persist the
+     * structured AEAT response. Mirrors markAsFailed's SENT-idempotency guard.
+     * REJECTED is terminal for retry: getRetryableRegistries() selects only ERROR.
+     *
+     * @param  array<string, mixed>|null  $aeatResponse
+     */
+    public function markAsRejected(
+        RegistryContract $registry,
+        string $error,
+        ?array $aeatResponse = null
+    ): void {
+        if ($registry instanceof Registry) {
+            DB::transaction(function () use ($registry, $error, $aeatResponse): void {
+                $registry->refresh();
+
+                if ($registry->status === RegistryStatusEnum::SENT) {
+                    return;
+                }
+
+                $currentAttempts = $registry->submission_attempts ?? 0;
+
+                $registry->update([
+                    'status' => RegistryStatusEnum::REJECTED->value,
+                    'aeat_error' => $error,
+                    'aeat_response' => $aeatResponse,
+                    'submission_attempts' => $currentAttempts + 1,
+                ]);
+            });
+        }
+    }
+
+    /**
      * Get pending registries for submission
      *
      * @return Collection<int, Registry>

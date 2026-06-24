@@ -2,13 +2,17 @@
 
 declare(strict_types=1);
 
+use AichaDigital\LaraVerifactu\Contracts\AeatClientContract;
+use AichaDigital\LaraVerifactu\Contracts\CertificateManagerContract;
 use AichaDigital\LaraVerifactu\Contracts\HashGeneratorContract;
 use AichaDigital\LaraVerifactu\Contracts\QrGeneratorContract;
 use AichaDigital\LaraVerifactu\Contracts\XmlBuilderContract;
 use AichaDigital\LaraVerifactu\Enums\RegistryStatusEnum;
 use AichaDigital\LaraVerifactu\Models\Invoice;
 use AichaDigital\LaraVerifactu\Models\Registry;
+use AichaDigital\LaraVerifactu\Services\InvoiceRegistrar;
 use AichaDigital\LaraVerifactu\Services\RegistryManager;
+use AichaDigital\LaraVerifactu\Support\AeatResponse;
 use Carbon\Carbon;
 
 beforeEach(function () {
@@ -266,5 +270,117 @@ describe('getRetryableRegistries', function () {
         $retryable = $this->registryManager->getRetryableRegistries(3);
 
         expect($retryable)->toHaveCount(1);
+    });
+
+    it('does not select a REJECTED registry for retry', function () {
+        $invoice = Invoice::factory()->create();
+        Registry::factory()->create([
+            'invoice_id' => $invoice->id,
+            'status' => RegistryStatusEnum::REJECTED->value,
+            'submission_attempts' => 0,
+        ]);
+
+        expect($this->registryManager->getRetryableRegistries())->toHaveCount(0);
+    });
+});
+
+// ========================================
+// markAsRejected Tests
+// ========================================
+
+describe('markAsRejected', function () {
+    it('marks a registry REJECTED and persists the AEAT response metadata', function () {
+        $invoice = Invoice::factory()->create();
+        $registry = Registry::factory()->create([
+            'invoice_id' => $invoice->id,
+            'status' => RegistryStatusEnum::PENDING->value,
+            'submission_attempts' => 0,
+        ]);
+
+        $this->registryManager->markAsRejected(
+            $registry,
+            '3002: NIF del IDFactura no identificado',
+            ['estado_envio' => 'Incorrecto', 'lineas' => [['codigo' => '3002']]],
+        );
+
+        $registry->refresh();
+
+        expect($registry->status)->toBe(RegistryStatusEnum::REJECTED)
+            ->and($registry->aeat_error)->toContain('3002')
+            ->and($registry->aeat_response['estado_envio'])->toBe('Incorrecto')
+            ->and($registry->submission_attempts)->toBe(1);
+    });
+
+    it('never overwrites a SENT registry with REJECTED', function () {
+        $invoice = Invoice::factory()->create();
+        $registry = Registry::factory()->create([
+            'invoice_id' => $invoice->id,
+            'status' => RegistryStatusEnum::SENT->value,
+        ]);
+
+        $this->registryManager->markAsRejected($registry, 'late rejection', null);
+
+        $registry->refresh();
+
+        expect($registry->status)->toBe(RegistryStatusEnum::SENT);
+    });
+});
+
+// ========================================
+// submitToAeat outcome routing Tests
+// ========================================
+
+describe('submitToAeat outcome routing', function () {
+    it('routes a validation rejection to REJECTED, not ERROR', function () {
+        $invoice = Invoice::factory()->create();
+        $registry = Registry::factory()->create([
+            'invoice_id' => $invoice->id,
+            'status' => RegistryStatusEnum::PENDING->value,
+        ]);
+
+        $aeatClient = Mockery::mock(AeatClientContract::class);
+        $aeatClient->shouldReceive('sendRegistration')->andReturn(
+            AeatResponse::rejection(
+                errors: ['3002: NIF del IDFactura no identificado'],
+                message: 'Incorrecto',
+                data: ['estado_envio' => 'Incorrecto'],
+            )
+        );
+
+        $registrar = new InvoiceRegistrar(
+            $this->registryManager,
+            Mockery::mock(CertificateManagerContract::class),
+            $aeatClient,
+        );
+
+        $registrar->submitToAeat($registry);
+        $registry->refresh();
+
+        expect($registry->status)->toBe(RegistryStatusEnum::REJECTED)
+            ->and($registry->aeat_response['estado_envio'])->toBe('Incorrecto');
+    });
+
+    it('routes a transport failure to ERROR', function () {
+        $invoice = Invoice::factory()->create();
+        $registry = Registry::factory()->create([
+            'invoice_id' => $invoice->id,
+            'status' => RegistryStatusEnum::PENDING->value,
+        ]);
+
+        $aeatClient = Mockery::mock(AeatClientContract::class);
+        $aeatClient->shouldReceive('sendRegistration')->andReturn(
+            AeatResponse::failure(errors: ['Invalid response from AEAT server'])
+        );
+
+        $registrar = new InvoiceRegistrar(
+            $this->registryManager,
+            Mockery::mock(CertificateManagerContract::class),
+            $aeatClient,
+        );
+
+        $registrar->submitToAeat($registry);
+        $registry->refresh();
+
+        expect($registry->status)->toBe(RegistryStatusEnum::ERROR);
     });
 });
