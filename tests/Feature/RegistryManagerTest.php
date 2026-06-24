@@ -9,6 +9,7 @@ use AichaDigital\LaraVerifactu\Contracts\QrGeneratorContract;
 use AichaDigital\LaraVerifactu\Contracts\XmlBuilderContract;
 use AichaDigital\LaraVerifactu\Enums\RechazoPrevioEnum;
 use AichaDigital\LaraVerifactu\Enums\RegistryStatusEnum;
+use AichaDigital\LaraVerifactu\Enums\RegistryTypeEnum;
 use AichaDigital\LaraVerifactu\Models\Invoice;
 use AichaDigital\LaraVerifactu\Models\Registry;
 use AichaDigital\LaraVerifactu\Services\InvoiceRegistrar;
@@ -431,5 +432,30 @@ describe('subsanación columns', function () {
         Registry::factory()->create(['invoice_id' => $invoice->id, 'amends_registry_id' => null]);
 
         expect(Registry::whereNull('amends_registry_id')->count())->toBe(2);
+    });
+});
+
+// ========================================
+// registry contract accessors Tests
+// ========================================
+
+describe('registry contract accessors', function () {
+    it('exposes the registry type, the amended registry id, and the registry id', function () {
+        $invoice = Invoice::factory()->create();
+        $rejected = Registry::factory()->create([
+            'invoice_id' => $invoice->id,
+            'registry_type' => RegistryTypeEnum::REGISTRATION->value,
+        ]);
+        $amendment = Registry::factory()->create([
+            'invoice_id' => $invoice->id,
+            'registry_type' => RegistryTypeEnum::REGISTRATION->value,
+            'amends_registry_id' => $rejected->id,
+        ]);
+
+        expect($amendment->getRegistryType())->toBe(RegistryTypeEnum::REGISTRATION)
+            ->and($amendment->getAmendsRegistryId())->toBe($rejected->id)
+            ->and($rejected->getAmendsRegistryId())->toBeNull()
+            ->and($rejected->getId())->toBe($rejected->id)
+            ->and($amendment->getId())->toBe($amendment->id);
     });
 });

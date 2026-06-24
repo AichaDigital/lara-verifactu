@@ -139,6 +139,30 @@ class Registry extends Model implements RegistryContract
     }
 
     /**
+     * Get the registry primary key (mirrors InvoiceContract::getId()).
+     */
+    public function getId(): int|string|null
+    {
+        return $this->id;
+    }
+
+    /**
+     * Get the registry type (RegistroAlta vs RegistroAnulacion).
+     */
+    public function getRegistryType(): RegistryTypeEnum
+    {
+        return $this->registry_type;
+    }
+
+    /**
+     * Get the id of the rejected registry this one amends, or null.
+     */
+    public function getAmendsRegistryId(): ?int
+    {
+        return $this->amends_registry_id;
+    }
+
+    /**
      * Get the associated invoice.
      */
     public function getInvoice(): InvoiceContract
