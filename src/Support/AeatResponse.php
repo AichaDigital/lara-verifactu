@@ -9,6 +9,7 @@ class AeatResponse
     /**
      * @param  array<string, mixed>|null  $data
      * @param  array<int, string>|null  $errors
+     * @param  bool  $rejection  True when AEAT semantically rejected the submission (EstadoEnvio/EstadoRegistro=Incorrecto), as opposed to a transport failure.
      */
     public function __construct(
         protected bool $success,
@@ -92,6 +93,7 @@ class AeatResponse
             'message' => $this->message,
             'data' => $this->data,
             'errors' => $this->errors,
+            'rejection' => $this->rejection,
         ];
     }
 
