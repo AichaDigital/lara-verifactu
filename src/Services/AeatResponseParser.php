@@ -70,9 +70,12 @@ final class AeatResponseParser
             );
         }
 
+        // Reached only when $submissionStatus === null and $lineDetails === []
+        // (the $isValidationRejection guard above is false), so the message is
+        // always the literal — a degenerate, AEAT-unevaluated transport failure.
         return AeatResponse::failure(
             errors: $lineErrors === [] ? ['Invalid response from AEAT server'] : $lineErrors,
-            message: $submissionStatus ?? 'Unknown AEAT response',
+            message: 'Unknown AEAT response',
         );
     }
 
