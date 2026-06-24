@@ -167,6 +167,29 @@ rejected historical record. Two parts:
   what surfaces the bug; leaving it would make `verifyBlockchain` lie after the
   first subsanación.
 
+  **Implementation (decided — option B, strict):**
+  - `HashGenerator` gains typed `generateRegistrationFromParts(string $issuerTaxId,
+    string $numSerieFactura, string $fechaExpedicion, string $tipoFactura, string
+    $cuotaTotal, string $importeTotal, ?string $previousHash, string
+    $fechaHoraHusoGen): string` and `generateCancellationFromParts(string
+    $issuerTaxId, string $numSerieFactura, string $fechaExpedicion, ?string
+    $previousHash, string $fechaHoraHusoGen): string` — typed params, NOT a generic
+    `array $parts`. Each calls the existing `buildChain()`, so the AEAT formula is
+    never duplicated.
+  - The existing `generate(InvoiceContract,...)` / `generateCancellation(...)` become
+    thin wrappers that compute invoiceNumber/amounts/type/date and delegate to the
+    new methods. No behavior change; existing callers untouched.
+  - `verifyRegistryHash()` extracts the hash inputs from the registry's **persisted
+    XML** via namespaced (`sf:`) XPath, plus the `previous_hash` / `hash_generated_at`
+    columns, and calls the matching `*FromParts` method per `registry_type`. It no
+    longer reads `$registry->invoice`.
+  - **Fail-loud:** if the XML is null/unparseable or any required node is missing,
+    `verifyRegistryHash()` returns `false` (chain invalid) — it never falls back to
+    the mutable invoice.
+  - Covers **both** RegistroAlta and RegistroAnulacion (anulación had the same
+    mutable-invoice bug); fixing only one half would leave `verifyBlockchain`
+    incoherent.
+
 ## Testing
 
 - Step 0 classification: well-formed `Incorrecto` → `REJECTED`; transport/SOAP/parse
