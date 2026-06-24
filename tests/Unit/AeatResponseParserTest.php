@@ -114,6 +114,7 @@ it('classifies a validation rejection and preserves line metadata', function () 
     expect($result->isValidationRejection())->toBeTrue()
         ->and($result->getData()['estado_envio'])->toBe('Incorrecto')
         ->and($result->getData()['lineas'][0]['codigo'])->toBe('3002')
+        ->and($result->getData()['lineas'][0]['descripcion'])->toBe('NIF del IDFactura no identificado')
         ->and($result->getData()['lineas'][0]['estado_registro'])->toBe('Incorrecto')
         ->and($result->getData()['lineas'][0]['registro_duplicado'])->toBeFalse();
 });

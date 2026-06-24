@@ -84,21 +84,9 @@ final class AeatResponseParser
      */
     private function collectLineDetails(object $response): array
     {
-        if (! property_exists($response, 'RespuestaLinea') || $response->RespuestaLinea === null) {
-            return [];
-        }
-
-        $lines = is_array($response->RespuestaLinea)
-            ? $response->RespuestaLinea
-            : [$response->RespuestaLinea];
-
         $details = [];
 
-        foreach ($lines as $line) {
-            if (! is_object($line)) {
-                continue;
-            }
-
+        foreach ($this->lineObjects($response) as $line) {
             $details[] = [
                 'estado_registro' => $this->stringProperty($line, 'EstadoRegistro'),
                 'codigo' => $this->stringProperty($line, 'CodigoErrorRegistro'),
@@ -118,21 +106,9 @@ final class AeatResponseParser
      */
     private function collectLineErrors(object $response): array
     {
-        if (! property_exists($response, 'RespuestaLinea') || $response->RespuestaLinea === null) {
-            return [];
-        }
-
-        $lines = is_array($response->RespuestaLinea)
-            ? $response->RespuestaLinea
-            : [$response->RespuestaLinea];
-
         $errors = [];
 
-        foreach ($lines as $line) {
-            if (! is_object($line)) {
-                continue;
-            }
-
+        foreach ($this->lineObjects($response) as $line) {
             $code = $this->stringProperty($line, 'CodigoErrorRegistro');
             $description = $this->stringProperty($line, 'DescripcionErrorRegistro');
 
@@ -144,6 +120,25 @@ final class AeatResponseParser
         }
 
         return $errors;
+    }
+
+    /**
+     * Normalize RespuestaLinea (single object or array) to a list of line objects.
+     *
+     * @return array<int, object>
+     */
+    private function lineObjects(object $response): array
+    {
+        if (! property_exists($response, 'RespuestaLinea') || $response->RespuestaLinea === null) {
+            return [];
+        }
+
+        $raw = $response->RespuestaLinea;
+
+        return array_values(array_filter(
+            is_array($raw) ? $raw : [$raw],
+            'is_object',
+        ));
     }
 
     private function presentationTimestamp(object $response): ?string
