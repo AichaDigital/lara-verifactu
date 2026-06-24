@@ -15,6 +15,7 @@ use AichaDigital\LaraVerifactu\Events\RegistryCreatedEvent;
 use AichaDigital\LaraVerifactu\Exceptions\VerifactuException;
 use AichaDigital\LaraVerifactu\Models\Registry;
 use AichaDigital\LaraVerifactu\Support\CancellationRecord;
+use AichaDigital\LaraVerifactu\Support\RegistrationCircumstances;
 use AichaDigital\LaraVerifactu\Support\PreviousRegistry;
 use AichaDigital\LaraVerifactu\Support\RegistryChain;
 use Carbon\Carbon;
@@ -47,9 +48,11 @@ final class RegistryManager
      *
      * @throws VerifactuException
      */
-    public function createRegistry(InvoiceContract $invoice): RegistryContract
-    {
-        return DB::transaction(function () use ($invoice) {
+    public function createRegistry(
+        InvoiceContract $invoice,
+        ?RegistrationCircumstances $circumstances = null
+    ): RegistryContract {
+        return DB::transaction(function () use ($invoice, $circumstances) {
             // Get previous registry for blockchain chaining
             $previousRegistry = $this->getPreviousRegistry();
             $previousHash = $previousRegistry?->hash;
@@ -75,7 +78,7 @@ final class RegistryManager
                 ) : null,
             );
 
-            $xml = $this->xmlBuilder->buildRegistrationXml($invoice, $chain);
+            $xml = $this->xmlBuilder->buildRegistrationXml($invoice, $chain, $circumstances);
 
             // Generate QR codes (AEAT cotejo URL: nif, numserie, fecha, importe)
             $qrUrl = $this->qrGenerator->generateUrl($invoice);
@@ -88,6 +91,8 @@ final class RegistryManager
                 'registry_number' => $registryNumber,
                 'registry_date' => Carbon::now(),
                 'registry_type' => RegistryTypeEnum::REGISTRATION->value,
+                'subsanacion' => $circumstances?->subsanacion ?? false,
+                'rechazo_previo' => $circumstances?->rechazoPrevio?->value,
                 'hash' => $hash,
                 'previous_hash' => $previousHash,
                 'hash_generated_at' => $generatedAt->format('c'),

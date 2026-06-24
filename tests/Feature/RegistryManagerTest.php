@@ -8,6 +8,7 @@ use AichaDigital\LaraVerifactu\Contracts\HashGeneratorContract;
 use AichaDigital\LaraVerifactu\Contracts\QrGeneratorContract;
 use AichaDigital\LaraVerifactu\Contracts\XmlBuilderContract;
 use AichaDigital\LaraVerifactu\Enums\RechazoPrevioEnum;
+use AichaDigital\LaraVerifactu\Support\RegistrationCircumstances;
 use AichaDigital\LaraVerifactu\Enums\RegistryStatusEnum;
 use AichaDigital\LaraVerifactu\Enums\RegistryTypeEnum;
 use AichaDigital\LaraVerifactu\Models\Invoice;
@@ -432,6 +433,58 @@ describe('subsanación columns', function () {
         Registry::factory()->create(['invoice_id' => $invoice->id, 'amends_registry_id' => null]);
 
         expect(Registry::whereNull('amends_registry_id')->count())->toBe(2);
+    });
+});
+
+// ========================================
+// createRegistry circumstances Tests
+// ========================================
+
+describe('createRegistry circumstances', function () {
+    it('forwards circumstances to the builder and persists them', function () {
+        $invoice = Invoice::factory()->create();
+
+        $this->hashGenerator->shouldReceive('generate')->andReturn(str_repeat('A', 64));
+        $this->qrGenerator->shouldReceive('generateUrl')->andReturn('https://example.test/qr');
+        $this->qrGenerator->shouldReceive('generateSvg')->andReturn('<svg/>');
+        $this->qrGenerator->shouldReceive('generatePng')->andReturn('png');
+
+        $captured = null;
+        $this->xmlBuilder
+            ->shouldReceive('buildRegistrationXml')
+            ->andReturnUsing(function ($inv, $chain, $circ = null) use (&$captured) {
+                $captured = $circ;
+
+                return '<xml/>';
+            });
+
+        $circumstances = new RegistrationCircumstances(
+            subsanacion: true,
+            rechazoPrevio: RechazoPrevioEnum::X,
+        );
+
+        $registry = $this->registryManager->createRegistry($invoice, $circumstances);
+        $registry->refresh();
+
+        expect($captured)->toBe($circumstances)
+            ->and($registry->subsanacion)->toBeTrue()
+            ->and($registry->rechazo_previo)->toBe(RechazoPrevioEnum::X);
+    });
+
+    it('defaults to a normal alta when no circumstances are given', function () {
+        $invoice = Invoice::factory()->create();
+
+        $this->hashGenerator->shouldReceive('generate')->andReturn(str_repeat('B', 64));
+        $this->qrGenerator->shouldReceive('generateUrl')->andReturn('https://example.test/qr');
+        $this->qrGenerator->shouldReceive('generateSvg')->andReturn('<svg/>');
+        $this->qrGenerator->shouldReceive('generatePng')->andReturn('png');
+        $this->xmlBuilder->shouldReceive('buildRegistrationXml')->andReturn('<xml/>');
+
+        $registry = $this->registryManager->createRegistry($invoice);
+        $registry->refresh();
+
+        expect($registry->subsanacion)->toBeFalse()
+            ->and($registry->rechazo_previo)->toBeNull();
     });
 });
 
