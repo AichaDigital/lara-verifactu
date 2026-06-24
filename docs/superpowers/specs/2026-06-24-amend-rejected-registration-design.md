@@ -16,14 +16,34 @@ invoice.
 
 ## Scope
 
-**v1 implements only the «ALTA POR RECHAZO» variant** (`sheet08-a`): a rejected
-**initial registration** whose unique key does **not** exist in AEAT yet, re-sent
-corrected as a new chain link with `Subsanacion=S` + `RechazoPrevio=S`.
+**v1 implements only the «ALTA POR RECHAZO» variant** (`sheet08-a` row 8): a
+rejected **initial registration** whose unique key does **not** exist in AEAT yet,
+re-sent corrected as a new chain link with `Subsanacion=S` + **`RechazoPrevio=X`**.
 
-**Out of scope → AID-209** (the other three subsanación variants, each with
-different preconditions): «ALTA DE SUBSANACIÓN» (correcting an already-`ACCEPTED`
-record), «ALTA POR RECHAZO DE SUBSANACIÓN», «ALTA DE SUBSANACIÓN SIN REGISTRO
-PREVIO». The data model below leaves room for all of them without rework.
+**Out of scope → AID-209** (the other subsanación variants, each with different
+preconditions): «ALTA DE SUBSANACIÓN» (correcting an already-`ACCEPTED` record,
+`RechazoPrevio=N`), «ALTA POR RECHAZO DE SUBSANACIÓN» (key exists, `RechazoPrevio=S`),
+«ALTA DE SUBSANACIÓN SIN REGISTRO PREVIO» and «ALTA POR RECHAZO DE SUBSANACIÓN SIN
+REGISTRO PREVIO» (NO-VERIFACTU→VERIFACTU, `RechazoPrevio=X`). The data model below
+leaves room for all of them without rework.
+
+## The `RechazoPrevio` value — verified against the source
+
+L17 (`sheet06:143-145`) and `SuministroInformacion.xsd:754` (`RechazoPrevioType`)
+define **three** values, and the distinction is *whether the record exists in
+AEAT*, not merely "was there a rejection":
+
+- **`N`** — no prior AEAT rejection.
+- **`S`** — prior AEAT rejection **and the record exists in AEAT** (a later
+  subsanación was rejected). → «ALTA POR RECHAZO DE SUBSANACIÓN».
+- **`X`** — **the record does not exist in AEAT** (regardless of prior rejection):
+  the initial registration was rejected, so it was never registered. → **our case,
+  «ALTA POR RECHAZO»**.
+
+So AID-137 emits **`RechazoPrevio=X`**, not `S`. Critically, `RechazoPrevioType`
+is an XSD enum `{N,S,X}` — `validate()` accepts any of them, so it will **not**
+catch a wrong value. The happy-path test must assert `<RechazoPrevio>X</RechazoPrevio>`
+explicitly.
 
 ## Frontier decisions (agreed)
 
@@ -48,23 +68,26 @@ PREVIO». The data model below leaves room for all of them without rework.
 Three columns on `verifactu_registries` (the `.php` and `.php.stub` must stay
 byte-identical — this repo carries known `.php`/`.stub` drift, so author both):
 
-- `subsanacion` boolean, default `false` → drives `<Subsanacion>S</Subsanacion>`.
-- `rechazo_previo` boolean, default `false` → drives `<RechazoPrevio>S</RechazoPrevio>`.
+- `subsanacion` boolean, default `false` → drives `<Subsanacion>S</Subsanacion>`
+  (L4 is binary N/S; a boolean suffices, `true` ⇒ `S`).
+- `rechazo_previo` char(1) nullable, cast to `RechazoPrevioEnum` `{N,S,X}` (null =
+  do not emit the element) → drives `<RechazoPrevio>`. **Not a boolean**: L17 has
+  three values and the XSD will not protect a wrong one.
 - `amends_registry_id` nullable self-FK → `registries.id` (the rejected record
   this one amends).
 
-Naming rationale: the two flags keep the **AEAT Spanish** names (literal XSD
-concepts, lists L4 / L17, values S/N); `amends_registry_id` is English (an
-internal model relation). Two independent booleans — not a single `isCorrection`
-flag — so the four `(S/N × S/N)` combinations cover all `sheet08-a` variants; v1
-only emits `(S,S)`.
+Naming rationale: the two flag columns keep the **AEAT Spanish** names (literal
+XSD/list concepts); `amends_registry_id` is English (an internal model relation).
+The two independent fields — not a single `isCorrection` flag — let
+`subsanacion(S) × rechazo_previo(N/S/X)` express every `sheet08-a` variant; v1 only
+emits `(S, X)`.
 
-### 3. `RegistryContract::getRegistryType()`
+### 3. `RegistryContract` accessors
 
 `registry_type` (enum `REGISTRATION`/`CANCELLATION`, migration `2026_06_10_000002`)
 exists on the model but is **not** exposed on `RegistryContract`. Add
-`getRegistryType(): RegistryTypeEnum` to the contract + model accessor (guard 1
-needs it).
+`getRegistryType(): RegistryTypeEnum` (guard 1 needs it) and
+`getAmendsRegistryId(): ?int` to the contract + model accessors.
 
 ### 4. `amendRejected` — public API + fail-loud guards
 
@@ -83,9 +106,12 @@ throwing `ValidationException` (fail-loud) before anything is generated:
 2. `$rejectedRegistry->getStatus() === REJECTED`. If `ACCEPTED` → explicit error
    pointing to AID-209 («ALTA DE SUBSANACIÓN»).
 3. `IDFactura` of `$correctedInvoice` (issuer NIF + series/number + issue date)
-   **matches** `$rejectedRegistry->getInvoice()`. Same fiscal invoice, corrected
-   data; if it differs it is another invoice → fail-loud. Identity is read from
-   the native `Invoice` relation, **not** by parsing XML.
+   **matches** the **persisted historical XML** of the rejected record. The XML
+   (`getXml()`) is the immutable fiscal snapshot generated at registration; we
+   parse `IDEmisorFactura` / `NumSerieFactura` / `FechaExpedicionFactura` from it
+   via namespaced XPath — **not** from `getInvoice()`, whose native model could be
+   mutated by the consumer after the fact. If they differ → another invoice,
+   fail-loud.
 4. **No double amendment**: no registry (counting `withTrashed()`) already has
    `amends_registry_id = $rejectedRegistry->id`. Once an amendment link was
    generated its hash is in the chain; a soft-deleted one still counts.
@@ -94,8 +120,8 @@ throwing `ValidationException` (fail-loud) before anything is generated:
 
 Reuses the `register()` pipeline inside a DB transaction: new `registry_number`,
 new chained hash, new XML carrying the **same `IDFactura`** + corrected data +
-`<Subsanacion>S</Subsanacion>` + `<RechazoPrevio>S</RechazoPrevio>`. Sets
-`subsanacion=true`, `rechazo_previo=true`, `amends_registry_id`,
+`<Subsanacion>S</Subsanacion>` + **`<RechazoPrevio>X</RechazoPrevio>`**. Sets
+`subsanacion=true`, `rechazo_previo=X`, `amends_registry_id`,
 `registry_type=REGISTRATION`. Submits to AEAT when `$submitToAeat`.
 
 ### 6. Hash chaining vs. amends relation (two distinct links)
@@ -119,31 +145,35 @@ source of truth.
 
 Emit `<Subsanacion>` / `<RechazoPrevio>` in `buildAlta` only when the registry
 context flags them, at the correct XSD position — in the generation-circumstances
-detail, **before `TipoFactura`** (`sheet02` field order). The flags are
-**registry** circumstances, not invoice data, so they are passed as generation
-context into `buildRegistrationXml`, not read off `InvoiceContract`.
+detail, **before `TipoFactura`** (`sheet02` field order). They are **registry**
+circumstances, not invoice data, so they are passed as generation context into
+`buildRegistrationXml`, not read off `InvoiceContract`.
 
 ## Testing
 
 - `canRetry()` excludes `REJECTED`; `retry-failed` no longer processes rejected
   records.
 - Each `amendRejected` guard fails loud: cancellation record / non-`REJECTED` /
-  `IDFactura` mismatch / double amendment (incl. soft-deleted prior).
-- Happy path: new `Registry` with both flags + `amends_registry_id`; XML contains
-  both elements before `TipoFactura`; chained after the last link; rejected record
-  untouched; `validate()` passes XSD.
+  `IDFactura` mismatch (parsed from historical XML) / double amendment (incl.
+  soft-deleted prior).
+- Happy path: new `Registry` with `subsanacion=true` + `rechazo_previo=X` +
+  `amends_registry_id`; XML contains `<Subsanacion>S</Subsanacion>` and explicitly
+  **`<RechazoPrevio>X</RechazoPrevio>`** (the XSD enum `{N,S,X}` would pass a wrong
+  value, so assert the literal), before `TipoFactura`; chained after the last link;
+  rejected record untouched; `validate()` passes XSD.
 - Migration `.php` / `.php.stub` parity (per the repo's drift guardrail).
 
 ## AID-137 closure criteria
 
 - A `REJECTED` is not auto-retried.
 - An explicit path creates a new amend-by-rejection registration.
-- That new registration's XML carries `Subsanacion=S` + `RechazoPrevio=S`.
+- That new registration's XML carries `Subsanacion=S` + **`RechazoPrevio=X`**.
 - The rejected record stays as history; the new one is chained afterwards.
 
 ## Files touched (anticipated)
 
 - `src/Enums/RegistryStatusEnum.php` — `canRetry()`.
+- `src/Enums/RechazoPrevioEnum.php` — **new** enum `{N,S,X}`.
 - `database/migrations/*_add_subsanacion_to_verifactu_registries_table.php` (+ `.stub`).
 - `src/Models/Registry.php`, `src/Contracts/RegistryContract.php` — fields +
   `getRegistryType()`, `getAmendsRegistryId()`.
