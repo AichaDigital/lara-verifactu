@@ -48,5 +48,14 @@ LICENSE.md
 SESSION_*.md
 HOTFIX_*.md
 BUG_*.md
+HANDOVER-*.md
+HANDOVER_*.md
 docs/SESSION_*.md
 docs/HOTFIX_*.md
+docs/HANDOVER-*.md
+docs/HANDOVER_*.md
+
+# Agent operational data (ephemeral, recreated per session, survives via internal
+# backups — never tracked). Self-managed dirs pinned here so the norm is portable.
+.superpowers/
+.remember/
