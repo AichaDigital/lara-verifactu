@@ -8,7 +8,6 @@ use AichaDigital\LaraVerifactu\Contracts\HashGeneratorContract;
 use AichaDigital\LaraVerifactu\Contracts\QrGeneratorContract;
 use AichaDigital\LaraVerifactu\Contracts\XmlBuilderContract;
 use AichaDigital\LaraVerifactu\Enums\RechazoPrevioEnum;
-use AichaDigital\LaraVerifactu\Support\RegistrationCircumstances;
 use AichaDigital\LaraVerifactu\Enums\RegistryStatusEnum;
 use AichaDigital\LaraVerifactu\Enums\RegistryTypeEnum;
 use AichaDigital\LaraVerifactu\Models\Invoice;
@@ -18,7 +17,9 @@ use AichaDigital\LaraVerifactu\Services\InvoiceRegistrar;
 use AichaDigital\LaraVerifactu\Services\RegistryManager;
 use AichaDigital\LaraVerifactu\Services\XmlBuilder;
 use AichaDigital\LaraVerifactu\Support\AeatResponse;
+use AichaDigital\LaraVerifactu\Support\RegistrationCircumstances;
 use Carbon\Carbon;
+use Illuminate\Database\QueryException;
 
 beforeEach(function () {
     $this->hashGenerator = Mockery::mock(HashGeneratorContract::class);
@@ -427,7 +428,7 @@ describe('subsanación columns', function () {
         expect(fn () => Registry::factory()->create([
             'invoice_id' => $invoice->id,
             'amends_registry_id' => $rejected->id,
-        ]))->toThrow(Illuminate\Database\QueryException::class);
+        ]))->toThrow(QueryException::class);
     });
 
     it('allows multiple registries with a null amends_registry_id', function () {

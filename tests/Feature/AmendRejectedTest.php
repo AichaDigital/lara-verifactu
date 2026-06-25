@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 use AichaDigital\LaraVerifactu\Contracts\AeatClientContract;
 use AichaDigital\LaraVerifactu\Contracts\CertificateManagerContract;
-use AichaDigital\LaraVerifactu\Enums\RegistryStatusEnum;
+use AichaDigital\LaraVerifactu\Contracts\QrGeneratorContract;
 use AichaDigital\LaraVerifactu\Enums\RechazoPrevioEnum;
+use AichaDigital\LaraVerifactu\Enums\RegistryStatusEnum;
 use AichaDigital\LaraVerifactu\Enums\RegistryTypeEnum;
 use AichaDigital\LaraVerifactu\Exceptions\VerifactuException;
 use AichaDigital\LaraVerifactu\Models\Invoice;
@@ -26,7 +27,7 @@ beforeEach(function () {
     config()->set('verifactu.system.version', '1.0');
     config()->set('verifactu.system.installation_number', '1');
 
-    $qrGenerator = Mockery::mock(\AichaDigital\LaraVerifactu\Contracts\QrGeneratorContract::class);
+    $qrGenerator = Mockery::mock(QrGeneratorContract::class);
     $qrGenerator->shouldReceive('generateUrl')->andReturn('https://example.test/qr');
     $qrGenerator->shouldReceive('generateSvg')->andReturn('<svg/>');
     $qrGenerator->shouldReceive('generatePng')->andReturn('png-binary');
