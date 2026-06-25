@@ -155,6 +155,56 @@ it('formats date in dd-mm-yyyy format', function () {
     expect($hash)->toBeString();
 });
 
+it('regenerates the registration hash from typed parts identical to generate()', function () {
+    $invoice = createMockInvoice([
+        'number' => 'F-2025-001',
+        'issue_datetime' => Carbon::parse('2025-10-11 10:30:00'),
+        'type' => InvoiceTypeEnum::COMPLETE,
+        'total_amount' => '121.00',
+        'total_tax_amount' => '21.00',
+    ]);
+    $generatedAt = Carbon::parse('2025-10-11T10:30:30+02:00');
+
+    $fromInvoice = $this->generator->generate($invoice, 'PREVHASH', $generatedAt);
+
+    $fromParts = $this->generator->generateRegistrationFromParts(
+        issuerTaxId: $invoice->getIssuerTaxId(),
+        numSerieFactura: 'F-2025-001',
+        fechaExpedicion: '11-10-2025',
+        tipoFactura: 'F1',
+        cuotaTotal: '21.00',
+        importeTotal: '121.00',
+        previousHash: 'PREVHASH',
+        fechaHoraHusoGen: $generatedAt->format('c'),
+    );
+
+    expect($fromParts)->toBe($fromInvoice)
+        ->and($fromParts)->toMatch('/^[A-F0-9]{64}$/');
+});
+
+it('regenerates the cancellation hash from typed parts identical to generateCancellation()', function () {
+    $issueDate = Carbon::parse('2025-10-11 10:30:00');
+    $generatedAt = Carbon::parse('2025-10-11T11:00:00+02:00');
+
+    $fromMethod = $this->generator->generateCancellation(
+        'B12345678',
+        'F-2025-001',
+        $issueDate,
+        'PREVHASH',
+        $generatedAt,
+    );
+
+    $fromParts = $this->generator->generateCancellationFromParts(
+        issuerTaxId: 'B12345678',
+        numSerieFactura: 'F-2025-001',
+        fechaExpedicion: '11-10-2025',
+        previousHash: 'PREVHASH',
+        fechaHoraHusoGen: $generatedAt->format('c'),
+    );
+
+    expect($fromParts)->toBe($fromMethod);
+});
+
 // Helper function to create mock invoice
 function createMockInvoice(array $overrides = []): InvoiceContract
 {

@@ -24,6 +24,21 @@ interface HashGeneratorContract
     ): string;
 
     /**
+     * Registration fingerprint from already-formatted primitive parts (used to
+     * verify from persisted XML without the mutable Invoice).
+     */
+    public function generateRegistrationFromParts(
+        string $issuerTaxId,
+        string $numSerieFactura,
+        string $fechaExpedicion,
+        string $tipoFactura,
+        string $cuotaTotal,
+        string $importeTotal,
+        ?string $previousHash,
+        string $fechaHoraHusoGen,
+    ): string;
+
+    /**
      * Generate the SHA-256 fingerprint (huella) for a cancellation record
      * according to AEAT specifications.
      */
@@ -33,6 +48,17 @@ interface HashGeneratorContract
         DateTimeInterface $issueDate,
         ?string $previousHash = null,
         ?DateTimeInterface $generatedAt = null,
+    ): string;
+
+    /**
+     * Cancellation fingerprint from already-formatted primitive parts.
+     */
+    public function generateCancellationFromParts(
+        string $issuerTaxId,
+        string $numSerieFactura,
+        string $fechaExpedicion,
+        ?string $previousHash,
+        string $fechaHoraHusoGen,
     ): string;
 
     /**

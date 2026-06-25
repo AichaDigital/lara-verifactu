@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace AichaDigital\LaraVerifactu\Contracts;
 
 use AichaDigital\LaraVerifactu\Enums\RegistryStatusEnum;
+use AichaDigital\LaraVerifactu\Enums\RegistryTypeEnum;
 use Carbon\Carbon;
 
 /**
@@ -23,6 +24,23 @@ interface RegistryContract
      * Get the registry date.
      */
     public function getRegistryDate(): Carbon;
+
+    /**
+     * Get the registry primary key, or null when the model has not been persisted yet.
+     * Mirrors InvoiceContract::getId() for guard and FK consistency.
+     */
+    public function getId(): int|string|null;
+
+    /**
+     * Get the registry type (RegistroAlta vs RegistroAnulacion).
+     */
+    public function getRegistryType(): RegistryTypeEnum;
+
+    /**
+     * Get the id of the rejected registry this one amends, or null when this
+     * registry is not an amendment («ALTA POR RECHAZO», AID-137).
+     */
+    public function getAmendsRegistryId(): ?int;
 
     /**
      * Get the associated invoice.

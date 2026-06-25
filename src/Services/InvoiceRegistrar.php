@@ -8,7 +8,9 @@ use AichaDigital\LaraVerifactu\Contracts\AeatClientContract;
 use AichaDigital\LaraVerifactu\Contracts\CertificateManagerContract;
 use AichaDigital\LaraVerifactu\Contracts\InvoiceContract;
 use AichaDigital\LaraVerifactu\Contracts\RegistryContract;
+use AichaDigital\LaraVerifactu\Enums\RechazoPrevioEnum;
 use AichaDigital\LaraVerifactu\Enums\RegistryStatusEnum;
+use AichaDigital\LaraVerifactu\Enums\RegistryTypeEnum;
 use AichaDigital\LaraVerifactu\Events\BlockchainVerifiedEvent;
 use AichaDigital\LaraVerifactu\Events\InvoiceRegisteredEvent;
 use AichaDigital\LaraVerifactu\Events\RegistryFailedEvent;
@@ -19,6 +21,9 @@ use AichaDigital\LaraVerifactu\Exceptions\VerifactuException;
 use AichaDigital\LaraVerifactu\Models\Registry;
 use AichaDigital\LaraVerifactu\Support\AeatLogSanitizer;
 use AichaDigital\LaraVerifactu\Support\AeatResponse;
+use AichaDigital\LaraVerifactu\Support\RegistrationCircumstances;
+use DOMDocument;
+use DOMXPath;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -288,6 +293,201 @@ final class InvoiceRegistrar
         event(new BlockchainVerifiedEvent($result));
 
         return $result;
+    }
+
+    /** AEAT SuministroInformacion namespace for sf: XPath on persisted XML. */
+    private const SF_NS = 'https://www2.agenciatributaria.gob.es/static_files/common/internet/dep/aplicaciones/es/aeat/tike/cont/ws/SuministroInformacion.xsd';
+
+    /**
+     * Amend a rejected initial registration («ALTA POR RECHAZO», AID-137).
+     *
+     * Re-sends the corrected invoice as a NEW chain link with Subsanacion=S and
+     * RechazoPrevio=X, linked to the rejected record via amends_registry_id. The
+     * rejected record and its XML stay immutable. Five fail-loud guards (in order)
+     * prove the operation is the «ALTA POR RECHAZO» variant before any XML is built.
+     *
+     * @throws VerifactuException
+     */
+    public function amendRejected(
+        RegistryContract $rejectedRegistry,
+        InvoiceContract $correctedInvoice,
+        bool $submitToAeat = true
+    ): RegistryContract {
+        return DB::transaction(function () use ($rejectedRegistry, $correctedInvoice, $submitToAeat) {
+            // Guard 1: only a REGISTRATION can be amended by rejection.
+            if ($rejectedRegistry->getRegistryType() !== RegistryTypeEnum::REGISTRATION) {
+                throw VerifactuException::make(
+                    'amendRejected expects a REGISTRATION registry, got ' . $rejectedRegistry->getRegistryType()->value
+                );
+            }
+
+            // Guard 2: status must be REJECTED (reachable via AID-257).
+            if ($rejectedRegistry->getStatus() !== RegistryStatusEnum::REJECTED) {
+                throw VerifactuException::make(
+                    'amendRejected: only a REJECTED registration can be amended; status is '
+                    . $rejectedRegistry->getStatus()->value
+                    . ' (an accepted/registered key uses the AID-209 subsanación flow)'
+                );
+            }
+
+            // Guard 3: the rejection must prove the key is NOT in AEAT. A
+            // duplicate-key / already-registered line means the key exists, so
+            // RechazoPrevio=X would be re-rejected.
+            $this->assertRejectionProvesNotInAeat($rejectedRegistry);
+
+            // Guard 4: the corrected invoice's IDFactura must match the rejected
+            // record's persisted historical XML (immutable), using the builder's
+            // getSerie().getNumber() convention.
+            $this->assertIdFacturaMatchesPersistedXml($rejectedRegistry, $correctedInvoice);
+
+            // Guard 5: no prior amendment of this rejected record (withTrashed).
+            $alreadyAmended = Registry::withTrashed()
+                ->where('amends_registry_id', $rejectedRegistry->getId() ?? null)
+                ->exists();
+
+            if ($alreadyAmended) {
+                throw VerifactuException::make(
+                    'amendRejected: registry ' . ($rejectedRegistry->getId() ?? '?') . ' has already been amended'
+                );
+            }
+
+            // Build the new chained amendment registry with S + X circumstances.
+            $registry = $this->registryManager->createRegistry(
+                $correctedInvoice,
+                new RegistrationCircumstances(
+                    subsanacion: true,
+                    rechazoPrevio: RechazoPrevioEnum::X,
+                ),
+            );
+
+            if ($registry instanceof Registry) {
+                $registry->update(['amends_registry_id' => $rejectedRegistry->getId()]);
+            }
+
+            $this->signRegistryXml($registry);
+
+            if ($submitToAeat) {
+                $this->submitToAeat($registry);
+            }
+
+            event(new InvoiceRegisteredEvent($correctedInvoice, $registry, $submitToAeat));
+
+            return $registry;
+        });
+    }
+
+    /**
+     * Guard 3 helper: the persisted AEAT rejection (AID-257) must show the key
+     * is not in AEAT. Fail-loud conditions:
+     *  - null/empty response → cannot prove not-in-AEAT.
+     *  - lineas is not a non-empty array → unknown/malformed shape, cannot prove not-in-AEAT.
+     *  - any line lacks the `registro_duplicado` key → incomplete shape, cannot prove not-in-AEAT.
+     *  - any line has registro_duplicado === true → key exists in AEAT; RechazoPrevio=X invalid.
+     */
+    private function assertRejectionProvesNotInAeat(RegistryContract $rejected): void
+    {
+        $response = $rejected->getAeatResponse();
+
+        if ($response === null) {
+            throw VerifactuException::make(
+                'amendRejected: the rejection carries no AEAT response metadata, so the key cannot be proven absent from AEAT'
+            );
+        }
+
+        $lines = $response['lineas'] ?? null;
+
+        if (! is_array($lines) || $lines === []) {
+            throw VerifactuException::make(
+                'amendRejected: the rejection lineas are empty or malformed — cannot prove the key is absent from AEAT'
+            );
+        }
+
+        foreach ($lines as $line) {
+            if (! is_array($line) || ! array_key_exists('registro_duplicado', $line)) {
+                throw VerifactuException::make(
+                    'amendRejected: a rejection line is missing the registro_duplicado key — cannot prove the key is absent from AEAT'
+                );
+            }
+
+            if ($line['registro_duplicado'] === true) {
+                throw VerifactuException::make(
+                    'amendRejected: rejection is a duplicate-key/already-registered code; the key exists in AEAT, so RechazoPrevio=X is invalid (use the AID-209 flow)'
+                );
+            }
+        }
+    }
+
+    /**
+     * Guard 4 helper: the corrected invoice's IDFactura (IDEmisorFactura /
+     * NumSerieFactura built as getSerie().getNumber() / FechaExpedicionFactura
+     * d-m-Y) must equal the rejected record's persisted historical XML. Fail-loud
+     * on null/empty XML or any missing node. Reads the immutable XML, never
+     * getInvoice().
+     */
+    private function assertIdFacturaMatchesPersistedXml(
+        RegistryContract $rejected,
+        InvoiceContract $corrected
+    ): void {
+        $xml = $rejected->getXml();
+
+        if ($xml === null || $xml === '') {
+            throw VerifactuException::make('amendRejected: the rejected record has no persisted XML to match IDFactura against');
+        }
+
+        $previousUseErrors = libxml_use_internal_errors(true);
+
+        try {
+            $dom = new DOMDocument;
+
+            if (! $dom->loadXML($xml)) {
+                throw VerifactuException::make('amendRejected: the rejected record XML is unparseable');
+            }
+
+            $xpath = new DOMXPath($dom);
+            $xpath->registerNamespace('sf', self::SF_NS);
+
+            $xmlIssuer = $this->xpathText($xpath, '//sf:RegistroAlta/sf:IDFactura/sf:IDEmisorFactura');
+            $xmlNumSerie = $this->xpathText($xpath, '//sf:RegistroAlta/sf:IDFactura/sf:NumSerieFactura');
+            $xmlFecha = $this->xpathText($xpath, '//sf:RegistroAlta/sf:IDFactura/sf:FechaExpedicionFactura');
+
+            if ($xmlIssuer === null || $xmlNumSerie === null || $xmlFecha === null) {
+                throw VerifactuException::make('amendRejected: the rejected record XML is missing an IDFactura node');
+            }
+
+            $correctedNumSerie = $corrected->getSerie()
+                ? $corrected->getSerie() . $corrected->getNumber()
+                : $corrected->getNumber();
+
+            if ($xmlIssuer !== $corrected->getIssuerTaxId()
+                || $xmlNumSerie !== $correctedNumSerie
+                || $xmlFecha !== $corrected->getIssueDatetime()->format('d-m-Y')) {
+                throw VerifactuException::make(
+                    'amendRejected: the corrected invoice IDFactura does not match the rejected record (the amendment must re-send the same key with corrected data)'
+                );
+            }
+        } finally {
+            libxml_clear_errors();
+            libxml_use_internal_errors($previousUseErrors);
+        }
+    }
+
+    private function xpathText(DOMXPath $xpath, string $query): ?string
+    {
+        $nodes = $xpath->query($query);
+
+        if ($nodes === false || $nodes->length === 0) {
+            return null;
+        }
+
+        $node = $nodes->item(0);
+
+        if (! $node instanceof \DOMNode) {
+            return null;
+        }
+
+        $value = $node->textContent;
+
+        return $value !== '' ? trim($value) : null;
     }
 
     /**
