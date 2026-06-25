@@ -78,7 +78,6 @@
         "analyse": "vendor/bin/phpstan analyse",
         "test": "vendor/bin/pest",
         "test-coverage": "vendor/bin/pest --coverage",
-        "test-parallel": "vendor/bin/pest --parallel",
         "test-profile": "vendor/bin/pest --profile",
         "test-mutate": "vendor/bin/pest --mutate",
         "format": "vendor/bin/pint",
@@ -104,7 +103,7 @@
         "precommit": [
             "@format",
             "@phpstan",
-            "@test-parallel"
+            "@test"
         ]
     },
     "config": {
