@@ -40,8 +40,13 @@ fork.
 - **No durability tuning.** Standard MariaDB config (production-faithful fsync per
   commit) was chosen deliberately over a fast test profile: fidelity to the
   deployment engine over inner-loop speed.
-- **No SQLite anywhere.** Full replace, single engine — not a dual-engine matrix
-  and not an opt-in escape hatch.
+- **No SQLite in the test runtime or workflow.** Full replace, single engine —
+  not a dual-engine matrix and not an opt-in escape hatch. **Production code is
+  untouched:** migrations keep their existing driver branches (e.g.
+  `database/migrations/2026_01_25_000001_consolidate_issue_datetime_in_verifactu_invoices.php:33`
+  has an `if ($driver === 'sqlite')` branch for consumers who run SQLite in their
+  own apps). Those branches stay; they simply lose test coverage under
+  MariaDB-only — see Risks.
 - **No `docker-compose.yml`** unless requested later. Env-driven config against the
   developer's existing local MariaDB plus the CI service container is sufficient.
 
@@ -50,7 +55,7 @@ fork.
 | Decision | Choice | Rationale |
 |---|---|---|
 | Engine | MariaDB only (full replace) | Deployment target; "don't mix" |
-| Version | MariaDB 12.3 LTS (`mariadb:12.3`) | Current LTS (12.3.2, May 2026, EOL Jun 2029) |
+| Version | MariaDB 12.3 LTS, floating `mariadb:12.3` tag | Current LTS (12.3.2 GA 2026-05-29, EOL Jun 2029). Floating tag tracks LTS patch/security updates → matches a patched-LTS production box (the fidelity choice). Pinning to `12.3.2` is a one-line change if strict CI reproducibility is ever needed. |
 | Driver | Laravel `mariadb` driver | Dedicated driver in L11+, distinct from `mysql`; L12/L13 support it |
 | Durability | Standard (no `my.cnf` tuning) | Fidelity to production over speed |
 | CI shape | One MariaDB service on each existing matrix job | Single axis, no matrix doubling; PHPStan/Pint stay DB-less |
@@ -74,10 +79,66 @@ against MariaDB, so any non-portable migration syntax surfaces here.
 
 ### CI (`run-tests.yml`)
 
-Each of the four matrix jobs (P8.3/8.4 × L12/L13) gains a `mariadb:12.3` service
-with a health check; the `DB_*` env vars point the suite at it. The service uses
-default durability. The PHPStan and Pint workflows do not touch the database and
-get no service.
+Three concrete changes to the existing single `test` job (which runs all four
+matrix combinations P8.3/8.4 × L12/L13):
+
+1. **PHP extensions (line 38).** Replace `sqlite, pdo_sqlite` with `pdo_mysql`
+   (the Laravel `mariadb` driver connects over PDO MySQL). Without it the
+   connection fails before migrations run. Final list:
+   `dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_mysql, soap, openssl`.
+
+2. **Timeout (line 12).** Raise `timeout-minutes: 5` → `15`. The job runs
+   `composer require` + `composer update` (full dependency resolution) **and** the
+   574-test suite on a real engine with standard durability; 5 minutes is a CI
+   time-bomb even when the code is correct. Acceptance includes measuring actual
+   duration before/after and tightening if there is comfortable headroom.
+
+3. **Service container.** Add a MariaDB service to the job, exact config:
+
+   ```yaml
+   services:
+     mariadb:
+       image: mariadb:12.3
+       env:
+         MARIADB_DATABASE: verifactu_test
+         MARIADB_ROOT_PASSWORD: root
+       ports:
+         - 3306:3306
+       options: >-
+         --health-cmd="healthcheck.sh --connect --innodb_initialized"
+         --health-interval=10s
+         --health-timeout=5s
+         --health-retries=5
+   ```
+
+   The job exports the matching connection env so `TestCase` reaches the service:
+   `DB_CONNECTION=mariadb`, `DB_HOST=127.0.0.1`, `DB_PORT=3306`,
+   `DB_DATABASE=verifactu_test`, `DB_USERNAME=root`, `DB_PASSWORD=root`.
+
+The PHPStan and Pint workflows do not touch the database and get no service.
+
+### Local development
+
+Because `tests/Pest.php:8` applies `TestCase` to the whole suite, `composer test`
+requires a reachable MariaDB. The package documents (README/CONTRIBUTING) the
+one-time setup against the developer's local MariaDB:
+
+```bash
+# One-time: create the test database (adjust user as preferred)
+mariadb -uroot -p -e "CREATE DATABASE IF NOT EXISTS verifactu_test;"
+
+# Per-shell (or persisted in a local, git-ignored env): point the suite at it
+export DB_CONNECTION=mariadb DB_HOST=127.0.0.1 DB_PORT=3306 \
+       DB_DATABASE=verifactu_test DB_USERNAME=root DB_PASSWORD=secret
+
+composer test
+```
+
+`RefreshDatabase`/`LazilyRefreshDatabase` migrate and roll back per test, so no
+manual reset is needed between runs; dropping/recreating `verifactu_test` is only
+needed if a migration set changes incompatibly. Credentials are env-driven with
+the CI defaults above; the developer overrides `DB_USERNAME`/`DB_PASSWORD` for
+their local instance.
 
 ### Handling latent failures
 
@@ -105,7 +166,14 @@ This issue *is* a testing-infra change, so "testing" here means the acceptance b
   by the suite size and isolated to test/schema portability in the common case.
 - **CI time increase.** MariaDB with standard durability is slower than
   `:memory:`. Accepted trade-off; bounded by keeping a single service per job and
-  not tuning away the deployment-faithful behavior.
+  not tuning away the deployment-faithful behavior. Mitigated by the raised
+  15-minute timeout; actual duration measured at implementation.
+- **SQLite-branch coverage gap.** Driver-conditional `sqlite` branches in
+  migrations (the `consolidate_issue_datetime` data migration) stay in production
+  for SQLite consumers but are no longer exercised by the MariaDB-only suite. This
+  is the symmetric cost of single-engine testing (the MySQL branch was untested
+  under SQLite before). Accepted: AEAT Verifactu is Spain B2B, where MySQL/MariaDB
+  is the realistic consumer engine. Not expanding scope to a multi-engine matrix.
 
 ## Follow-ups
 
