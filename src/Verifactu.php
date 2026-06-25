@@ -69,6 +69,17 @@ final class Verifactu
     }
 
     /**
+     * Amend a rejected initial registration («ALTA POR RECHAZO», AID-137).
+     */
+    public function amendRejected(
+        RegistryContract $rejectedRegistry,
+        InvoiceContract $correctedInvoice,
+        bool $submitToAeat = true
+    ): RegistryContract {
+        return $this->registrar->amendRejected($rejectedRegistry, $correctedInvoice, $submitToAeat);
+    }
+
+    /**
      * Register a batch of invoices
      *
      * @param  iterable<InvoiceContract>  $invoices
