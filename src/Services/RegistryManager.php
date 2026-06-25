@@ -15,8 +15,8 @@ use AichaDigital\LaraVerifactu\Events\RegistryCreatedEvent;
 use AichaDigital\LaraVerifactu\Exceptions\VerifactuException;
 use AichaDigital\LaraVerifactu\Models\Registry;
 use AichaDigital\LaraVerifactu\Support\CancellationRecord;
-use AichaDigital\LaraVerifactu\Support\RegistrationCircumstances;
 use AichaDigital\LaraVerifactu\Support\PreviousRegistry;
+use AichaDigital\LaraVerifactu\Support\RegistrationCircumstances;
 use AichaDigital\LaraVerifactu\Support\RegistryChain;
 use Carbon\Carbon;
 use DOMDocument;
@@ -96,7 +96,7 @@ final class RegistryManager
                 'registry_number' => $registryNumber,
                 'registry_date' => Carbon::now(),
                 'registry_type' => RegistryTypeEnum::REGISTRATION->value,
-                'subsanacion' => $circumstances?->subsanacion ?? false,
+                'subsanacion' => $circumstances !== null && $circumstances->subsanacion,
                 'rechazo_previo' => $circumstances?->rechazoPrevio?->value,
                 'hash' => $hash,
                 'previous_hash' => $previousHash,
@@ -354,9 +354,15 @@ final class RegistryManager
             return null;
         }
 
-        $value = $nodes->item(0)?->textContent;
+        $node = $nodes->item(0);
 
-        return $value !== null ? trim($value) : null;
+        if (! $node instanceof \DOMNode) {
+            return null;
+        }
+
+        $value = $node->textContent;
+
+        return $value !== '' ? trim($value) : null;
     }
 
     /**
