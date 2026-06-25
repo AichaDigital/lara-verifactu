@@ -10,10 +10,11 @@
 
 ## Global Constraints
 
-- **PHP:** 8.3+ · **Laravel:** 12.* and 13.* (CI matrix P8.3/8.4 × L12/L13).
-- **Engine:** MariaDB 12.3 LTS only (`mariadb:12.3` image). No SQLite in test runtime or workflow. Production migration code (driver-conditional `sqlite` branches) stays untouched.
+- **PHP:** 8.3+ · **Laravel:** 12.* and 13.* (CI matrix P8.3/8.4 × L12/L13 × db:{mariadb,mysql} = 8 jobs).
+- **Engines:** local target MariaDB 11.4 on port **3307**; CI runs both MariaDB 12.3 (`mariadb:12.3`) and MySQL 8.4 (`mysql:8.4`). No SQLite in test runtime or workflow. Production migration code (driver-conditional `sqlite` branches) stays untouched.
+- **Driver:** env-driven `DB_DRIVER` (default `mariadb`; CI mysql-leg sets `mysql`).
 - **CI DB auth:** dedicated user `verifactu` / `secret` on database `verifactu_test`, host `%` — never root over TCP.
-- **Durability:** standard MariaDB config, no `my.cnf` tuning.
+- **Durability:** standard engine config, no tuning.
 - **No `--parallel`:** `precommit` runs serial `@test`.
 - **Artifacts in English.** Commit messages English; end every commit with `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`.
 - **Scope fence:** NO domain logic changes (chain-lock is AID-258).
@@ -207,40 +208,63 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 ---
 
-### Task 4: Update the CI workflow (extensions, timeout, MariaDB service, env)
+### Task 4: Make CI a two-engine matrix (MariaDB 12.3 + MySQL 8.4) + env-driven driver
 
 **Files:**
+- Modify: `tests/TestCase.php` (driver becomes `env('DB_DRIVER', 'mariadb')`)
 - Modify: `.github/workflows/run-tests.yml`
 
 **Interfaces:**
-- Consumes: the green local suite from Task 3.
-- Produces: CI running the suite on MariaDB across all four matrix combos.
+- Consumes: the green-on-MariaDB local suite from Task 3.
+- Produces: CI running the suite on BOTH MariaDB 12.3 and MySQL 8.4 across the 8-combo matrix.
 
-- [ ] **Step 1: Raise the job timeout (line 12)**
+- [ ] **Step 1: Make the TestCase driver env-driven**
 
-Change `timeout-minutes: 5` to `timeout-minutes: 15`.
+In `tests/TestCase.php`, change the driver line inside the `testing` connection from `'driver' => 'mariadb',` to:
 
-- [ ] **Step 2: Add the MariaDB service and job env under the `test` job**
+```php
+            'driver' => env('DB_DRIVER', 'mariadb'),
+```
 
-Add, at the `test` job level (sibling of `timeout-minutes` / `strategy` / `steps`):
+Everything else in that connection block is unchanged.
+
+- [ ] **Step 2: Confirm local (MariaDB) is still green with the env-driven driver**
+
+Run: `DB_DRIVER=mariadb DB_HOST=127.0.0.1 DB_PORT=3307 DB_DATABASE=verifactu_test DB_USERNAME=verifactu DB_PASSWORD=secret vendor/bin/pest 2>&1 | tail -5`
+Expected: same green result as the end of Task 3.
+
+- [ ] **Step 3: Add the engine axis + db to the job name + raise timeout**
+
+In `.github/workflows/run-tests.yml`: add `db: [mariadb, mysql]` to `strategy.matrix`; change `timeout-minutes: 5` → `15`; and add the engine to the job `name:` so the 8 jobs are distinguishable, e.g.:
+
+```yaml
+    name: P${{ matrix.php }} - L${{ matrix.laravel }} - ${{ matrix.db }} - ${{ matrix.stability }}
+```
+
+- [ ] **Step 4: Add the per-engine service + job env (sibling of `strategy`/`steps`)**
 
 ```yaml
     services:
-      mariadb:
-        image: mariadb:12.3
+      db:
+        image: ${{ matrix.db == 'mysql' && 'mysql:8.4' || 'mariadb:12.3' }}
         env:
           MARIADB_DATABASE: verifactu_test
           MARIADB_USER: verifactu
           MARIADB_PASSWORD: secret
           MARIADB_ROOT_PASSWORD: root
+          MYSQL_DATABASE: verifactu_test
+          MYSQL_USER: verifactu
+          MYSQL_PASSWORD: secret
+          MYSQL_ROOT_PASSWORD: root
         ports:
           - 3306:3306
         options: >-
-          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
           --health-interval=10s
           --health-timeout=5s
-          --health-retries=5
+          --health-retries=10
     env:
+      DB_DRIVER: ${{ matrix.db }}
       DB_HOST: 127.0.0.1
       DB_PORT: 3306
       DB_DATABASE: verifactu_test
@@ -248,40 +272,44 @@ Add, at the `test` job level (sibling of `timeout-minutes` / `strategy` / `steps
       DB_PASSWORD: secret
 ```
 
-The `services:` block applies to every matrix combination; each runner gets its own fresh MariaDB on `127.0.0.1:3306`. The dedicated `verifactu` user (created by the entrypoint with host `%` and granted on `verifactu_test`) is reachable over TCP; root is not.
+The image is chosen by `matrix.db`; one env block carries both `MARIADB_*` and `MYSQL_*` (each image ignores the other's). `matrix.db` doubles as the Laravel driver name, so `DB_DRIVER: ${{ matrix.db }}` selects the right driver. Both images auto-create `verifactu`@`%` granted on `verifactu_test`; `mysqladmin ping` is the portable healthcheck.
 
-- [ ] **Step 3: Swap the PHP extensions (line 38)**
+- [ ] **Step 5: Swap the PHP extensions (line 38)**
 
-Replace `sqlite, pdo_sqlite` with `pdo_mysql` in the `extensions:` list. Result:
+Replace `sqlite, pdo_sqlite` with `pdo_mysql`:
 
 ```yaml
           extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_mysql, soap, openssl
 ```
 
-- [ ] **Step 4: Validate the workflow YAML locally**
+- [ ] **Step 6: Validate the workflow YAML**
 
-Run: `python3 -c "import yaml,sys; yaml.safe_load(open('.github/workflows/run-tests.yml')); print('YAML OK')"`
+Run: `python3 -c "import yaml; yaml.safe_load(open('.github/workflows/run-tests.yml')); print('YAML OK')"`
 Expected: `YAML OK`.
 
-- [ ] **Step 5: Commit and push to trigger CI**
+- [ ] **Step 7: Commit and push**
 
 ```bash
-git add .github/workflows/run-tests.yml
-git commit -m "ci: run tests on MariaDB 12.3 service across the matrix (AID-259)
+git add tests/TestCase.php .github/workflows/run-tests.yml
+git commit -m "ci: two-engine test matrix (MariaDB 12.3 + MySQL 8.4) (AID-259)
 
-Add a mariadb:12.3 service (dedicated verifactu user, healthcheck) and DB_* env
-to the test job; swap sqlite/pdo_sqlite for pdo_mysql; raise timeout 5->15 to
-absorb service boot + composer update + real-engine suite. One services block
-covers all four P8.3/8.4 x L12/L13 combos.
+Add db:[mariadb,mysql] matrix axis (8 jobs); per-engine service image chosen by
+matrix.db with both MARIADB_*/MYSQL_* env and a portable mysqladmin-ping
+healthcheck; env-driven DB_DRIVER; swap sqlite/pdo_sqlite for pdo_mysql; timeout
+5->15. Public repo, so the extra runners are free.
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 git push -u origin abdelkarim/aid-259-lara-verifactu-migrate-test-suite-from-sqlite-to-mariadb
 ```
 
-- [ ] **Step 6: Verify CI is green on all four matrix combos and measure duration**
+- [ ] **Step 8: Open the PR and watch all 8 combos**
 
-Run: `gh pr create --fill --base main 2>/dev/null; gh pr checks --watch` (or watch the run if the PR already exists)
-Expected: `run-tests` SUCCESS for P8.3-L12, P8.3-L13, P8.4-L12, P8.4-L13, plus PHPStan and GitGuardian. Note the job duration; if comfortably under 15 min, optionally tighten `timeout-minutes` in a follow-up.
+Run: `gh pr create --fill --base main 2>/dev/null; gh pr checks --watch`
+Expected: `run-tests` SUCCESS for all 8 (P8.3/8.4 × L12/L13 × {mariadb, mysql}), plus PHPStan and GitGuardian. Note durations.
+
+- [ ] **Step 9: Fix MySQL-only failures surfaced in CI (sub-loop, if any)**
+
+If mysql-leg jobs fail where the mariadb legs pass, the failures are MySQL-8.4-specific portability (stricter `sql_mode`, reserved words, default collation, `ONLY_FULL_GROUP_BY`). Apply the same categorize → fix → escalate method as Task 3, push, and re-watch until all 8 are green. Real domain bugs → escalate to the user, do not silence.
 
 ---
 
@@ -301,10 +329,12 @@ Add to the testing/development docs:
 ````markdown
 ## Running the tests
 
-The suite runs against MariaDB (the deployment engine), not SQLite. One-time setup:
+The suite runs against **MariaDB** (a deployment engine), not SQLite. The local
+target is your MariaDB instance (this repo's dev box runs it on port 3307).
+One-time setup:
 
 ```bash
-mariadb -uroot -p <<'SQL'
+mariadb -uroot --port=3307 --protocol=tcp <<'SQL'
 CREATE DATABASE IF NOT EXISTS verifactu_test;
 CREATE USER IF NOT EXISTS 'verifactu'@'%' IDENTIFIED BY 'secret';
 GRANT ALL PRIVILEGES ON verifactu_test.* TO 'verifactu'@'%';
@@ -312,15 +342,16 @@ FLUSH PRIVILEGES;
 SQL
 ```
 
-Then point the suite at it (defaults match CI; override per your local instance):
+Point the suite at it (CI uses the same values but `DB_PORT=3306`):
 
 ```bash
-export DB_HOST=127.0.0.1 DB_PORT=3306 DB_DATABASE=verifactu_test \
-       DB_USERNAME=verifactu DB_PASSWORD=secret
+export DB_DRIVER=mariadb DB_HOST=127.0.0.1 DB_PORT=3307 \
+       DB_DATABASE=verifactu_test DB_USERNAME=verifactu DB_PASSWORD=secret
 composer test
 ```
 
-`composer test` runs serially (parallel testing is intentionally disabled — see AID-259).
+CI additionally runs the full suite against MySQL 8.4. `composer test` is serial
+(parallel testing is intentionally disabled — see AID-259).
 ````
 
 - [ ] **Step 2: Verify the docs render and the commands match the spec**
@@ -341,8 +372,8 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 ## Done criteria (whole branch)
 
-- Full suite green on MariaDB 12.3 locally and across all four CI matrix combos.
-- CI connects as `verifactu` (not root) over TCP.
+- Full suite green locally on MariaDB 11.4, and across all 8 CI combos (P8.3/8.4 × L12/L13 × {MariaDB 12.3, MySQL 8.4}).
+- CI connects as `verifactu` (not root) over TCP on both engines; driver is env-driven (`DB_DRIVER`).
 - `test-parallel` removed; `precommit` serial; `ext-pdo_mysql` in `require-dev`.
 - No SQLite in `tests/TestCase.php` or the workflow; production migration `sqlite` branches untouched.
 - Before/after pass-count delta recorded in the PR; any real domain bug escalated, not silenced.
