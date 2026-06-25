@@ -2,7 +2,8 @@
 
 - **Issue:** AID-259 (split out of AID-258; **blocks AID-258**)
 - **Date:** 2026-06-25
-- **Status:** approved design
+- **Status:** approved design (v2: CI runs a two-engine matrix MariaDB 12.3 + MySQL
+  8.4; local target is MariaDB 11.4 on port 3307; driver is env-driven)
 
 ## Problem
 
@@ -27,13 +28,18 @@ fork.
 
 **In scope — test infrastructure only:**
 
-- Switch `tests/TestCase.php` from SQLite to the **`mariadb`** driver, env-driven.
-- Add a **MariaDB 12.3 LTS** service to `run-tests.yml` across the full matrix
-  (P8.3/8.4 × L12/L13).
-- Fix the latent failures MariaDB surfaces that SQLite was masking.
+- Switch `tests/TestCase.php` from SQLite to an **env-driven driver** (default
+  `mariadb`), reading `DB_DRIVER`/`DB_HOST`/`DB_PORT`/`DB_DATABASE`/`DB_USERNAME`/
+  `DB_PASSWORD`.
+- Make `run-tests.yml` a **two-engine matrix**: add a `db: [mariadb, mysql]` axis
+  so all combos run on **MariaDB 12.3 LTS** and **MySQL 8.4 LTS**
+  (P8.3/8.4 × L12/L13 × {mariadb, mysql} = 8 jobs). The repo is public, so
+  GitHub-hosted Actions minutes are free — the doubling costs nothing.
+- Fix the latent failures the real engines surface that SQLite was masking.
 - Drop `--parallel` (`precommit` → serial `@test`; remove the `test-parallel`
   script) and add `ext-pdo_mysql` to `require-dev`.
-- Document the local-dev requirement (developer already runs a local MariaDB).
+- Document the local-dev requirement: the suite runs against the developer's
+  local **MariaDB 11.4 on port 3307** (`DB_PORT=3307`).
 
 **Out of scope:**
 
@@ -42,13 +48,15 @@ fork.
 - **No durability tuning.** Standard MariaDB config (production-faithful fsync per
   commit) was chosen deliberately over a fast test profile: fidelity to the
   deployment engine over inner-loop speed.
-- **No SQLite in the test runtime or workflow.** Full replace, single engine —
-  not a dual-engine matrix and not an opt-in escape hatch. **Production code is
-  untouched:** migrations keep their existing driver branches (e.g.
+- **No SQLite in the test runtime or workflow.** SQLite is fully removed as a test
+  engine — no SQLite-in-the-matrix and no opt-in escape hatch. The CI matrix DOES
+  cover two engines, but both are **real deployment engines** (MariaDB + MySQL),
+  not a test/prod-engine mix. **Production code is untouched:** migrations keep
+  their existing driver branches (e.g.
   `database/migrations/2026_01_25_000001_consolidate_issue_datetime_in_verifactu_invoices.php:33`
   has an `if ($driver === 'sqlite')` branch for consumers who run SQLite in their
-  own apps). Those branches stay; they simply lose test coverage under
-  MariaDB-only — see Risks.
+  own apps). Those branches stay; they simply lose test coverage now that the
+  suite runs only on MariaDB/MySQL — see Risks.
 - **No `docker-compose.yml`** unless requested later. Env-driven config against the
   developer's existing local MariaDB plus the CI service container is sufficient.
 
@@ -56,11 +64,12 @@ fork.
 
 | Decision | Choice | Rationale |
 |---|---|---|
-| Engine | MariaDB only (full replace) | Deployment target; "don't mix" |
-| Version | MariaDB 12.3 LTS, floating `mariadb:12.3` tag | Current LTS (12.3.2 GA 2026-05-29, EOL Jun 2029). Floating tag tracks LTS patch/security updates → matches a patched-LTS production box (the fidelity choice). Pinning to `12.3.2` is a one-line change if strict CI reproducibility is ever needed. |
-| Driver | Laravel `mariadb` driver | Dedicated driver in L11+, distinct from `mysql`; L12/L13 support it |
-| Durability | Standard (no `my.cnf` tuning) | Fidelity to production over speed |
-| CI shape | One `services:` block on the single `test` job; applies to all 4 matrix combos | Single axis, no matrix doubling; PHPStan/Pint stay DB-less |
+| Engine (local) | MariaDB 11.4 on port 3307 | Developer's local MariaDB; same engine family as CI's MariaDB 12.3 so Task-3 fixes transfer cleanly. (Local MySQL 8.0 on 3306 exists too but is not the local target.) |
+| Engine (CI) | Two-engine matrix: MariaDB 12.3 + MySQL 8.4 | Both are real deployment engines the package ships to. Public repo → Actions free, so covering both costs nothing. SQLite fully dropped. |
+| Versions | MariaDB `mariadb:12.3` LTS, MySQL `mysql:8.4` LTS | MariaDB 12.3.2 GA 2026-05-29 (EOL Jun 2029); MySQL 8.4 LTS. Floating minor tags track LTS patches = patched-LTS production parity. Pin to exact patch only if strict reproducibility is needed. |
+| Driver | Env-driven `DB_DRIVER` (default `mariadb`; CI mysql-leg sets `mysql`) | Laravel's `mariadb` and `mysql` drivers differ in grammar; each engine must use its own driver to test faithfully |
+| Durability | Standard (no `my.cnf` tuning), both engines | Fidelity to production over speed |
+| CI shape | One `services:` block per job, image+healthcheck selected by `matrix.db` | 8 jobs total; PHPStan/Pint stay DB-less. Free on a public repo. |
 | CI DB auth | Dedicated `MARIADB_USER`/`MARIADB_PASSWORD`, not root over TCP | Docker MariaDB root is localhost-bound unless `MARIADB_ROOT_HOST=%`; a granted user connects cleanly over the mapped TCP port (Codex P1) |
 | Parallelism | Drop `--parallel`; `precommit` runs serial | Pest's Laravel parallel handler skips testbench packages → no per-worker DB suffix → shared-DB collisions on MariaDB. Quality over speed; serial cost imperceptible on modern hardware (Codex P1) |
 | Latent failures | Fixed as part of this PR | The migration is the occasion to surface and fix them |
@@ -69,13 +78,18 @@ fork.
 
 ### `tests/TestCase.php`
 
-`getEnvironmentSetUp()` sets the default connection to `mariadb`, with all
-connection parameters read from env so the same code works locally and in CI:
+`getEnvironmentSetUp()` sets the `testing` connection with an **env-driven driver**
+so the same code runs on local MariaDB and on either CI engine:
 
+- `DB_DRIVER` (default `mariadb`; CI's mysql-leg sets `mysql`)
 - `DB_HOST` (default `127.0.0.1`)
-- `DB_PORT` (default `3306`)
+- `DB_PORT` (default `3306` — the CI mapped service port; local dev sets `3307`
+  for the local MariaDB instance)
 - `DB_DATABASE` (default `verifactu_test`)
-- `DB_USERNAME` / `DB_PASSWORD`
+- `DB_USERNAME` / `DB_PASSWORD` (default `verifactu` / `secret`)
+
+Task 1 landed the connection with a hardcoded `mariadb` driver; the `DB_DRIVER`
+env read is added with the CI matrix so the mysql-leg selects its own driver.
 
 `RefreshDatabase`/`LazilyRefreshDatabase` migrate once, then wrap each test in a
 transaction and roll back. This holds for **DML** tests. **Caveat (MariaDB DDL
@@ -89,53 +103,71 @@ migration syntax surfaces here.
 
 ### CI (`run-tests.yml`)
 
-Three concrete changes to the existing single `test` job (which runs all four
-matrix combinations P8.3/8.4 × L12/L13):
+The `test` job gains a database-engine axis and a per-engine service.
 
-1. **PHP extensions (line 38).** Replace `sqlite, pdo_sqlite` with `pdo_mysql`
-   (the Laravel `mariadb` driver connects over PDO MySQL). Without it the
-   connection fails before migrations run. Final list:
+1. **Matrix engine axis.** Add `db: [mariadb, mysql]` to the strategy matrix →
+   8 jobs (P8.3/8.4 × L12/L13 × {mariadb, mysql}).
+
+2. **PHP extensions (line 38).** Replace `sqlite, pdo_sqlite` with `pdo_mysql`
+   (both the `mariadb` and `mysql` Laravel drivers connect over PDO MySQL). Final:
    `dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_mysql, soap, openssl`.
 
-2. **Timeout (line 12).** Raise `timeout-minutes: 5` → `15`. The job runs
-   `composer require` + `composer update` (full dependency resolution) **and** the
-   574-test suite on a real engine with standard durability; 5 minutes is a CI
-   time-bomb even when the code is correct. Acceptance includes measuring actual
-   duration before/after and tightening if there is comfortable headroom.
+3. **Timeout (line 12).** Raise `timeout-minutes: 5` → `15` per job. Measure
+   actual duration and tighten if there is headroom.
 
-3. **Service container.** Add a MariaDB service to the job, exact config:
+4. **Per-engine service + env.** The image is selected by `matrix.db`; one env
+   block carries both `MARIADB_*` and `MYSQL_*` keys (each image ignores the
+   other's), and `DB_DRIVER` is set from `matrix.db`:
 
    ```yaml
    services:
-     mariadb:
-       image: mariadb:12.3
+     db:
+       image: ${{ matrix.db == 'mysql' && 'mysql:8.4' || 'mariadb:12.3' }}
        env:
          MARIADB_DATABASE: verifactu_test
          MARIADB_USER: verifactu
          MARIADB_PASSWORD: secret
          MARIADB_ROOT_PASSWORD: root
+         MYSQL_DATABASE: verifactu_test
+         MYSQL_USER: verifactu
+         MYSQL_PASSWORD: secret
+         MYSQL_ROOT_PASSWORD: root
        ports:
          - 3306:3306
        options: >-
-         --health-cmd="healthcheck.sh --connect --innodb_initialized"
+         --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
          --health-interval=10s
          --health-timeout=5s
-         --health-retries=5
+         --health-retries=10
    ```
 
-   The job exports the matching connection env so `TestCase` reaches the service as
-   the **dedicated user** (root is not reachable over TCP without
-   `MARIADB_ROOT_HOST=%`): `DB_CONNECTION=mariadb`, `DB_HOST=127.0.0.1`,
-   `DB_PORT=3306`, `DB_DATABASE=verifactu_test`, `DB_USERNAME=verifactu`,
-   `DB_PASSWORD=secret`. The MariaDB entrypoint auto-creates `MARIADB_USER` with
-   host `%` and grants it on `MARIADB_DATABASE`, so the TCP connection works.
+   And at job level:
+
+   ```yaml
+   env:
+     DB_DRIVER: ${{ matrix.db }}
+     DB_HOST: 127.0.0.1
+     DB_PORT: 3306
+     DB_DATABASE: verifactu_test
+     DB_USERNAME: verifactu
+     DB_PASSWORD: secret
+   ```
+
+   `matrix.db` is exactly `mariadb` or `mysql` — also the Laravel driver name — so
+   `DB_DRIVER: ${{ matrix.db }}` selects the right driver per leg. Both official
+   images auto-create the dedicated `verifactu` user (host `%`) granted on
+   `verifactu_test` from their `*_USER`/`*_PASSWORD` env, so the non-root TCP
+   connection works on either engine. `mysqladmin ping` is the portable healthcheck
+   (MariaDB ships `mysqladmin` too); root over TCP is unnecessary for the suite,
+   which connects as `verifactu`.
 
 The PHPStan and Pint workflows do not touch the database and get no service.
 
 **Matrix coverage.** The `services:` block lives on the single `test` job, so
-GitHub Actions starts a fresh, isolated MariaDB container for **every** matrix
-combination (all four of P8.3/8.4 × L12/L13) on its own runner VM. No shared
-service, no cross-combo port contention — each job gets its own `127.0.0.1:3306`.
+GitHub Actions starts a fresh, isolated DB container for **every** one of the eight
+combos on its own runner VM — no shared service, no cross-combo port contention,
+each job gets its own `127.0.0.1:3306`. The repo is public, so all these runner
+minutes are free.
 
 ### Test parallelism
 
@@ -161,36 +193,37 @@ the extensions change above. No `ext-sqlite` requirement is added.
 ### Local development
 
 Because `tests/Pest.php:8` applies `TestCase` to the whole suite, `composer test`
-requires a reachable MariaDB. The package documents (README/CONTRIBUTING) the
-one-time setup against the developer's local MariaDB:
+requires a reachable MariaDB. The local target is the developer's **MariaDB 11.4 on
+port 3307** (a separate local MySQL 8.0 on 3306 is not the target). The package
+documents (README/CONTRIBUTING) the one-time setup:
 
 ```bash
-# One-time: create the test database and a dedicated user (mirrors CI)
-mariadb -uroot -p <<'SQL'
+# One-time: create the test database + dedicated user on the local MariaDB (3307)
+mariadb -uroot --port=3307 --protocol=tcp <<'SQL'
 CREATE DATABASE IF NOT EXISTS verifactu_test;
 CREATE USER IF NOT EXISTS 'verifactu'@'%' IDENTIFIED BY 'secret';
 GRANT ALL PRIVILEGES ON verifactu_test.* TO 'verifactu'@'%';
 FLUSH PRIVILEGES;
 SQL
 
-# Per-shell (or persisted in a local, git-ignored env): point the suite at it
-export DB_CONNECTION=mariadb DB_HOST=127.0.0.1 DB_PORT=3306 \
+# Per-shell (or persisted in a local, git-ignored env): point the suite at MariaDB
+export DB_DRIVER=mariadb DB_HOST=127.0.0.1 DB_PORT=3307 \
        DB_DATABASE=verifactu_test DB_USERNAME=verifactu DB_PASSWORD=secret
 
 composer test
 ```
 
-`RefreshDatabase`/`LazilyRefreshDatabase` migrate and roll back per test for DML,
-so no manual reset is needed between normal runs (the DDL implicit-commit caveat
-above applies to migration-running tests). Drop/recreate `verifactu_test` only if
-a migration set changes incompatibly. Local credentials match the CI defaults
-(`verifactu`/`secret`). `composer test` is serial — `test-parallel` is removed
-(see Test parallelism).
+The only local override vs the CI defaults is `DB_PORT=3307` (CI's MariaDB service
+is on 3306). `RefreshDatabase`/`LazilyRefreshDatabase` migrate and roll back per
+test for DML, so no manual reset is needed between normal runs (the DDL
+implicit-commit caveat above applies to migration-running tests). `composer test`
+is serial — `test-parallel` is removed (see Test parallelism).
 
 ### Handling latent failures
 
-MariaDB is expected to surface failures SQLite masked. The migration is **done
-when the full suite is green on MariaDB**. The fixes split into two kinds:
+The real engines are expected to surface failures SQLite masked. The migration is
+**done when the full suite is green on both MariaDB and MySQL**. The fixes split
+into two kinds:
 
 - **Test/schema portability** (column types, strict mode, date precision, JSON,
   constraint ordering): fixed inline as part of this PR.
@@ -202,9 +235,11 @@ when the full suite is green on MariaDB**. The fixes split into two kinds:
 
 This issue *is* a testing-infra change, so "testing" here means the acceptance bar:
 
-- Full suite green on MariaDB 12.3, locally and across all four CI matrix combos.
-- CI connects as the dedicated `verifactu` user (not root) over TCP — proves the
-  service auth is correct, not a localhost-socket false positive.
+- Full suite green locally on MariaDB 11.4, and across all eight CI combos
+  (P8.3/8.4 × L12/L13 × {MariaDB 12.3, MySQL 8.4}).
+- CI connects as the dedicated `verifactu` user (not root) over TCP on both
+  engines — proves the service auth is correct, not a localhost-socket false
+  positive.
 - `composer precommit` (serial) passes; `test-parallel` no longer present.
 - `ext-pdo_mysql` declared in `require-dev`; no SQLite references remain in
   `TestCase.php` or the workflow.
@@ -221,10 +256,9 @@ This issue *is* a testing-infra change, so "testing" here means the acceptance b
   15-minute timeout; actual duration measured at implementation.
 - **SQLite-branch coverage gap.** Driver-conditional `sqlite` branches in
   migrations (the `consolidate_issue_datetime` data migration) stay in production
-  for SQLite consumers but are no longer exercised by the MariaDB-only suite. This
-  is the symmetric cost of single-engine testing (the MySQL branch was untested
-  under SQLite before). Accepted: AEAT Verifactu is Spain B2B, where MySQL/MariaDB
-  is the realistic consumer engine. Not expanding scope to a multi-engine matrix.
+  for SQLite consumers but are no longer exercised once the suite runs only on
+  MariaDB/MySQL. Accepted: AEAT Verifactu is Spain B2B, where MySQL/MariaDB is the
+  realistic consumer engine — and the CI matrix now covers both of those.
 - **Migration-running tests lose transaction isolation.** MariaDB DDL
   implicit-commit (Codex P2) breaks per-test rollback for tests that run
   migrations (install command). Handled explicitly during implementation, not
