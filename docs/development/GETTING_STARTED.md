@@ -341,7 +341,7 @@ Si tienes preguntas:
 
 ## 📞 Contacto
 
-- Email: info@aichadigital.com
+- Email: info@aichadigital.es
 - Documentación interna: Ver archivos `.cursor/`
 
 ---

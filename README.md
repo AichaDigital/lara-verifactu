@@ -255,7 +255,7 @@ composer quality       # all of the above + coverage
 ## Security
 
 If you discover a security vulnerability, please email
-**security@aichadigital.com** instead of using the issue tracker. Never
+**security@aichadigital.es** instead of using the issue tracker. Never
 commit certificates or credentials; keep your `.p12` outside the project
 tree with restrictive permissions.
 
