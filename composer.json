@@ -16,7 +16,7 @@
     "authors": [
         {
             "name": "Aicha Digital",
-            "email": "info@aichadigital.com",
+            "email": "info@aichadigital.es",
             "role": "Developer"
         }
     ],
@@ -33,6 +33,7 @@
         "spatie/laravel-package-tools": "^1.16"
     },
     "require-dev": {
+        "ext-pdo_mysql": "*",
         "larastan/larastan": "^3.8",
         "laravel/pint": "^1.13",
         "nunomaduro/collision": "^8.0",
@@ -77,7 +78,6 @@
         "analyse": "vendor/bin/phpstan analyse",
         "test": "vendor/bin/pest",
         "test-coverage": "vendor/bin/pest --coverage",
-        "test-parallel": "vendor/bin/pest --parallel",
         "test-profile": "vendor/bin/pest --profile",
         "test-mutate": "vendor/bin/pest --mutate",
         "format": "vendor/bin/pint",
@@ -103,7 +103,7 @@
         "precommit": [
             "@format",
             "@phpstan",
-            "@test-parallel"
+            "@test"
         ]
     },
     "config": {

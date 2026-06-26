@@ -620,5 +620,5 @@ Registry::whereNull('qr_svg')->chunk(100, function ($registries) use ($qrGenerat
 - Check the [README](README.md) for general information
 - Review the [API documentation](docs/api.md)
 - Open an issue on [GitHub](https://github.com/AichaDigital/lara-verifactu/issues)
-- Contact support: support@aichadigital.com
+- Contact support: support@aichadigital.es
 

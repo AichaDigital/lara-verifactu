@@ -252,10 +252,36 @@ composer format        # Laravel Pint
 composer quality       # all of the above + coverage
 ```
 
+### Running the suite (MariaDB / MySQL)
+
+The suite runs against **MariaDB/MySQL** (the deployment engines), not SQLite, so
+it surfaces schema and engine behavior SQLite silently masks. One-time local setup
+(this repo's dev box runs MariaDB on port 3307):
+
+```bash
+mariadb -uroot --port=3307 --protocol=tcp <<'SQL'
+CREATE DATABASE IF NOT EXISTS verifactu_test;
+CREATE USER IF NOT EXISTS 'verifactu'@'%' IDENTIFIED BY 'secret';
+GRANT ALL PRIVILEGES ON verifactu_test.* TO 'verifactu'@'%';
+FLUSH PRIVILEGES;
+SQL
+```
+
+Point the suite at it (CI uses the same values but `DB_PORT=3306`):
+
+```bash
+export DB_DRIVER=mariadb DB_HOST=127.0.0.1 DB_PORT=3307 \
+       DB_DATABASE=verifactu_test DB_USERNAME=verifactu DB_PASSWORD=secret
+composer test
+```
+
+CI runs the full suite against both **MariaDB 12.3** and **MySQL 8.4**. `composer
+test` is serial (parallel testing is intentionally disabled, see AID-259).
+
 ## Security
 
 If you discover a security vulnerability, please email
-**security@aichadigital.com** instead of using the issue tracker. Never
+**security@aichadigital.es** instead of using the issue tracker. Never
 commit certificates or credentials; keep your `.p12` outside the project
 tree with restrictive permissions.
 

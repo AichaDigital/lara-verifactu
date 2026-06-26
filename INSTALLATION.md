@@ -393,7 +393,7 @@ Una vez instalado:
 
 - 🐛 [Reporta un issue](https://github.com/AichaDigital/lara-verifactu/issues)
 - 💬 [Inicia una discusión](https://github.com/AichaDigital/lara-verifactu/discussions)
-- 📧 Email: support@aichadigital.com
+- 📧 Email: support@aichadigital.es
 
 ---
 

@@ -7,11 +7,6 @@ use AichaDigital\LaraVerifactu\Enums\RegistryStatusEnum;
 use AichaDigital\LaraVerifactu\Models\Registry;
 use Carbon\Carbon;
 
-beforeEach(function () {
-    // Run migrations
-    $this->loadMigrationsFrom(__DIR__ . '/../../database/migrations');
-});
-
 it('can create a registry', function () {
     $registry = Registry::factory()->create([
         'registry_number' => 'REG-0001',

@@ -4,7 +4,7 @@
 
 ## Código de Conducta
 
-Este proyecto y todos los que participan en él se rigen por nuestro Código de Conducta. Al participar, se espera que mantengas este código. Por favor reporta comportamientos inaceptables a info@aichadigital.com.
+Este proyecto y todos los que participan en él se rigen por nuestro Código de Conducta. Al participar, se espera que mantengas este código. Por favor reporta comportamientos inaceptables a info@aichadigital.es.
 
 ## ¿Cómo Puedo Contribuir?
 
@@ -221,7 +221,7 @@ Al contribuir a Lara Verifactu, aceptas que tus contribuciones serán licenciada
 Si tienes preguntas sobre cómo contribuir, no dudes en:
 
 - Abrir un issue
-- Contactarnos en info@aichadigital.com
+- Contactarnos en info@aichadigital.es
 - Unirte a nuestras discusiones en GitHub
 
 ¡Gracias por contribuir! 🎉
