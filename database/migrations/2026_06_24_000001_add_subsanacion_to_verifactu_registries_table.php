@@ -41,8 +41,8 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('verifactu_registries', function (Blueprint $table) {
-            $table->dropUnique('verifactu_registries_amends_unique');
             $table->dropForeign(['amends_registry_id']);
+            $table->dropUnique('verifactu_registries_amends_unique');
         });
 
         Schema::table('verifactu_registries', function (Blueprint $table) {

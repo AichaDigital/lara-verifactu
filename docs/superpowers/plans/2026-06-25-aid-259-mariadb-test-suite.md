@@ -378,3 +378,42 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 - No SQLite in `tests/TestCase.php` or the workflow; production migration `sqlite` branches untouched.
 - Before/after pass-count delta recorded in the PR; any real domain bug escalated, not silenced.
 - PR opened against `main`; AID-259 unblocks AID-258.
+
+---
+
+## Execution addendum — DB lifecycle deadlock (2026-06-26)
+
+Running the suite on the real engine surfaced a hang that SQLite `:memory:` had
+masked for months — the whole point of this migration. Two distinct latent bugs:
+
+1. **Migration `down()` ordering (MySQL/MariaDB error 1553).** In
+   `2026_06_24_000001_add_subsanacion...`, `down()` dropped the unique index
+   before the FK that depends on it. SQLite allowed it silently; the real engines
+   reject it. Fix: `dropForeign(['amends_registry_id'])` before
+   `dropUnique('verifactu_registries_amends_unique')`.
+
+2. **Test DB lifecycle / metadata-lock deadlock.** One connection left a
+   transaction open (`Sleep`) while another ran `DROP TABLE` for the refresh,
+   blocking on an exclusive metadata lock. With MySQL's default `lock_wait_timeout`
+   (1 year) this hung indefinitely (~18 min observed). Root cause: inconsistent
+   refresh strategy (`LazilyRefreshDatabase` only on Feature) + redundant
+   `loadMigrationsFrom` in `beforeEach` + `executionOrder=random`.
+
+**Lifecycle fix applied (this scope):**
+
+- `RefreshDatabase` uniform across the suite (`tests/Pest.php`); `Unit` no longer
+  touches the DB (`defineDatabaseMigrations` gated to Feature).
+- `executionOrder` → `default` (deterministic, reproducible).
+- `tearDown` disconnects all connections after `parent::tearDown()` (testbench
+  rebuilds the app per test; stale connections accumulate otherwise).
+- `SET SESSION lock_wait_timeout=5, innodb_lock_wait_timeout=5` on the test
+  connection — turns any future hang into a fast, reproducible failure.
+- Redundant `loadMigrationsFrom` removed from Feature `beforeEach` hooks.
+- Driver env-driven (`DB_DRIVER`) for the MySQL CI leg.
+
+**Verification (2026-06-26):** full suite green on both engines — 574 passed,
+7 skipped, 1315 assertions. Local MariaDB 3307 took 568s vs MySQL 3306 62s; the
+9× gap is `innodb_flush_method=O_DIRECT` on macOS (no real O_DIRECT support),
+local-only, not a CI concern (Linux containers handle O_DIRECT efficiently).
+
+**Over-engineering cleanup deferred to AID-261** (not in this scope).

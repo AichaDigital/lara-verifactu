@@ -278,3 +278,9 @@ This issue *is* a testing-infra change, so "testing" here means the acceptance b
   custom hook since Pest's Laravel parallel handler skips testbench packages.
 - A `docker-compose.yml` for contributor parity, if the package later takes
   external contributors.
+- **AID-261** (over-engineering cleanup of the suite). The real-engine run
+  confirmed the "latent failures" risk this spec anticipated: a migration
+  `down()` 1553 bug and a metadata-lock deadlock from an inconsistent refresh
+  strategy, both masked by SQLite. The DB lifecycle fix landed under AID-259;
+  test-style simplification is deferred to AID-261. See the plan's
+  "Execution addendum" for the full root-cause analysis.

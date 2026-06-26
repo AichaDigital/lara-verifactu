@@ -6,11 +6,6 @@ use AichaDigital\LaraVerifactu\Database\Factories\InvoiceFactory;
 use AichaDigital\LaraVerifactu\Enums\TaxTypeEnum;
 use AichaDigital\LaraVerifactu\Models\InvoiceBreakdown;
 
-beforeEach(function () {
-    // Run migrations
-    $this->loadMigrationsFrom(__DIR__ . '/../../database/migrations');
-});
-
 it('can create an invoice breakdown', function () {
     $breakdown = InvoiceBreakdown::factory()->create([
         'tax_rate' => 21.00,

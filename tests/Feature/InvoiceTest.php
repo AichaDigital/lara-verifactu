@@ -9,11 +9,6 @@ use AichaDigital\LaraVerifactu\Enums\RegimeTypeEnum;
 use AichaDigital\LaraVerifactu\Models\Invoice;
 use Carbon\Carbon;
 
-beforeEach(function () {
-    // Run migrations
-    $this->loadMigrationsFrom(__DIR__ . '/../../database/migrations');
-});
-
 it('can create an invoice', function () {
     $invoice = Invoice::factory()->create([
         'serie' => 'AA',

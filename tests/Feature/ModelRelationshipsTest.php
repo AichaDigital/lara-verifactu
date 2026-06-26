@@ -7,11 +7,6 @@ use AichaDigital\LaraVerifactu\Models\Invoice;
 use AichaDigital\LaraVerifactu\Models\InvoiceBreakdown;
 use AichaDigital\LaraVerifactu\Models\Registry;
 
-beforeEach(function () {
-    // Run migrations
-    $this->loadMigrationsFrom(__DIR__ . '/../../database/migrations');
-});
-
 it('invoice has one registry relationship', function () {
     $invoice = Invoice::factory()->withoutBreakdowns()->create();
     $registry = Registry::factory()->forInvoice($invoice)->create();

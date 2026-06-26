@@ -3,10 +3,10 @@
 declare(strict_types=1);
 
 use AichaDigital\LaraVerifactu\Tests\TestCase;
-use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(TestCase::class)->in(__DIR__);
-uses(LazilyRefreshDatabase::class)->in('Feature');
+uses(RefreshDatabase::class)->in('Feature');
 
 /*
 |--------------------------------------------------------------------------

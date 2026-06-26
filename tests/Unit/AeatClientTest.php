@@ -83,12 +83,13 @@ it('builds failed AeatResponse objects', function () {
 });
 
 it('returns per-registry failure responses when batch sending fails', function () {
+    $client = new AeatClient('https://verifactu-test.invalid/soap', 3, false);
     $registry = Mockery::mock(RegistryContract::class);
     $registry->shouldReceive('getSignedXml')->andReturn('<signed/>');
     $registry->shouldReceive('getXml')->andReturn('<xml/>');
     $registry->shouldReceive('getRegistryNumber')->andReturn('REG-001');
 
-    $responses = $this->client->sendBatch(collect([$registry]));
+    $responses = $client->sendBatch(collect([$registry]));
 
     expect($responses)->toHaveCount(1)
         ->and($responses->first()->isFailure())->toBeTrue();

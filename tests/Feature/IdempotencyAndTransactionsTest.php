@@ -11,10 +11,6 @@ use AichaDigital\LaraVerifactu\Models\Registry;
 use AichaDigital\LaraVerifactu\Services\RegistryManager;
 use Illuminate\Support\Facades\Queue;
 
-beforeEach(function () {
-    $this->loadMigrationsFrom(__DIR__ . '/../../database/migrations');
-});
-
 describe('RegistryManager idempotency', function () {
     it('markAsSubmitted does not overwrite already sent registry', function () {
         $registry = Registry::factory()->submitted()->create([

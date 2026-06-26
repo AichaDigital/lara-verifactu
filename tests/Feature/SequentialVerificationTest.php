@@ -8,10 +8,6 @@ use AichaDigital\LaraVerifactu\Models\Registry;
 use Illuminate\Support\Facades\Queue;
 
 beforeEach(function () {
-    // Run migrations
-    $this->loadMigrationsFrom(__DIR__ . '/../../database/migrations');
-
-    // Enable lock for sequential tests
     config(['verifactu.lock.enabled' => true]);
     config(['verifactu.lock.timeout' => 300]);
 });
