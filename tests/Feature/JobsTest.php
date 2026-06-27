@@ -47,8 +47,9 @@ it('can dispatch verify blockchain integrity job', function () {
 it('process invoice registration job has correct configuration', function () {
     $job = new ProcessInvoiceRegistrationJob(1);
 
-    expect($job->tries)->toBeGreaterThan(0)
+    expect($job->tries)->toBe(1) // fiscal compliance: no automatic retries
         ->and($job->timeout)->toBeGreaterThan(0)
+        ->and($job->queue)->toBe('fiscal_verification') // dedicated sequential queue
         ->and($job->invoiceId)->toBe(1);
 });
 
