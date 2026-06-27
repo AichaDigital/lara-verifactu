@@ -201,6 +201,18 @@ composer analyse
 composer format
 ```
 
+### Tests de concurrencia (on-demand)
+
+Existe un test de integración basado en `pcntl_fork` que confirma empíricamente
+que la cadena de huella no se bifurca bajo creación concurrente de registros
+(AID-258 / AID-264). **No** forma parte de la suite por defecto ni del CI: vive
+fuera de los testsuites de PHPUnit (`tests/Concurrency/`) y requiere la extensión
+`pcntl` más un motor de base de datos real. Para ejecutarlo:
+
+```bash
+RUN_CONCURRENCY_IT=1 vendor/bin/pest tests/Concurrency
+```
+
 ## Herramientas de Calidad
 
 Este proyecto utiliza:
