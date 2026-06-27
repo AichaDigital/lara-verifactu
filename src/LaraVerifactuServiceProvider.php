@@ -62,6 +62,9 @@ class LaraVerifactuServiceProvider extends PackageServiceProvider
                 // listed here or publishMigrations() never copies it to
                 // consumers (CI does not catch this — tests load the folder).
                 '2026_06_24_000001_add_subsanacion_to_verifactu_registries_table',
+                // AID-258: chain-lock sentinel table. MUST be listed here or
+                // publishMigrations() never copies it to consumers.
+                '2026_06_26_000001_create_verifactu_chain_locks_table',
             ])
             ->hasCommand(RegisterInvoiceCommand::class)
             ->hasCommand(RetryFailedCommand::class)

@@ -58,6 +58,9 @@ final class RegistryManager
         ?RegistrationCircumstances $circumstances = null
     ): RegistryContract {
         return DB::transaction(function () use ($invoice, $circumstances) {
+            // Serialize concurrent chain writes before reading the head (AID-258).
+            $this->acquireChainLock();
+
             // Get previous registry for blockchain chaining
             $previousRegistry = $this->getPreviousRegistry();
             $previousHash = $previousRegistry?->hash;
@@ -128,6 +131,9 @@ final class RegistryManager
     public function createCancellationRegistry(InvoiceContract $invoice): RegistryContract
     {
         return DB::transaction(function () use ($invoice) {
+            // Serialize concurrent chain writes before reading the head (AID-258).
+            $this->acquireChainLock();
+
             $previousRegistry = $this->getPreviousRegistry();
             $previousHash = $previousRegistry?->hash;
 
@@ -178,6 +184,23 @@ final class RegistryManager
 
             return $registry;
         });
+    }
+
+    /**
+     * Acquire the exclusive chain-head lock (AID-258).
+     *
+     * Takes a FOR UPDATE lock on the chain's sentinel row so that concurrent
+     * registry creations serialize their "read chain head + insert" section and
+     * cannot fork the fingerprint chain. Must be called inside the surrounding
+     * DB::transaction, before getPreviousRegistry(). The dedicated sentinel row
+     * (vs. locking the head row) also covers the empty-chain case.
+     */
+    private function acquireChainLock(): void
+    {
+        DB::table('verifactu_chain_locks')
+            ->where('scope', 'global')
+            ->lockForUpdate()
+            ->first();
     }
 
     /**
