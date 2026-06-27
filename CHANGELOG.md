@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Internal
+
+- Add the on-demand fork-based concurrency integration test for the AID-258
+  chain-fork lock (AID-264): N real processes create registries concurrently and
+  assert the fingerprint chain does not fork. Gated behind `RUN_CONCURRENCY_IT=1`
+  and kept out of the CI suite (lives outside the PHPUnit testsuites). Verified
+  sensitive — it detects the fork in 6/6 runs when the lock is disabled.
+
 ## [1.0.0] - 2026-06-27
 
 First stable release. The public API (including the `src/Contracts/*` interfaces)
