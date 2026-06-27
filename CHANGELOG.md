@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-06-27
+
+First stable release. The public API (including the `src/Contracts/*` interfaces)
+and the published database schema are now frozen under SemVer — breaking changes
+require a MAJOR bump (see `VERSIONING.md`). "Stable" means the API and schema are
+locked for the declared scope, not full Spanish-law coverage: the package keeps
+its **honest-core, fail-loud** posture, rejecting unsupported AEAT cases with a
+`ValidationException` instead of emitting fiscal XML the AEAT would reject. The
+supported-vs-rejected matrix is documented in the README; the post-1.0 coverage
+roadmap is tracked in AID-209.
+
+### Added
+
+- Amend-by-rejection «ALTA POR RECHAZO» (AID-137): a `REJECTED` initial
+  registration whose unique key is provably **not** registered at AEAT can be
+  re-sent, corrected, as a new chain link carrying `Subsanacion=S` +
+  `RechazoPrevio=X`, with `amends_registry_id` pointing at the rejected record.
+  The rejected record and its XML stay immutable. Blockchain verification now
+  reads the hash inputs from each registry's persisted historical XML, not the
+  mutable `Invoice`.
+
+### Changed
+
+- AEAT validation rejections (`EstadoRegistro = Incorrecto`) are now classified
+  as `REJECTED` instead of a generic error state (AID-257) — the precondition
+  for the amend-by-rejection flow: a record AEAT never accepted can be corrected
+  and re-sent rather than staying stuck.
+
+### Fixed
+
+- Chain-fork lock (AID-258): the hash-chain head is now locked under concurrent
+  registry creation. `acquireChainLock()` takes an exclusive lock on a sentinel
+  row at the start of the registration transaction (both registration and
+  cancellation paths) before selecting the previous link, so two concurrent
+  creations can no longer read the same predecessor and fork the fingerprint
+  chain. The chain is global per issuer.
+
+### Internal
+
+- Migrated the test suite from SQLite to the real MariaDB/MySQL engine, green
+  dual-engine (MariaDB 12.3 + MySQL 8.4) in CI (AID-259); pinned the rule 1156
+  IDOtro+02 × TipoFactura invariant (AID-228); standardized the README badge
+  block (AID-241).
+- Documented the schema versioning policy in `VERSIONING.md`: published
+  migrations immutable from 1.0.0 (append-only), additive schema = MINOR,
+  breaking schema = MAJOR, `src/Contracts/*` treated as stable API.
+
 ## [1.0.0-rc2] - 2026-06-21
 
 ### Added
@@ -534,7 +581,9 @@ This release introduces **critical fiscal compliance features** required for pro
 - **PHPStan: Level 8 ✅ (12 legitimate framework false positives baselined)**
 - **Code Style: PSR-12 ✅**
 
-[Unreleased]: https://github.com/aichadigital/lara-verifactu/compare/v1.0.0-rc1...HEAD
+[Unreleased]: https://github.com/aichadigital/lara-verifactu/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/aichadigital/lara-verifactu/compare/v1.0.0-rc2...v1.0.0
+[1.0.0-rc2]: https://github.com/aichadigital/lara-verifactu/compare/v1.0.0-rc1...v1.0.0-rc2
 [1.0.0-rc1]: https://github.com/aichadigital/lara-verifactu/compare/v0.11.0...v1.0.0-rc1
 [0.11.0]: https://github.com/aichadigital/lara-verifactu/compare/v0.10.0...v0.11.0
 [0.1.0]: https://github.com/aichadigital/lara-verifactu/releases/tag/v0.1.0

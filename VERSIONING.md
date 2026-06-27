@@ -55,6 +55,26 @@ laravel-12 (Laravel 12)
 
 ---
 
+## 🗄️ Política de versionado de esquema
+
+El esquema de base de datos publicado también es contrato público:
+
+- A partir de `v1.0.0` estable, una migración ya publicada se considera inmutable.
+  Cualquier cambio estructural se realiza mediante una migración nueva y append-only.
+- Cambios aditivos (nuevas tablas/columnas/índices, nuevos valores de enumeración no
+  retroincompatibles): **MINOR**.
+- Cambios de ruptura de esquema (eliminación o cambio de tipo, restricciones que invaliden
+  datos persistentes existentes, renombre de estructura con pérdida de compatibilidad): **MAJOR**.
+- Esta política aplica tanto a la semántica fiscal materializada en la base como a su
+  persistencia física.
+- En este paquete no hay migraciones `.stub`; por ello no aplica aún una
+  consistencia `*.php`/`*.stub`.
+- En paralelo a la política de esquema, en `1.0.0` el contrato público (incluidos
+  los contratos de `src/Contracts/*`) pasa a tratarse como API estable. Cambios
+  incompatibles en esas firmas se publican como MAJOR.
+
+---
+
 ## 📌 Convenciones de Naming
 
 ### Branches
@@ -212,7 +232,6 @@ Cuando Laravel 13 sea lanzado:
 
 ---
 
-**Última actualización**: Noviembre 2025  
+**Última actualización**: 27 de junio de 2026  
 **Versión de Laravel actual**: 12.x  
 **Estrategia**: Solo Laravel 12+ hasta que Laravel 13 requiera cambios incompatibles
-
