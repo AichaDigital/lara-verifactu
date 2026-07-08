@@ -189,10 +189,9 @@ Cada release debe indicar claramente:
 ### Actualizar en Cada Cambio
 
 1. **README.md**: Requisitos técnicos
-2. **INSTALLATION.md**: Versión de Laravel requerida
-3. **CHANGELOG.md**: Notas de versión
-4. **composer.json**: Constraints de dependencias
-5. **.github/workflows/run-tests.yml**: Matriz de tests
+2. **CHANGELOG.md**: Notas de versión
+3. **composer.json**: Constraints de dependencias
+4. **.github/workflows/run-tests.yml**: Matriz de tests
 
 ---
 
@@ -203,7 +202,6 @@ Cuando se actualiza la versión de Laravel soportada:
 - [ ] Actualizar `composer.json` (`illuminate/contracts`)
 - [ ] Actualizar `.github/workflows/run-tests.yml`
 - [ ] Actualizar `README.md` (requisitos técnicos)
-- [ ] Actualizar `INSTALLATION.md`
 - [ ] Actualizar `CHANGELOG.md`
 - [ ] Ejecutar tests localmente
 - [ ] Verificar que CI pasa
