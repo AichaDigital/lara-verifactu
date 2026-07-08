@@ -65,6 +65,10 @@ class LaraVerifactuServiceProvider extends PackageServiceProvider
                 // AID-258: chain-lock sentinel table. MUST be listed here or
                 // publishMigrations() never copies it to consumers.
                 '2026_06_26_000001_create_verifactu_chain_locks_table',
+                // AID-344: drops the hardcoded FK from invoice_id to
+                // verifactu_invoices so custom-mode consumers aren't rejected.
+                // MUST be listed here or publishMigrations() never copies it.
+                '2026_07_08_000001_drop_invoice_foreign_key_from_verifactu_registries_table',
             ])
             ->hasCommand(RegisterInvoiceCommand::class)
             ->hasCommand(RetryFailedCommand::class)

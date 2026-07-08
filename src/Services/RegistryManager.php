@@ -95,7 +95,7 @@ final class RegistryManager
 
             // Create registry
             $registry = Registry::create([
-                'invoice_id' => $invoice->id ?? null,
+                'invoice_id' => $invoice->getId(),
                 'registry_number' => $registryNumber,
                 'registry_date' => Carbon::now(),
                 'registry_type' => RegistryTypeEnum::REGISTRATION->value,
@@ -168,7 +168,7 @@ final class RegistryManager
             $xml = $this->xmlBuilder->buildCancellationXml($record, $chain);
 
             $registry = Registry::create([
-                'invoice_id' => $invoice->id ?? null,
+                'invoice_id' => $invoice->getId(),
                 'registry_number' => $registryNumber,
                 'registry_date' => Carbon::now(),
                 'registry_type' => RegistryTypeEnum::CANCELLATION->value,

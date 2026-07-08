@@ -101,14 +101,18 @@ Registry           → a chain link: RegistroAlta or RegistroAnulacion (table: v
 
 The package supports a `native` / `custom` mode switch
 (`config('verifactu.mode')`) and a `models` binding array so a consumer can
-point `invoice`/`breakdown`/`registry` at their own classes. **In practice
-this is only partially wired**: `Registry::invoice()` and the
-`registries.invoice_id` foreign key are hardcoded against the native
-`Invoice` model and the `verifactu_invoices` table, so a genuinely external
-custom model fails the FK constraint on `register()` (tracked in AID-344).
-Don't advertise `custom` mode as a finished, decoupled integration path when
-working on docs or examples — see the README's "Custom invoice models"
-section for the exact caveat.
+point `invoice`/`breakdown`/`registry` at their own classes. **As of
+AID-344, `Registry::invoice()` resolves the class from
+`config('verifactu.models.invoice')` and the hardcoded FK to
+`verifactu_invoices` is gone** — any Eloquent model (any table, integer PK)
+implementing `InvoiceContract` now works through the facade
+(`register`/`cancel`/`status`). What's still native-only: `verifactu:register`,
+`ProcessInvoiceRegistrationJob`, `verifactu:retry-failed`, `verifactu:status`
+— these query the native `Invoice` Eloquent model directly (`Invoice::find()`,
+`Invoice::doesntHave('registry')`, sequential-order validation), not the
+config binding. Don't advertise those CLI/queue entry points as
+custom-mode-ready — see the README's "Custom invoice models" section for the
+exact split.
 
 ## 📁 Package Structure
 

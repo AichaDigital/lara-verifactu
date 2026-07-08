@@ -211,13 +211,19 @@ Any model implementing
 the bundled `Invoice` model (native mode) is optional. See
 `config/verifactu.php` for the model bindings.
 
-> **Current limitation:** `Registry::invoice()` and the `registries.invoice_id`
-> foreign key are hardcoded against the native `Invoice` model and the
-> `verifactu_invoices` table, so a genuinely external custom model (not
-> backed by that table) fails the FK constraint on `register()`. Until this
-> is decoupled (tracked in AID-344), integrate a pre-existing invoice system
-> by mapping into the native `Invoice` model behind your own service layer,
-> rather than relying on `custom` mode end-to-end.
+> **Now supported (AID-344):** `Registry::invoice()` resolves the model
+> class from `config('verifactu.models.invoice')` and the hardcoded FK to
+> `verifactu_invoices` was dropped, so any Eloquent model — any table,
+> integer primary key — implementing `InvoiceContract` can be registered,
+> cancelled and queried through the facade (`register`/`cancel`/`status`).
+>
+> **Still native-only:** the `verifactu:register` artisan command (single-ID
+> and `--all`), `ProcessInvoiceRegistrationJob`, `verifactu:retry-failed` and
+> `verifactu:status` resolve/query the native `Invoice` Eloquent model
+> directly and don't go through the config binding — use the facade
+> programmatically for a custom model instead of those entry points. A
+> non-integer/string invoice primary key is also not supported
+> (`InvoiceContract::getId(): ?int` and `invoice_id` are int-only).
 
 ## Architecture notes
 

@@ -94,6 +94,7 @@ class TestCase extends Orchestra
         }
 
         $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
+        $this->loadMigrationsFrom(__DIR__ . '/Fixtures/migrations');
     }
 
     private function closeOpenTestDatabaseConnection(): void

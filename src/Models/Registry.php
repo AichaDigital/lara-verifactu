@@ -113,12 +113,20 @@ class Registry extends Model implements RegistryContract
     /**
      * Get the invoice associated with this registry.
      *
+     * Resolves the related model from `config('verifactu.models.invoice')`
+     * so a custom mode consumer's own Eloquent model is honored instead of
+     * always assuming the native `Invoice` (AID-344). Defaults to `Invoice`
+     * when unset, matching native mode.
+     *
      * @return BelongsTo<Invoice, static>
      */
     public function invoice(): BelongsTo
     {
+        /** @var class-string<Model> $invoiceModel */
+        $invoiceModel = config('verifactu.models.invoice', Invoice::class);
+
         /** @var BelongsTo<Invoice, static> */
-        return $this->belongsTo(Invoice::class);
+        return $this->belongsTo($invoiceModel, 'invoice_id');
     }
 
     // ========================================

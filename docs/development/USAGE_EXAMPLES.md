@@ -229,22 +229,22 @@ Verifactu::register($rectification);
 
 ### Integrate with an Existing Invoice Model
 
-> **Current limitation:** the FK from `verifactu_registries.invoice_id` to
-> `verifactu_invoices` and the `Registry::invoice()` Eloquent relation are
-> hardcoded against the native `Invoice` model — they don't yet honor
-> `config('verifactu.models.invoice')`. A genuinely external model (not
-> backed by the `verifactu_invoices` table) will fail that FK constraint when
-> you call `Verifactu::register()`. This is tracked in AID-344; until it
-> lands, integrate a pre-existing invoice system by mapping into the native
-> `Invoice` model behind your own service layer, rather than relying on
-> `custom` mode end-to-end.
+> **Now supported (AID-344):** `Registry::invoice()` resolves the class from
+> `config('verifactu.models.invoice')` and the hardcoded FK to
+> `verifactu_invoices` is gone — a genuinely external model (any table,
+> integer PK) registers, cancels and reports status correctly through the
+> facade. **Still native-only:** `verifactu:register`,
+> `ProcessInvoiceRegistrationJob`, `verifactu:retry-failed`,
+> `verifactu:status` — those resolve/query the native `Invoice` Eloquent
+> model directly, not the config binding.
 >
 > The sketch below shows the *shape* of an `InvoiceContract` implementation —
 > it deliberately implements only a handful of representative methods for
 > readability. The interface has ~18 methods; see
 > `src/Contracts/InvoiceContract.php`, `src/Contracts/RecipientContract.php`
 > and `src/Contracts/InvoiceBreakdownContract.php` for the full, authoritative
-> list before writing a real implementation.
+> list, and `tests/Fixtures/CustomInvoice.php` for a complete, real
+> implementation exercised by the test suite.
 
 ```php
 namespace App\Models;

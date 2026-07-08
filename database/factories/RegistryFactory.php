@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AichaDigital\LaraVerifactu\Database\Factories;
 
+use AichaDigital\LaraVerifactu\Contracts\InvoiceContract;
 use AichaDigital\LaraVerifactu\Enums\RegistryStatusEnum;
 use AichaDigital\LaraVerifactu\Models\Invoice;
 use AichaDigital\LaraVerifactu\Models\Registry;
@@ -78,12 +79,13 @@ class RegistryFactory extends Factory
     }
 
     /**
-     * Set a specific invoice.
+     * Set a specific invoice. Accepts any InvoiceContract (native or
+     * custom-mode) so fixtures can build registries against either (AID-344).
      */
-    public function forInvoice(Invoice $invoice): static
+    public function forInvoice(InvoiceContract $invoice): static
     {
         return $this->state(fn (array $attributes) => [
-            'invoice_id' => $invoice->id,
+            'invoice_id' => $invoice->getId(),
         ]);
     }
 

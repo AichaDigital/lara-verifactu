@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Custom invoice models are now genuinely decoupled from the native
+  `Invoice` table (AID-344): `Registry::invoice()` resolves the model class
+  from `config('verifactu.models.invoice')` at runtime, and the hardcoded
+  foreign key from `verifactu_registries.invoice_id` to `verifactu_invoices`
+  has been dropped. Any Eloquent model (any table, integer primary key)
+  implementing `InvoiceContract` can now be registered, cancelled and
+  queried through the `Verifactu` facade. The `verifactu:register` command,
+  `ProcessInvoiceRegistrationJob`, `verifactu:retry-failed` and
+  `verifactu:status` remain native-`Invoice`-only (tracked separately) —
+  see the README's "Custom invoice models" section.
+
+### Fixed
+
+- `RegistryManager` now persists `invoice_id` via `InvoiceContract::getId()`
+  instead of the Eloquent `id` magic property (AID-344) — no behavior
+  change for native mode, but the previous code silently bypassed the
+  contract.
+
 ### Internal
 
 - Modernize the Eloquent cast declarations: the `Invoice`, `InvoiceBreakdown`
