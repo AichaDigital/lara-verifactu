@@ -105,7 +105,7 @@ point `invoice`/`breakdown`/`registry` at their own classes. **In practice
 this is only partially wired**: `Registry::invoice()` and the
 `registries.invoice_id` foreign key are hardcoded against the native
 `Invoice` model and the `verifactu_invoices` table, so a genuinely external
-custom model fails the FK constraint on `register()` (tracked in AID-209).
+custom model fails the FK constraint on `register()` (tracked in AID-344).
 Don't advertise `custom` mode as a finished, decoupled integration path when
 working on docs or examples — see the README's "Custom invoice models"
 section for the exact caveat.

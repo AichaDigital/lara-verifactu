@@ -215,7 +215,7 @@ the bundled `Invoice` model (native mode) is optional. See
 > foreign key are hardcoded against the native `Invoice` model and the
 > `verifactu_invoices` table, so a genuinely external custom model (not
 > backed by that table) fails the FK constraint on `register()`. Until this
-> is decoupled (tracked in AID-209), integrate a pre-existing invoice system
+> is decoupled (tracked in AID-344), integrate a pre-existing invoice system
 > by mapping into the native `Invoice` model behind your own service layer,
 > rather than relying on `custom` mode end-to-end.
 
