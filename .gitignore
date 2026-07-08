@@ -34,12 +34,7 @@ aeat-cert.*
 certificates/
 .certificates/
 
-# Internal development documentation
-
 # Excludes
-FASE_7_COMPLETADA.md
-FASE_7_REQUISITOS.md
-RESUMEN_PROYECTO.md
 LICENSE.md
 .DS_Store
 .vscode/

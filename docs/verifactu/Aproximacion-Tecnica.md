@@ -1,5 +1,13 @@
 # Consideraciones Técnicas para Paquete Laravel Verifactu
 
+> **Nota histórica (2026-07-08, AID-343):** este documento es la propuesta de
+> diseño **previa a la implementación** (namespace de ejemplo
+> `VendorName\Verifactu\Contracts`, referencias a `documentacion_verifactu/`
+> que ya no existe con ese nombre). Explica el *porqué* del diseño basado en
+> contratos, pero está **superado** por la arquitectura realmente publicada
+> en `src/Contracts/` y por el README (incluida la limitación real del modo
+> `custom` documentada allí). No usar como referencia de la API actual.
+
 ## Resumen ejecutivo
 
 El paquete debe proporcionar una implementación completa del sistema Verifactu de la AEAT para aplicaciones Laravel, con enfoque en arquitectura agnóstica que permita su integración tanto en proyectos nuevos como en sistemas de facturación existentes.

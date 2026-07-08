@@ -1,6 +1,7 @@
 # Lara Verifactu - Usage Examples
 
-This document provides comprehensive usage examples for the Lara Verifactu package.
+This document provides longer-form usage examples for the Lara Verifactu
+package, complementing the [README](../../README.md).
 
 ## Table of Contents
 
@@ -27,38 +28,39 @@ composer require aichadigital/lara-verifactu
 php artisan verifactu:install
 ```
 
-This command will:
-- Publish the configuration file
-- Publish database migrations
-- Ask if you want to run migrations immediately
+This command publishes the configuration file and the database migrations,
+and asks whether to run migrations immediately.
 
 ### Step 3: Configure Environment Variables
 
-Add the following to your `.env` file:
-
 ```env
-# Operating mode: native or custom
+# Operating mode: native (bundled models) or custom — see the "Agnostic Mode"
+# caveat below before relying on custom mode end to end
 VERIFACTU_MODE=native
 
-# AEAT Environment: production or sandbox
-VERIFACTU_ENVIRONMENT=sandbox
+# AEAT environment
+VERIFACTU_ENVIRONMENT=sandbox   # sandbox (AEAT Pruebas Externas) | production
 
-# Company details
+# Issuer (obligado a expedir factura) — must match the AEAT census
 VERIFACTU_COMPANY_TAX_ID=B12345678
 VERIFACTU_COMPANY_NAME="My Company SL"
 
-# Certificate settings
-VERIFACTU_CERT_PATH=/path/to/certificate.pfx
+# Certificate settings (PKCS#12, keep OUTSIDE the project tree)
+VERIFACTU_CERT_PATH=/secure/path/certificate.p12
 VERIFACTU_CERT_PASSWORD=your-secret-password
+VERIFACTU_CERT_TYPE=representante   # ciudadano | representante | sello
 
-# Queue settings
+# Queue
 VERIFACTU_QUEUE_CONNECTION=redis
-VERIFACTU_QUEUE_NAME=verifactu
+VERIFACTU_QUEUE=fiscal_verification
 
 # Retry settings
 VERIFACTU_RETRY_MAX_ATTEMPTS=3
 VERIFACTU_RETRY_DELAY=60
 ```
+
+See `config/verifactu.php` for the full set of options (logging, caching,
+batching, chain-lock timeouts).
 
 ### Step 4: Run Migrations
 
@@ -71,19 +73,17 @@ php artisan migrate
 ### Native Mode - Create and Register Invoice
 
 ```php
+use AichaDigital\LaraVerifactu\Facades\Verifactu;
 use AichaDigital\LaraVerifactu\Models\Invoice;
-use AichaDigital\LaraVerifactu\Models\InvoiceBreakdown;
 use AichaDigital\LaraVerifactu\Enums\InvoiceTypeEnum;
 use AichaDigital\LaraVerifactu\Enums\TaxTypeEnum;
-use AichaDigital\LaraVerifactu\Services\InvoiceRegistrar;
 
 // Create an invoice
 $invoice = Invoice::create([
     'serie' => 'A',
-    'number' => '2025-001',
-    'issue_date' => now(),
-    'issue_time' => now(),
-    'type' => InvoiceTypeEnum::COMPLETE,
+    'number' => '2026-001',
+    'issue_datetime' => now(),
+    'type' => InvoiceTypeEnum::COMPLETE, // F1
     'base_amount' => 100.00,
     'tax_amount' => 21.00,
     'total_amount' => 121.00,
@@ -102,8 +102,7 @@ $invoice->breakdowns()->create([
 ]);
 
 // Register with Verifactu (with AEAT submission)
-$registrar = app(InvoiceRegistrar::class);
-$registry = $registrar->register($invoice, submitToAeat: true);
+$registry = Verifactu::register($invoice, submitToAeat: true);
 
 echo "Invoice registered successfully!\n";
 echo "Registry Number: {$registry->getRegistryNumber()}\n";
@@ -115,10 +114,11 @@ echo "QR URL: {$registry->getQrUrl()}\n";
 
 ```php
 // Register locally only (submit to AEAT later via queue)
-$registry = $registrar->register($invoice, submitToAeat: false);
+$registry = Verifactu::register($invoice, submitToAeat: false);
 
-// Submit later
-$registrar->submitToAeat($registry);
+// Submit later — dispatches the same job the queue-based flow uses
+// (see "Working with Jobs" below)
+\AichaDigital\LaraVerifactu\Jobs\SubmitRegistryToAeatJob::dispatch($registry->getId());
 ```
 
 ## Native Mode
@@ -126,13 +126,14 @@ $registrar->submitToAeat($registry);
 ### Complete Invoice with Multiple Tax Breakdowns
 
 ```php
+use AichaDigital\LaraVerifactu\Facades\Verifactu;
 use AichaDigital\LaraVerifactu\Models\Invoice;
 use AichaDigital\LaraVerifactu\Enums\TaxTypeEnum;
 
 $invoice = Invoice::create([
     'serie' => 'F',
-    'number' => '2025-042',
-    'issue_date' => now(),
+    'number' => '2026-042',
+    'issue_datetime' => now(),
     'type' => InvoiceTypeEnum::COMPLETE,
     'description' => 'Mixed products and services',
     'recipient_nif' => '12345678A',
@@ -162,12 +163,13 @@ $invoice->total_amount = $invoice->base_amount + $invoice->tax_amount;
 $invoice->save();
 
 // Register
-app(InvoiceRegistrar::class)->register($invoice);
+Verifactu::register($invoice);
 ```
 
 ### Rectification Invoice
 
 ```php
+use AichaDigital\LaraVerifactu\Models\Invoice;
 use AichaDigital\LaraVerifactu\Enums\InvoiceTypeEnum;
 
 // Original invoice
@@ -176,21 +178,18 @@ $originalInvoice = Invoice::find(1);
 // Create rectification
 $rectification = Invoice::create([
     'serie' => 'R',
-    'number' => '2025-001',
-    'issue_date' => now(),
-    'type' => InvoiceTypeEnum::RECTIFICATIVE,
+    'number' => '2026-001',
+    'issue_datetime' => now(),
+    'type' => InvoiceTypeEnum::RECTIFICATIVE, // R1
     'rectification_type' => 'S', // Substitution
     'base_amount' => 100.00,
     'tax_amount' => 21.00,
     'total_amount' => 121.00,
-    'description' => 'Rectification of invoice A-2025-042',
+    'description' => 'Rectification of invoice A-2026-042',
     'metadata' => [
-        'original_invoice_id' => $originalInvoice->id,
-        'original_invoice_number' => $originalInvoice->number,
-        'reason' => 'Error in amount',
         // The invoices this one rectifies (AEAT FacturasRectificadas).
         'rectified_invoices' => [
-            ['number' => $originalInvoice->number, 'issue_date' => $originalInvoice->issue_date],
+            ['number' => $originalInvoice->number, 'issue_date' => $originalInvoice->issue_datetime],
         ],
         // Substitution (S) rectifications MUST carry the substituted amounts
         // (AEAT ImporteRectificacion / DesgloseRectificacionType). Omitting them
@@ -203,7 +202,6 @@ $rectification = Invoice::create([
     ],
 ]);
 
-// Add breakdown
 $rectification->breakdowns()->create([
     'tax_type' => TaxTypeEnum::IVA,
     'tax_rate' => 21.00,
@@ -211,8 +209,7 @@ $rectification->breakdowns()->create([
     'tax_amount' => 21.00,
 ]);
 
-// Register
-app(InvoiceRegistrar::class)->register($rectification);
+Verifactu::register($rectification);
 ```
 
 > **Substitution (`S`) vs incremental (`I`):** set `rectification_type` to `'S'`
@@ -226,12 +223,28 @@ app(InvoiceRegistrar::class)->register($rectification);
 > 1189 requires `Destinatarios` for F3) and the substituted invoices in
 > `metadata['substituted_invoices']` (`[['number' => ..., 'issue_date' => ...]]`).
 > It emits `FacturasSustituidas`; without a recipient or substituted invoices it
-> throws `ValidationException`. This is **distinct from rectifications** — do not
-> use the `RECTIFICATIVE_BY_SUBSTITUTION` enum case for it.
+> throws `ValidationException`.
 
 ## Agnostic Mode
 
-### Integrate with Existing Invoice Model
+### Integrate with an Existing Invoice Model
+
+> **Current limitation:** the FK from `verifactu_registries.invoice_id` to
+> `verifactu_invoices` and the `Registry::invoice()` Eloquent relation are
+> hardcoded against the native `Invoice` model — they don't yet honor
+> `config('verifactu.models.invoice')`. A genuinely external model (not
+> backed by the `verifactu_invoices` table) will fail that FK constraint when
+> you call `Verifactu::register()`. This is tracked in AID-209; until it
+> lands, integrate a pre-existing invoice system by mapping into the native
+> `Invoice` model behind your own service layer, rather than relying on
+> `custom` mode end-to-end.
+>
+> The sketch below shows the *shape* of an `InvoiceContract` implementation —
+> it deliberately implements only a handful of representative methods for
+> readability. The interface has ~18 methods; see
+> `src/Contracts/InvoiceContract.php`, `src/Contracts/RecipientContract.php`
+> and `src/Contracts/InvoiceBreakdownContract.php` for the full, authoritative
+> list before writing a real implementation.
 
 ```php
 namespace App\Models;
@@ -239,6 +252,9 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use AichaDigital\LaraVerifactu\Contracts\InvoiceContract;
 use AichaDigital\LaraVerifactu\Enums\InvoiceTypeEnum;
+use AichaDigital\LaraVerifactu\Enums\RegimeTypeEnum;
+use Carbon\Carbon;
+use Illuminate\Support\Collection;
 
 class Invoice extends Model implements InvoiceContract
 {
@@ -247,17 +263,17 @@ class Invoice extends Model implements InvoiceContract
         return $this->id;
     }
 
-    public function getSerie(): ?string
+    public function getIssuerTaxId(): string
     {
-        return $this->serie;
+        return config('verifactu.company.tax_id');
     }
 
-    public function getNumber(): string
+    public function getInvoiceNumber(): string
     {
-        return $this->invoice_number;
+        return trim(($this->serie ? "{$this->serie}-" : '').$this->invoice_number);
     }
 
-    public function getIssueDate(): \DateTimeInterface
+    public function getIssueDatetime(): Carbon
     {
         return $this->issue_date;
     }
@@ -267,17 +283,25 @@ class Invoice extends Model implements InvoiceContract
         return InvoiceTypeEnum::from($this->invoice_type);
     }
 
-    public function getTotalAmount(): string
+    public function getTotalAmount(): float
     {
-        return (string) $this->total;
+        return (float) $this->total;
     }
 
-    public function getTaxAmount(): string
+    public function getTaxAmount(): float
     {
-        return (string) $this->tax;
+        return (float) $this->tax;
     }
 
-    public function getBreakdowns(): iterable
+    public function getRegimeType(): RegimeTypeEnum
+    {
+        return RegimeTypeEnum::GENERAL;
+    }
+
+    /**
+     * @return Collection<int, \AichaDigital\LaraVerifactu\Contracts\InvoiceBreakdownContract>
+     */
+    public function getBreakdowns(): Collection
     {
         return $this->items->map(function ($item) {
             return new class($item) implements \AichaDigital\LaraVerifactu\Contracts\InvoiceBreakdownContract {
@@ -288,73 +312,81 @@ class Invoice extends Model implements InvoiceContract
                     return \AichaDigital\LaraVerifactu\Enums\TaxTypeEnum::IVA;
                 }
 
-                public function getTaxRate(): string
+                public function getTaxRate(): float
                 {
-                    return (string) $this->item->tax_rate;
+                    return (float) $this->item->tax_rate;
                 }
 
-                public function getBaseAmount(): string
+                public function getBaseAmount(): float
                 {
-                    return (string) $this->item->base;
+                    return (float) $this->item->base;
                 }
 
-                public function getTaxAmount(): string
+                public function getTaxAmount(): float
                 {
-                    return (string) $this->item->tax;
+                    return (float) $this->item->tax;
                 }
 
-                // ... implement other methods
+                // getSurchargeRate(), getSurchargeAmount(), isExempt(),
+                // getExemptionReason(), getCalificacion() also required —
+                // see InvoiceBreakdownContract.
             };
         });
     }
 
     public function getRecipient(): ?\AichaDigital\LaraVerifactu\Contracts\RecipientContract
     {
-        if (!$this->customer) {
+        if (! $this->customer) {
             return null;
         }
 
         return new class($this->customer) implements \AichaDigital\LaraVerifactu\Contracts\RecipientContract {
             public function __construct(private $customer) {}
 
-            public function getTaxId(): string
+            public function getNif(): ?string
             {
                 return $this->customer->tax_id;
             }
 
-            public function getName(): string
+            public function getName(): ?string
             {
                 return $this->customer->name;
             }
 
-            public function getCountryCode(): string
+            public function getCountry(): ?string
             {
                 return $this->customer->country ?? 'ES';
             }
 
-            public function getIdType(): \AichaDigital\LaraVerifactu\Enums\IdTypeEnum
+            public function getIdType(): ?\AichaDigital\LaraVerifactu\Enums\IdTypeEnum
             {
                 return \AichaDigital\LaraVerifactu\Enums\IdTypeEnum::NIF;
+            }
+
+            public function getId(): ?string
+            {
+                return $this->customer->tax_id;
             }
         };
     }
 
-    // ... implement remaining methods from InvoiceContract
+    // ... implement the remaining InvoiceContract methods
+    // (getSerie, getNumber, getRectificationType, getRectifiedInvoices,
+    // getRectificationAmounts, getSubstitutedInvoices, getPreviousInvoiceId,
+    // getPreviousHash, getCurrency, hasRecipient, getDescription, getMetadata,
+    // isSimplified, getInvoiceType, the deprecated getIssueDate/getIssueTime)
 }
 ```
 
-### Register Existing Invoice
+### Register an Existing Invoice
 
 ```php
 use App\Models\Invoice;
-use AichaDigital\LaraVerifactu\Services\InvoiceRegistrar;
+use AichaDigital\LaraVerifactu\Facades\Verifactu;
 
-// Your existing invoice
 $invoice = Invoice::find(42);
 
-// Register with Verifactu
-$registrar = app(InvoiceRegistrar::class);
-$registry = $registrar->register($invoice);
+$registry = Verifactu::register($invoice);
 
 echo "Registered! Registry: {$registry->getRegistryNumber()}\n";
 ```
@@ -382,8 +414,7 @@ php artisan verifactu:register --all --no-submit
 ### Retry Failed Submissions
 
 ```bash
-# Retry up to 50 failed registries (max 3 attempts each)
-php artisan verifactu:retry-failed --limit=50 --max-attempts=3
+php artisan verifactu:retry-failed --max-attempts=3 --limit=50
 ```
 
 ### Verify Blockchain Integrity
@@ -395,8 +426,7 @@ php artisan verifactu:verify-blockchain
 ### Check System Status
 
 ```bash
-# Show status with last 20 registries
-php artisan verifactu:status --limit=20
+php artisan verifactu:status --recent=20
 ```
 
 ## Working with Jobs
@@ -406,16 +436,12 @@ php artisan verifactu:status --limit=20
 ```php
 use AichaDigital\LaraVerifactu\Jobs\ProcessInvoiceRegistrationJob;
 
-// Dispatch to queue
 ProcessInvoiceRegistrationJob::dispatch($invoice->id);
 
-// Dispatch with delay
+ProcessInvoiceRegistrationJob::dispatch($invoice->id, submitToAeat: false);
+
 ProcessInvoiceRegistrationJob::dispatch($invoice->id)
     ->delay(now()->addMinutes(5));
-
-// Dispatch to specific queue
-ProcessInvoiceRegistrationJob::dispatch($invoice->id)
-    ->onQueue('high-priority');
 ```
 
 ### Submit Registry to AEAT (Queue)
@@ -423,9 +449,7 @@ ProcessInvoiceRegistrationJob::dispatch($invoice->id)
 ```php
 use AichaDigital\LaraVerifactu\Jobs\SubmitRegistryToAeatJob;
 
-$registry = $invoice->registry;
-
-SubmitRegistryToAeatJob::dispatch($registry->id);
+SubmitRegistryToAeatJob::dispatch($registry->getId());
 ```
 
 ### Schedule Batch Retry
@@ -433,7 +457,7 @@ SubmitRegistryToAeatJob::dispatch($registry->id);
 ```php
 use AichaDigital\LaraVerifactu\Jobs\RetryFailedRegistriesJob;
 
-// In your scheduler (app/Console/Kernel.php)
+// In your scheduler
 $schedule->job(new RetryFailedRegistriesJob(maxAttempts: 3, limit: 100))
     ->dailyAt('02:00');
 ```
@@ -443,7 +467,6 @@ $schedule->job(new RetryFailedRegistriesJob(maxAttempts: 3, limit: 100))
 ```php
 use AichaDigital\LaraVerifactu\Jobs\VerifyBlockchainIntegrityJob;
 
-// Verify blockchain every night
 $schedule->job(new VerifyBlockchainIntegrityJob)
     ->dailyAt('03:00');
 ```
@@ -456,13 +479,9 @@ $schedule->job(new VerifyBlockchainIntegrityJob)
 use AichaDigital\LaraVerifactu\Events\InvoiceRegisteredEvent;
 use Illuminate\Support\Facades\Event;
 
-Event::listen(InvoiceRegisteredEvent::class, function ($event) {
-    // Send notification
-    Mail::to($event->invoice->recipient_email)
-        ->send(new InvoiceRegisteredMail($event->invoice, $event->registry));
-
-    // Update your system
-    $event->invoice->update(['verifactu_status' => 'registered']);
+Event::listen(InvoiceRegisteredEvent::class, function (InvoiceRegisteredEvent $event) {
+    // $event->invoice, $event->registry, $event->submittedToAeat
+    $event->invoice->getMetadata();
 });
 ```
 
@@ -474,14 +493,8 @@ use AichaDigital\LaraVerifactu\Events\RegistrySubmittedEvent;
 Event::listen(RegistrySubmittedEvent::class, function ($event) {
     Log::info('Registry submitted to AEAT', [
         'registry_number' => $event->registry->getRegistryNumber(),
-        'csv' => $event->response->getCsv(),
+        'csv' => $event->registry->getAeatCsv(),
     ]);
-
-    // Notify accounting department
-    Notification::send(
-        User::role('accounting')->get(),
-        new RegistrySubmittedNotification($event->registry)
-    );
 });
 ```
 
@@ -490,12 +503,12 @@ Event::listen(RegistrySubmittedEvent::class, function ($event) {
 ```php
 use AichaDigital\LaraVerifactu\Events\RegistryFailedEvent;
 
-Event::listen(RegistryFailedEvent::class, function ($event) {
-    if ($event->attempt >= 3) {
-        // Max attempts reached - alert admin
-        Mail::to('admin@company.com')
-            ->send(new RegistryFailedAlert($event->registry, $event->error));
-    }
+Event::listen(RegistryFailedEvent::class, function (RegistryFailedEvent $event) {
+    Log::error('Registry submission failed', [
+        'registry_id' => $event->registry->getId(),
+        'error' => $event->error,
+        'attempt' => $event->attempt,
+    ]);
 });
 ```
 
@@ -505,12 +518,8 @@ Event::listen(RegistryFailedEvent::class, function ($event) {
 use AichaDigital\LaraVerifactu\Events\BlockchainVerifiedEvent;
 
 Event::listen(BlockchainVerifiedEvent::class, function ($event) {
-    if (!$event->result['valid']) {
+    if (! $event->result['valid']) {
         // Critical: blockchain integrity compromised!
-        Mail::to('security@company.com')
-            ->send(new BlockchainIntegrityAlert($event->result['errors']));
-
-        // Log to security channel
         Log::channel('security')->critical('Blockchain integrity check failed', [
             'errors' => $event->result['errors'],
         ]);
@@ -518,26 +527,29 @@ Event::listen(BlockchainVerifiedEvent::class, function ($event) {
 });
 ```
 
+> Verify each event's exact constructor/public properties against
+> `src/Events/*.php` before wiring a listener — the snippets above show the
+> intended shape, not a guaranteed-stable payload contract.
+
 ## Advanced Scenarios
 
 ### Batch Registration with Progress Tracking
 
 ```php
+use AichaDigital\LaraVerifactu\Facades\Verifactu;
 use AichaDigital\LaraVerifactu\Models\Invoice;
-use AichaDigital\LaraVerifactu\Services\InvoiceRegistrar;
 
-$invoices = Invoice::whereNull('registry_id')
-    ->whereDate('issue_date', today())
+$invoices = Invoice::whereDoesntHave('registry')
+    ->whereDate('issue_datetime', today())
     ->get();
 
-$registrar = app(InvoiceRegistrar::class);
-$results = [];
+$results = ['success' => [], 'failed' => []];
 
 foreach ($invoices as $invoice) {
     try {
-        $registry = $registrar->register($invoice);
+        Verifactu::register($invoice);
         $results['success'][] = $invoice->id;
-    } catch (\Exception $e) {
+    } catch (\Throwable $e) {
         $results['failed'][] = [
             'invoice_id' => $invoice->id,
             'error' => $e->getMessage(),
@@ -548,77 +560,30 @@ foreach ($invoices as $invoice) {
 Log::info('Batch registration completed', $results);
 ```
 
-### Custom Retry Logic
+Or use the built-in batch helper, which returns aggregate counts:
 
 ```php
-use AichaDigital\LaraVerifactu\Services\RegistryManager;
-use AichaDigital\LaraVerifactu\Enums\RegistryStatusEnum;
-
-$registryManager = app(RegistryManager::class);
-
-// Get registries that failed but haven't exceeded max attempts
-$retryable = $registryManager->getRetryableRegistries(maxAttempts: 5, limit: 100);
-
-foreach ($retryable as $registry) {
-    try {
-        app(InvoiceRegistrar::class)->submitToAeat($registry);
-    } catch (\Exception $e) {
-        Log::error("Retry failed for registry {$registry->id}", [
-            'error' => $e->getMessage(),
-        ]);
-    }
-}
+['success' => $success, 'failed' => $failed, 'registries' => $registries]
+    = Verifactu::sendBatch($invoices);
 ```
 
-### Verify Specific Invoice Chain
+### Verify Chain Integrity
 
 ```php
-use AichaDigital\LaraVerifactu\Services\RegistryManager;
-use AichaDigital\LaraVerifactu\Services\HashGenerator;
+use AichaDigital\LaraVerifactu\Facades\Verifactu;
 
-$registryManager = app(RegistryManager::class);
-$hashGenerator = app(HashGenerator::class);
+['valid' => $valid, 'errors' => $errors] = Verifactu::validateChain();
 
-$invoice = Invoice::with('registry')->find(42);
-
-// Verify this specific registry
-$previousHash = $registryManager->getPreviousHash();
-$expectedHash = $hashGenerator->generate($invoice, $previousHash);
-
-if ($invoice->registry->hash === $expectedHash) {
-    echo "✅ Hash is valid\n";
-} else {
-    echo "❌ Hash mismatch - blockchain integrity issue!\n";
+if (! $valid) {
+    Log::channel('security')->critical('Fingerprint chain broken', ['errors' => $errors]);
 }
-```
-
-### Generate QR Codes for Existing Invoices
-
-```php
-use AichaDigital\LaraVerifactu\Services\QrGenerator;
-use AichaDigital\LaraVerifactu\Models\Registry;
-
-$qrGenerator = app(QrGenerator::class);
-
-Registry::whereNull('qr_svg')->chunk(100, function ($registries) use ($qrGenerator) {
-    foreach ($registries as $registry) {
-        $invoice = $registry->invoice;
-
-        $registry->update([
-            'qr_url' => $qrGenerator->generateUrl($invoice, $registry->hash),
-            'qr_svg' => $qrGenerator->generateSvg($invoice, $registry->hash),
-            'qr_png' => $qrGenerator->generatePng($invoice, $registry->hash),
-        ]);
-    }
-});
 ```
 
 ---
 
 ## Need Help?
 
-- Check the [README](README.md) for general information
-- Review the [API documentation](docs/api.md)
+- Check the [README](../../README.md) for status, the support matrix, and security notes
+- Review [CHANGELOG.md](../../CHANGELOG.md) for version history
 - Open an issue on [GitHub](https://github.com/AichaDigital/lara-verifactu/issues)
 - Contact support: support@aichadigital.es
-

@@ -16,15 +16,19 @@ records regulation (Real Decreto 1007/2023). It generates AEAT-conformant
 chained fingerprints (huella), validation QR codes and registration XML,
 and submits registration and cancellation records to the AEAT web service.
 
-> **Status: 0.11.x — sandbox-validated beta.**
+> **Status: v1.0.0 — stable.**
 >
-> Every artifact this package produces has been validated against the
-> official AEAT specifications, and the full submission flow has been
-> **accepted live by the AEAT external testing environment** (Pruebas
-> Externas): real registration and cancellation records submitted with a
-> representative certificate, answered `Correcto` with CSV, including
-> AEAT-side validation of the chained fingerprint. Pending before 1.0:
-> production hardening and high-volume testing.
+> The public API (including `src/Contracts/*`) and the published database
+> schema are frozen under SemVer; breaking changes require a MAJOR bump (see
+> [VERSIONING.md](VERSIONING.md)). Every artifact this package produces has
+> been validated against the official AEAT specifications, and the full
+> submission flow has been **accepted live by the AEAT external testing
+> environment** (Pruebas Externas): real registration and cancellation
+> records submitted with a representative certificate, answered `Correcto`
+> with CSV, including AEAT-side validation of the chained fingerprint.
+> "Stable" means the API and schema are locked for the declared scope, not
+> full Spanish-law coverage — see the honest-core support matrix below. The
+> post-1.0 coverage roadmap is tracked in AID-209.
 
 ## Conformance
 
@@ -206,6 +210,14 @@ Any model implementing
 `AichaDigital\LaraVerifactu\Contracts\InvoiceContract` can be registered —
 the bundled `Invoice` model (native mode) is optional. See
 `config/verifactu.php` for the model bindings.
+
+> **Current limitation:** `Registry::invoice()` and the `registries.invoice_id`
+> foreign key are hardcoded against the native `Invoice` model and the
+> `verifactu_invoices` table, so a genuinely external custom model (not
+> backed by that table) fails the FK constraint on `register()`. Until this
+> is decoupled (tracked in AID-209), integrate a pre-existing invoice system
+> by mapping into the native `Invoice` model behind your own service layer,
+> rather than relying on `custom` mode end-to-end.
 
 ## Architecture notes
 
