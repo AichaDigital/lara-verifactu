@@ -91,21 +91,24 @@ class Registry extends Model implements RegistryContract
     ];
 
     /**
-     * The attributes that should be cast.
+     * Get the attributes that should be cast.
      *
-     * @var array<string, string>
+     * @return array<string, string>
      */
-    protected $casts = [
-        'registry_date' => 'datetime',
-        'registry_type' => RegistryTypeEnum::class,
-        'subsanacion' => 'boolean',
-        'rechazo_previo' => RechazoPrevioEnum::class,
-        'amends_registry_id' => 'integer',
-        'submitted_at' => 'datetime',
-        'submission_attempts' => 'integer',
-        'status' => RegistryStatusEnum::class,
-        'aeat_response' => 'array',
-    ];
+    protected function casts(): array
+    {
+        return [
+            'registry_date' => 'datetime',
+            'registry_type' => RegistryTypeEnum::class,
+            'subsanacion' => 'boolean',
+            'rechazo_previo' => RechazoPrevioEnum::class,
+            'amends_registry_id' => 'integer',
+            'submitted_at' => 'datetime',
+            'submission_attempts' => 'integer',
+            'status' => RegistryStatusEnum::class,
+            'aeat_response' => 'array',
+        ];
+    }
 
     /**
      * Get the invoice associated with this registry.

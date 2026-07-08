@@ -65,21 +65,24 @@ class InvoiceBreakdown extends Model implements InvoiceBreakdownContract
     ];
 
     /**
-     * The attributes that should be cast.
+     * Get the attributes that should be cast.
      *
-     * @var array<string, string>
+     * @return array<string, string>
      */
-    protected $casts = [
-        'tax_rate' => 'decimal:2',
-        'base_amount' => 'decimal:2',
-        'tax_amount' => 'decimal:2',
-        'surcharge_rate' => 'decimal:2',
-        'surcharge_amount' => 'decimal:2',
-        'exempt' => 'boolean',
-        'metadata' => 'array',
-        'tax_type' => TaxTypeEnum::class,
-        'calificacion' => CalificacionOperacionEnum::class,
-    ];
+    protected function casts(): array
+    {
+        return [
+            'tax_rate' => 'decimal:2',
+            'base_amount' => 'decimal:2',
+            'tax_amount' => 'decimal:2',
+            'surcharge_rate' => 'decimal:2',
+            'surcharge_amount' => 'decimal:2',
+            'exempt' => 'boolean',
+            'metadata' => 'array',
+            'tax_type' => TaxTypeEnum::class,
+            'calificacion' => CalificacionOperacionEnum::class,
+        ];
+    }
 
     /**
      * Get the invoice that owns this breakdown.

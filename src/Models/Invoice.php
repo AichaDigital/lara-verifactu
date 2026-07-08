@@ -87,20 +87,23 @@ class Invoice extends Model implements InvoiceContract
     ];
 
     /**
-     * The attributes that should be cast.
+     * Get the attributes that should be cast.
      *
-     * @var array<string, string>
+     * @return array<string, string>
      */
-    protected $casts = [
-        'issue_datetime' => 'datetime',
-        'base_amount' => 'decimal:2',
-        'tax_amount' => 'decimal:2',
-        'total_amount' => 'decimal:2',
-        'metadata' => 'array',
-        'type' => InvoiceTypeEnum::class,
-        'recipient_id_type' => IdTypeEnum::class,
-        'regime_type' => RegimeTypeEnum::class,
-    ];
+    protected function casts(): array
+    {
+        return [
+            'issue_datetime' => 'datetime',
+            'base_amount' => 'decimal:2',
+            'tax_amount' => 'decimal:2',
+            'total_amount' => 'decimal:2',
+            'metadata' => 'array',
+            'type' => InvoiceTypeEnum::class,
+            'recipient_id_type' => IdTypeEnum::class,
+            'regime_type' => RegimeTypeEnum::class,
+        ];
+    }
 
     /**
      * Get the invoice registry.
