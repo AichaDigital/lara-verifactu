@@ -234,7 +234,7 @@ Verifactu::register($rectification);
 > hardcoded against the native `Invoice` model — they don't yet honor
 > `config('verifactu.models.invoice')`. A genuinely external model (not
 > backed by the `verifactu_invoices` table) will fail that FK constraint when
-> you call `Verifactu::register()`. This is tracked in AID-209; until it
+> you call `Verifactu::register()`. This is tracked in AID-344; until it
 > lands, integrate a pre-existing invoice system by mapping into the native
 > `Invoice` model behind your own service layer, rather than relying on
 > `custom` mode end-to-end.
