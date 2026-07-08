@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Internal
 
+- Modernize the Eloquent cast declarations: the `Invoice`, `InvoiceBreakdown`
+  and `Registry` models now declare their casts via the `casts()` method
+  (Laravel 11+ idiom) instead of the classic `$casts` property. Behavior-neutral
+  — identical cast map and semantics, only the declaration form changed. Model
+  configuration stays at the PHP level; no Laravel 13-only `#[Table]` native
+  attributes are introduced, since those would break L12 consumers.
 - Add the on-demand fork-based concurrency integration test for the AID-258
   chain-fork lock (AID-264): N real processes create registries concurrently and
   assert the fingerprint chain does not fork. Gated behind `RUN_CONCURRENCY_IT=1`
