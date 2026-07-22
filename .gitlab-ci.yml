@@ -165,5 +165,6 @@ pest:
       fi
     # Deja constancia del motor REAL contra el que se ejecuta: el nombre del job
     # dice la intención, esto dice el hecho.
-    - php -r '$p=new PDO("mysql:host=".getenv("DB_HOST").";dbname=".getenv("DB_DATABASE"), getenv("DB_USERNAME"), getenv("DB_PASSWORD")); echo "motor: ", $p->getAttribute(PDO::ATTR_SERVER_VERSION), PHP_EOL;'
+    - |
+      php -r '$p=new PDO("mysql:host=".getenv("DB_HOST").";dbname=".getenv("DB_DATABASE"), getenv("DB_USERNAME"), getenv("DB_PASSWORD")); echo "motor=", $p->getAttribute(PDO::ATTR_SERVER_VERSION), PHP_EOL;'
     - ./vendor/bin/pest --ci
