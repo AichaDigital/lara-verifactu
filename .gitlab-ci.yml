@@ -151,6 +151,18 @@ pest:
     - composer update --prefer-stable --prefer-dist --no-interaction --no-progress
     - composer show -D
   script:
+    # PCOV es OBLIGATORIO aquí aunque este job no mida cobertura. `phpunit.xml`
+    # declara `failOnWarning="true"`, y «No code coverage driver available» se
+    # emite como warning: sin driver, la suite aborta sin ejecutar un solo test.
+    # El workflow original lo tenía resuelto de rebote (`coverage: pcov` en
+    # setup-php); la imagen compartida lo trae deshabilitado, así que hay que
+    # activarlo explícitamente.
+    - echo 'pcov.enabled=1' > /usr/local/etc/php/conf.d/zz-pcov-on.ini
+    - |
+      if ! php -r 'exit(ini_get("pcov.enabled") ? 0 : 1);'; then
+        echo "PCOV no se activó — la suite abortaría por failOnWarning sin ejecutar nada"
+        exit 1
+      fi
     # Espera con PDO usando las credenciales reales del test (no root): así se
     # comprueba también que el servicio creó el usuario y la base.
     - |
