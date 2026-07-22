@@ -39,8 +39,13 @@ default:
     - aichadigital
     - docker
   interruptible: true
-  # GitHub fijaba timeout-minutes: 15; holgura porque aquí no hay caché de Actions.
-  timeout: 25 minutes
+  # GitHub fijaba timeout-minutes: 15. Aquí no basta, y no por lentitud del
+  # runner: la suite hace migraciones contra BD REAL en cada test (3-6 s por
+  # test medidos), y las 8 combinaciones corren de cuatro en cuatro compartiendo
+  # 12 cores con sus cuatro contenedores de base de datos. Medido: ~25 min por
+  # job con esa contención. 45 min deja margen sin dejar de ser una red de
+  # seguridad — un job colgado sigue muriendo, solo que más tarde.
+  timeout: 45 minutes
 
 variables:
   COMPOSER_CACHE_DIR: "$CI_PROJECT_DIR/.composer-cache"
