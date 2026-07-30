@@ -25,8 +25,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `exit(1)`. Verified by disabling the chain lock and confirming the test turns
   red on both engines.
 
-Neither of the two entries above changed runtime behaviour: that work left
-`src/` untouched.
+- **The AEAT call no longer happens inside a database transaction** (AID-717).
+  `register()`, `cancel()` and `amendRejected()` used to wrap registry creation,
+  the SOAP call to the tax agency and the event in a single transaction, and
+  `submitToAeat()` opened another one around the call itself. The transaction
+  now ends where the record is durable, and the submission happens outside it.
+
+  Three things this fixes:
+  - The AID-258 chain lock is no longer held across the round trip to the
+    agency. It used to be, so every other issuance queued behind the AEAT's
+    latency and could time out waiting on the lock.
+  - A record the agency had already accepted could be rolled back by anything
+    that threw afterwards — a consumer listener on `InvoiceRegisteredEvent`, for
+    instance — leaving the record filed at the AEAT and absent locally. That is
+    no longer possible.
+  - `markAsFailed()` was rolled back along with everything else, so a failed
+    submission left nothing behind and `verifactu:retry-failed` had nothing to
+    retry. The package's own retry mechanism was inert on this path.
+
+  **Behaviour change to be aware of.** A failed submission now leaves the
+  registry persisted in `ERROR` with `submission_attempts` incremented, instead
+  of leaving no row at all. That is what makes it retryable — and it is
+  deliberately the *same* record: same chain link, hash and registry number, so
+  a retry re-sends it rather than creating a second link for one invoice. The
+  consequence for consumers on the queued path is that **re-dispatching
+  `ProcessInvoiceRegistrationJob` for that invoice now skips** (its
+  `$invoice->registry()->exists()` guard fires). Use `verifactu:retry-failed`,
+  which re-submits the existing record. Note also that a network timeout still
+  leaves the remote outcome unknown; what changes is that there is now local
+  state to reconcile it against.
+
+The first two entries changed no runtime behaviour: that work left `src/`
+untouched. The third one does, as its own note says.
 
 ### Fixed
 
