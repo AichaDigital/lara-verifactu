@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The fork-based proof that the fingerprint chain cannot be forked under
+  concurrent writes (AID-264, guarding the AID-258 chain lock) **now runs in
+  CI**, against both engines of the test matrix (MySQL 8.4 and MariaDB 12.3).
+  It had never run in any pipeline: the file gates on `RUN_CONCURRENCY_IT=1`
+  and nothing set it, so the most expensive invariant in the package — a fork
+  means two records declaring the same predecessor, an invalid chain before the
+  Spanish tax agency — was covered by no automated gate at all. The job fails
+  if the test reports itself skipped, so an absent gate cannot be replaced by a
+  gate that lies.
+- The same test was hardened so its green means something (AID-710): the forked
+  writers are released on an absolute-time barrier instead of one-by-one as
+  they are created, the process count is now measured and documented instead of
+  assumed, and a child that fails reports its real exception instead of a mute
+  `exit(1)`. Verified by disabling the chain lock and confirming the test turns
+  red on both engines.
+
+No runtime behaviour changed: `src/` is untouched by this work.
+
 ## [1.1.0] - 2026-07-15
 
 ### Added
