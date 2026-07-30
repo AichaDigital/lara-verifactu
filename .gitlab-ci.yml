@@ -19,12 +19,19 @@
 # solo lectura y un job que escribe en la rama que prueba convierte el CI en autor
 # del repositorio. Se sustituye por `pint --test`.
 #
+# DECISIÓN POSTERIOR, YA TOMADA (AID-710): el test de fork SÍ se activa.
+#
+# Este bloque decía que `tests/Concurrency/ChainForkConcurrencyTest.php` no se
+# activaba: exige `RUN_CONCURRENCY_IT=1`, el workflow de GitHub no lo ponía, y
+# activarlo era AÑADIR cobertura que nunca existió — una decisión, no una
+# traducción. La decisión está tomada. La cadena de huellas es el núcleo del
+# cumplimiento AEAT de este paquete y era su único invariante sin gate
+# automático: una bifurcación son dos registros declarando el mismo predecesor,
+# es decir una cadena inválida ante la Agencia Tributaria. Vive en el job
+# `concurrency`, al final de este fichero.
+#
 # NO se traduce ni se activa:
 #
-#   - `tests/Concurrency/ChainForkConcurrencyTest.php` exige `RUN_CONCURRENCY_IT=1`
-#     y el workflow de GitHub NO lo ponía: ese test de fork nunca ha corrido en CI.
-#     La imagen compartida trae pcntl, así que activarlo sería posible — pero sería
-#     AÑADIR cobertura que nunca existió, y eso es una decisión, no una traducción.
 #   - No hay job de cobertura porque no había workflow de cobertura. El original
 #     instalaba pcov pero ejecutaba `pest --ci` sin medir.
 #   - `update-changelog.yml`: automatización de release que nunca llegó a ejecutarse
@@ -185,3 +192,109 @@ pest:
     - |
       php -r '$p=new PDO("mysql:host=".getenv("DB_HOST").";dbname=".getenv("DB_DATABASE"), getenv("DB_USERNAME"), getenv("DB_PASSWORD")); echo "motor=", $p->getAttribute(PDO::ATTR_SERVER_VERSION), PHP_EOL;'
     - ./vendor/bin/pest --ci
+
+# Prueba de concurrencia por fork: el invariante de que la cadena de huellas NO
+# se bifurca bajo escritura concurrente (lock de AID-258, prueba de AID-264),
+# activada y endurecida en AID-710.
+#
+# Job aparte y no un paso de `pest`, a propósito: `tests/Concurrency` vive fuera
+# de los testsuites de `phpunit.xml` (así que la matriz `pest` no lo toca ni
+# cargándolo), la carrera depende del MOTOR y no de la versión de PHP ni de
+# Laravel, y esa matriz ya son 8 jobs de ~25 min. Colgarlo de ella serían 8
+# ejecuciones de una prueba que solo varía en una dimensión.
+#
+# DOS MOTORES por la misma razón que en larabill (AID-700): MySQL y MariaDB
+# divergen en locking, y un gate de un solo motor calibra contra una sola
+# realidad. Aquí se midió que el fallo es idéntico en ambos — pero eso es un
+# resultado medido, no algo que se pudiera suponer antes de medirlo.
+#
+# El recuento de procesos NO se fija aquí: lo decide el propio test, con la cifra
+# medida y justificada en `verifactuForkCount()`. Subirlo desde el YAML no compra
+# seguridad — por encima del suelo no discrimina más, y cerca del techo de
+# `innodb_lock_wait_timeout` produce rojos falsos.
+concurrency:
+  stage: test
+  image: aichadigital/laravel-ci:8.3
+  # Medido en ~1 min por motor. 15 basta y sigue matando un job colgado.
+  timeout: 15 minutes
+  parallel:
+    matrix:
+      - DB_DRIVER: "mysql"
+        DB_IMAGE: "mysql:8.4"
+      - DB_DRIVER: "mariadb"
+        DB_IMAGE: "mariadb:12.3"
+  services:
+    - name: $DB_IMAGE
+      alias: db
+  variables:
+    PHP_VERSION: "8.3"
+    # Sin esto el fichero se auto-saltea. Que faltara es exactamente el motivo de
+    # AID-710: el test existía y no lo ejecutaba nadie.
+    RUN_CONCURRENCY_IT: "1"
+    MYSQL_DATABASE: verifactu_test
+    MYSQL_USER: verifactu
+    MYSQL_PASSWORD: secret
+    MYSQL_ROOT_PASSWORD: root
+    MARIADB_DATABASE: verifactu_test
+    MARIADB_USER: verifactu
+    MARIADB_PASSWORD: secret
+    MARIADB_ROOT_PASSWORD: root
+    DB_HOST: db
+    DB_PORT: "3306"
+    DB_DATABASE: verifactu_test
+    DB_USERNAME: verifactu
+    DB_PASSWORD: secret
+  cache:
+    key: "composer-concurrency-php8.3"
+    paths:
+      - .composer-cache/
+  before_script:
+    - php -v | head -1
+    - composer update --prefer-stable --prefer-dist --no-interaction --no-progress
+  script:
+    # PCOV, por el mismo motivo que en `pest`: `phpunit.xml` declara
+    # failOnWarning="true" y «No code coverage driver available» se emite como
+    # warning, así que sin driver la suite aborta sin ejecutar un solo test.
+    - echo 'pcov.enabled=1' > /usr/local/etc/php/conf.d/zz-pcov-on.ini
+    - |
+      if ! php -r 'exit(ini_get("pcov.enabled") ? 0 : 1);'; then
+        echo "PCOV no se activó — la suite abortaría por failOnWarning sin ejecutar nada"
+        exit 1
+      fi
+    # pcntl AFIRMADO, no supuesto: sin él el test hace markTestSkipped() y el job
+    # quedaría verde sin haber probado nada. Se comprueba aquí porque la imagen
+    # puede cambiar sin que este fichero se entere.
+    - |
+      if ! php -r 'exit(function_exists("pcntl_fork") ? 0 : 1);'; then
+        echo "La imagen no trae pcntl: el test de fork no puede ejecutarse."
+        exit 1
+      fi
+    - |
+      for i in $(seq 1 60); do
+        php -r 'try { new PDO("mysql:host=".getenv("DB_HOST").";port=".getenv("DB_PORT").";dbname=".getenv("DB_DATABASE"), getenv("DB_USERNAME"), getenv("DB_PASSWORD")); exit(0); } catch (Throwable $e) { exit(1); }' && break
+        sleep 2
+      done
+    - |
+      if ! php -r 'try { new PDO("mysql:host=".getenv("DB_HOST").";port=".getenv("DB_PORT").";dbname=".getenv("DB_DATABASE"), getenv("DB_USERNAME"), getenv("DB_PASSWORD")); exit(0); } catch (Throwable $e) { exit(1); }'; then
+        echo "El servicio $DB_IMAGE no respondió en 120 s con el usuario de test"
+        exit 1
+      fi
+    # Deja constancia del motor REAL: el nombre del job dice la intención.
+    - |
+      php -r '$p=new PDO("mysql:host=".getenv("DB_HOST").";dbname=".getenv("DB_DATABASE"), getenv("DB_USERNAME"), getenv("DB_PASSWORD")); echo "motor=", $p->getAttribute(PDO::ATTR_SERVER_VERSION), PHP_EOL;'
+    - |
+      set -o pipefail
+      ./vendor/bin/pest tests/Concurrency/ --ci 2>&1 | tee /tmp/concurrency.log
+    # Guarda anti-skip. Un test gateado que se saltea deja el job VERDE, que es
+    # el fallo que este ticket corrige: no se sustituye un gate ausente por un
+    # gate que miente. Aquí no hay skips legítimos — con RUN_CONCURRENCY_IT=1 y
+    # pcntl presente, cualquier «skipped» significa que el gate no corrió.
+    - |
+      if grep -qiE '[0-9]+ skipped' /tmp/concurrency.log; then
+        echo "El test de concurrencia se SALTÓ contra $DB_IMAGE: el gate no verificó nada."
+        exit 1
+      fi
+      if ! grep -qE 'Tests:.*[0-9]+ passed' /tmp/concurrency.log; then
+        echo "Ningún test pasado en la prueba de concurrencia contra $DB_IMAGE."
+        exit 1
+      fi
