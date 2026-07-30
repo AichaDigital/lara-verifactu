@@ -54,8 +54,11 @@ final class InvoiceRegistrar
      */
     public function register(InvoiceContract $invoice, bool $submitToAeat = true): RegistryContract
     {
-        return DB::transaction(function () use ($invoice, $submitToAeat) {
-            // Step 1: Create registry
+        // The transaction covers creating and signing the record — and NOTHING
+        // else (AID-717). It used to wrap the AEAT call and the event too, which
+        // held the AID-258 chain lock across the whole round trip to the agency
+        // and made it possible to roll back a record the agency had accepted.
+        $registry = DB::transaction(function () use ($invoice) {
             Log::channel(config('verifactu.logging.channel', 'single'))
                 ->debug('Creating registry for invoice', [
                     'invoice_number' => $invoice->getNumber(),
@@ -64,20 +67,24 @@ final class InvoiceRegistrar
 
             $registry = $this->registryManager->createRegistry($invoice);
 
-            // Step 2: Sign XML (opt-in: VERI*FACTU records are not signed,
-            // the chained fingerprint replaces the signature)
+            // Sign XML (opt-in: VERI*FACTU records are not signed, the chained
+            // fingerprint replaces the signature)
             $this->signRegistryXml($registry);
-
-            // Step 3: Submit to AEAT if requested
-            if ($submitToAeat) {
-                $this->submitToAeat($registry);
-            }
-
-            // Dispatch event
-            event(new InvoiceRegisteredEvent($invoice, $registry, $submitToAeat));
 
             return $registry;
         });
+
+        // Committed: the chain lock is released and the link exists on its own.
+        // A submission that now fails leaves a persisted record in ERROR that
+        // RetryFailedCommand can re-send — the same link, hash and number, never
+        // a new one.
+        if ($submitToAeat) {
+            $this->submitToAeat($registry);
+        }
+
+        event(new InvoiceRegisteredEvent($invoice, $registry, $submitToAeat));
+
+        return $registry;
     }
 
     /**
@@ -90,7 +97,9 @@ final class InvoiceRegistrar
      */
     public function cancel(InvoiceContract $invoice, bool $submitToAeat = true): RegistryContract
     {
-        return DB::transaction(function () use ($invoice, $submitToAeat) {
+        // Same boundary as register() (AID-717): the transaction ends where the
+        // record is durable, and the AEAT call happens outside it.
+        $registry = DB::transaction(function () use ($invoice) {
             Log::channel(config('verifactu.logging.channel', 'single'))
                 ->debug('Creating cancellation registry for invoice', [
                     'invoice_number' => $invoice->getNumber(),
@@ -101,111 +110,119 @@ final class InvoiceRegistrar
 
             $this->signRegistryXml($registry);
 
-            if ($submitToAeat) {
-                $this->submitToAeat($registry);
-            }
-
             return $registry;
         });
+
+        if ($submitToAeat) {
+            $this->submitToAeat($registry);
+        }
+
+        return $registry;
     }
 
     /**
-     * Submit a registry to AEAT
+     * Submit a registry to AEAT.
      *
-     * Uses a database transaction to ensure atomicity between
-     * AEAT response and registry status update.
+     * Deliberately opens NO transaction of its own (AID-717). It used to wrap
+     * everything — including the network call — in one, which kept a transaction
+     * open for the duration of the round trip and made the outcome of a
+     * successful submission revertible.
+     *
+     * Atomicity is not lost: each outcome is persisted by markAsSubmitted() /
+     * markAsRejected() / markAsFailed(), and each of those opens its own short
+     * transaction around its own write. What is gained is that the record of an
+     * outcome the agency already produced can no longer be rolled back by
+     * something that happens afterwards.
      *
      * @throws AeatException
      */
     public function submitToAeat(RegistryContract $registry): AeatResponse
     {
-        return DB::transaction(function () use ($registry) {
-            try {
+        try {
+            Log::channel(config('verifactu.logging.channel', 'single'))
+                ->debug('Submitting registry to AEAT', [
+                    'registry_number' => $registry->getRegistryNumber(),
+                ]);
+
+            // Refresh to get the latest persisted state before deciding.
+            if ($registry instanceof Registry) {
+                $registry->refresh();
+
+                // Idempotency check: skip if already sent
+                if ($registry->status === RegistryStatusEnum::SENT) {
+                    Log::channel(config('verifactu.logging.channel', 'single'))
+                        ->debug('Registry already sent, skipping', [
+                            'registry_number' => $registry->getRegistryNumber(),
+                            'csv' => $registry->aeat_csv,
+                        ]);
+
+                    return new AeatResponse(
+                        success: true,
+                        code: $registry->aeat_csv,
+                        message: 'Already submitted'
+                    );
+                }
+            }
+
+            // Submit to AEAT
+            $response = $this->aeatClient->sendRegistration($registry);
+
+            // Update registry based on response
+            if ($response->isSuccess()) {
+                $this->registryManager->markAsSubmitted(
+                    $registry,
+                    $response->getCsv() ?? '',
+                    $response->getMessage() ?? ''
+                );
+
                 Log::channel(config('verifactu.logging.channel', 'single'))
-                    ->debug('Submitting registry to AEAT', [
+                    ->info('Registry submitted successfully', [
                         'registry_number' => $registry->getRegistryNumber(),
+                        'csv' => $response->getCsv(),
                     ]);
 
-                // Refresh registry to get latest state within transaction
-                if ($registry instanceof Registry) {
-                    $registry->refresh();
-
-                    // Idempotency check: skip if already sent
-                    if ($registry->status === RegistryStatusEnum::SENT) {
-                        Log::channel(config('verifactu.logging.channel', 'single'))
-                            ->debug('Registry already sent, skipping', [
-                                'registry_number' => $registry->getRegistryNumber(),
-                                'csv' => $registry->aeat_csv,
-                            ]);
-
-                        return new AeatResponse(
-                            success: true,
-                            code: $registry->aeat_csv,
-                            message: 'Already submitted'
-                        );
-                    }
-                }
-
-                // Submit to AEAT
-                $response = $this->aeatClient->sendRegistration($registry);
-
-                // Update registry based on response
-                if ($response->isSuccess()) {
-                    $this->registryManager->markAsSubmitted(
+                // Dispatch success event
+                event(new RegistrySubmittedEvent($registry, $response));
+            } else {
+                if ($response->isValidationRejection()) {
+                    $this->registryManager->markAsRejected(
                         $registry,
-                        $response->getCsv() ?? '',
-                        $response->getMessage() ?? ''
+                        $response->getErrorMessage(),
+                        $response->getData()
                     );
-
-                    Log::channel(config('verifactu.logging.channel', 'single'))
-                        ->info('Registry submitted successfully', [
-                            'registry_number' => $registry->getRegistryNumber(),
-                            'csv' => $response->getCsv(),
-                        ]);
-
-                    // Dispatch success event
-                    event(new RegistrySubmittedEvent($registry, $response));
                 } else {
-                    if ($response->isValidationRejection()) {
-                        $this->registryManager->markAsRejected(
-                            $registry,
-                            $response->getErrorMessage(),
-                            $response->getData()
-                        );
-                    } else {
-                        $this->registryManager->markAsFailed(
-                            $registry,
-                            $response->getErrorMessage()
-                        );
-                    }
-
-                    Log::channel(config('verifactu.logging.channel', 'single'))
-                        ->error('Registry submission failed', [
-                            'registry_number' => $registry->getRegistryNumber(),
-                            'error' => AeatLogSanitizer::redactText((string) $response->getErrorMessage()),
-                        ]);
-
-                    // Dispatch failure event
-                    event(new RegistryFailedEvent($registry, $response->getErrorMessage(), $registry->getSubmissionAttempts()));
+                    $this->registryManager->markAsFailed(
+                        $registry,
+                        $response->getErrorMessage()
+                    );
                 }
-
-                return $response;
-            } catch (\Throwable $e) {
-                $this->registryManager->markAsFailed($registry, $e->getMessage());
 
                 Log::channel(config('verifactu.logging.channel', 'single'))
-                    ->error('Exception during AEAT submission', [
+                    ->error('Registry submission failed', [
                         'registry_number' => $registry->getRegistryNumber(),
-                        'error' => AeatLogSanitizer::redactText($e->getMessage()),
-                        ...AeatLogSanitizer::traceContext($e),
+                        'error' => AeatLogSanitizer::redactText((string) $response->getErrorMessage()),
                     ]);
 
                 // Dispatch failure event
-                event(new RegistryFailedEvent($registry, $e->getMessage(), $registry->getSubmissionAttempts()));
-
-                throw AeatException::connectionFailed($e->getMessage());
+                event(new RegistryFailedEvent($registry, $response->getErrorMessage(), $registry->getSubmissionAttempts()));
             }
-        });
+
+            return $response;
+        } catch (\Throwable $e) {
+            $this->registryManager->markAsFailed($registry, $e->getMessage());
+
+            Log::channel(config('verifactu.logging.channel', 'single'))
+                ->error('Exception during AEAT submission', [
+                    'registry_number' => $registry->getRegistryNumber(),
+                    'error' => AeatLogSanitizer::redactText($e->getMessage()),
+                    ...AeatLogSanitizer::traceContext($e),
+                ]);
+
+            // Dispatch failure event
+            event(new RegistryFailedEvent($registry, $e->getMessage(), $registry->getSubmissionAttempts()));
+
+            throw AeatException::connectionFailed($e->getMessage());
+        }
     }
 
     /**
@@ -313,7 +330,7 @@ final class InvoiceRegistrar
         InvoiceContract $correctedInvoice,
         bool $submitToAeat = true
     ): RegistryContract {
-        return DB::transaction(function () use ($rejectedRegistry, $correctedInvoice, $submitToAeat) {
+        $registry = DB::transaction(function () use ($rejectedRegistry, $correctedInvoice) {
             // Guard 1: only a REGISTRATION can be amended by rejection.
             if ($rejectedRegistry->getRegistryType() !== RegistryTypeEnum::REGISTRATION) {
                 throw VerifactuException::make(
@@ -366,14 +383,17 @@ final class InvoiceRegistrar
 
             $this->signRegistryXml($registry);
 
-            if ($submitToAeat) {
-                $this->submitToAeat($registry);
-            }
-
-            event(new InvoiceRegisteredEvent($correctedInvoice, $registry, $submitToAeat));
-
             return $registry;
         });
+
+        // Outside the transaction, same as register()/cancel() (AID-717).
+        if ($submitToAeat) {
+            $this->submitToAeat($registry);
+        }
+
+        event(new InvoiceRegisteredEvent($correctedInvoice, $registry, $submitToAeat));
+
+        return $registry;
     }
 
     /**
