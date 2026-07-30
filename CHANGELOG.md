@@ -25,7 +25,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `exit(1)`. Verified by disabling the chain lock and confirming the test turns
   red on both engines.
 
-No runtime behaviour changed: `src/` is untouched by this work.
+Neither of the two entries above changed runtime behaviour: that work left
+`src/` untouched.
+
+### Fixed
+
+- The internal registry number is no longer derived from `COUNT(*) + 1` under a
+  row lock (AID-715), which was broken in two independent ways:
+  - **Deadlocks under concurrent creation.** Locking a `COUNT(*)` filtered by
+    `whereDate(created_at)` took a *gap lock* on the very range every writer
+    then inserted into. Measured with the chain lock temporarily disabled, that
+    killed 7 of 8 concurrent writers with `SQLSTATE[40001] 1213 Deadlock`,
+    identically on MySQL 8.4 and MariaDB 12.3. It stayed dormant in practice
+    only because the AID-258 chain lock serializes writers upstream, so the
+    correctness of the chain rested on a second mechanism covering this one.
+  - **Number reuse after a soft delete.** `Registry` uses `SoftDeletes` but the
+    UNIQUE index does not, so a soft-deleted row keeps holding its number while
+    `COUNT(*)` stops seeing it. A single soft delete made the next registry
+    claim a number that was still taken, and the insert failed on the
+    constraint. No concurrency was needed to trigger this.
+
+  The number is now `MAX` over the day's prefix including trashed rows, with no
+  row lock: an issued number is never reused, and nothing locks a range. Format
+  (`REG-YYYYMMDD-NNNNNN`) and existing data are unchanged, and the sequence
+  continues from whatever the previous mechanism had issued, so no migration or
+  data update is required. `registry_number` is a package-internal identifier —
+  the number declared to the AEAT is `NumSerieFactura`, which is untouched.
 
 ## [1.1.0] - 2026-07-15
 

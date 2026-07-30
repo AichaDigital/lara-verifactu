@@ -515,22 +515,57 @@ final class RegistryManager
     }
 
     /**
-     * Generate a unique registry number
+     * Generate the internal registry number. Format: REG-YYYYMMDD-NNNNNN.
      *
-     * Format: REG-YYYYMMDD-NNNNNN
+     * NOT an AEAT field: the number declared to the tax agency is
+     * NumSerieFactura, taken from the issuer's own invoice number. This one is
+     * a package-internal identifier with a UNIQUE index.
      *
-     * Uses pessimistic locking to prevent race conditions
-     * when multiple registries are created concurrently.
+     * AID-715 replaced `COUNT(*) + 1` under `lockForUpdate()`, which was broken
+     * two independent ways:
+     *
+     * 1. Locking a COUNT filtered by whereDate(created_at) takes a GAP LOCK on
+     *    the very range every writer then inserts into. Measured with the chain
+     *    lock temporarily disabled, that killed N-1 of N concurrent writers with
+     *    SQLSTATE[40001] 1213 Deadlock, identically on MySQL 8.4 and MariaDB
+     *    12.3 — the AID-700 pattern. It stayed dormant only because
+     *    acquireChainLock() serializes writers upstream in the same transaction.
+     * 2. Registry uses SoftDeletes and the UNIQUE index does not. COUNT(*) is
+     *    filtered by the SoftDeletingScope, so one soft-deleted row was enough
+     *    to hand out a number still held by it and die on the constraint. No
+     *    concurrency required.
+     *
+     * So: MAX over the day's prefix, WITH trashed rows, and NO row lock. An
+     * issued number is never reused, and nothing locks a range. Do not add
+     * lockForUpdate() back "for safety" — that is what caused the deadlock.
+     * Serialization is not this method's job: it is acquireChainLock()'s, and
+     * that lock is what guarantees the chain cannot fork. The UNIQUE index is
+     * an additional defence, not the guarantee.
+     *
+     * No retry (`attempts:`) is wired here or in the callers, deliberately.
+     * Beyond repeating RegistryCreatedEvent, which is dispatched inside the
+     * transaction, the callers' transactions are NESTED: InvoiceRegistrar opens
+     * its own and calls createRegistry() inside it, so an inner `attempts:`
+     * would sit on a savepoint and could not retry a deadlock at all (AID-570).
+     * Making it effective would mean retrying InvoiceRegistrar's outer
+     * transaction, whose closure submits to the AEAT — a retry there would
+     * re-send to the tax agency. A deadlock introduced by the consumer's own
+     * context belongs to the consumer's outermost transaction, and only if that
+     * closure is free of non-transactional side effects.
      */
     private function generateRegistryNumber(): string
     {
-        $date = Carbon::now()->format('Ymd');
+        $prefix = sprintf('REG-%s-', Carbon::now()->format('Ymd'));
 
-        // Use pessimistic locking to get consistent count
-        $count = Registry::whereDate('created_at', Carbon::today())
-            ->lockForUpdate()
-            ->count() + 1;
+        // Sargable prefix scan on the registry_number index. The previous
+        // whereDate(created_at) wrapped the column in a function and could not
+        // use an index at all.
+        $last = Registry::withTrashed()
+            ->where('registry_number', 'like', $prefix . '%')
+            ->max('registry_number');
 
-        return sprintf('REG-%s-%06d', $date, $count);
+        $next = $last === null ? 1 : ((int) mb_substr((string) $last, -6)) + 1;
+
+        return sprintf('%s%06d', $prefix, $next);
     }
 }
