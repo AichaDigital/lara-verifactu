@@ -11,6 +11,7 @@ use AichaDigital\LaraVerifactu\Database\Factories\InvoiceFactory;
 use AichaDigital\LaraVerifactu\Enums\IdTypeEnum;
 use AichaDigital\LaraVerifactu\Enums\InvoiceTypeEnum;
 use AichaDigital\LaraVerifactu\Enums\RegimeTypeEnum;
+use AichaDigital\LaraVerifactu\Enums\RegistryStatusEnum;
 use AichaDigital\LaraVerifactu\Enums\RegistryTypeEnum;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
@@ -572,13 +573,25 @@ class Invoice extends Model implements InvoiceContract
                 return; // Let database cascade handle it
             }
 
-            // Soft delete EVERY registry (AID-734). The cascade is 1→N and must
-            // never be expressed through the singular relation: any determinism
+            // Soft delete every registry the agency has NOT ruled on (AID-734,
+            // AID-220).
+            //
+            // 1→N, and never through the singular relation: any determinism
             // trick on registry() — latestOfMany(), ofMany(), a LIMIT — would
             // silently narrow this to one row and leave the rest alive under a
             // deleted invoice. Measured, not feared: with latestOfMany() two of
             // three registries survived.
-            $invoice->registries()->delete();
+            //
+            // Filed records are skipped, not deleted. The invoice may go; the
+            // record the agency holds may not, for as long as the retention
+            // obligation lasts (RD 1007/2023 arts. 8 & 16). A soft-deleted
+            // invoice with its sealed registry alive is the correct outcome —
+            // see docs/notes/lara-privacy-immutability-vs-erasure.md. The filter
+            // lives here because this is a query-builder write: the model's
+            // seal hook fires no event for it.
+            $invoice->registries()
+                ->whereNotIn('status', RegistryStatusEnum::agencyVerdictValues())
+                ->delete();
 
             // Soft delete breakdowns
             $invoice->breakdowns()->delete();

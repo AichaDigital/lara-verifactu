@@ -47,9 +47,15 @@ Answering the questions above:
 - **`lara-privacy`** anonymises business / CRM / user / customer data.
 - **`lara-verifactu`** keeps sealed records intact and classifies `verifactu_registries` (`xml`, `signed_xml`, `hash`, `previous_hash`, `aeat_csv`, and any cotejo fields) as **non-anonymisable while retained**. The anonymisation pipeline must never promise an erasure on these it cannot deliver.
 
-### Follow-up (not v1.0) — Linear AID-220
+### Enforcement — Linear AID-220, shipped
 
-Enforcement is not yet in code: `Invoice::deleting` (`src/Models/Invoice.php:474`) cascades a soft-delete to the sealed `registry`, and `forceDelete` lets the DB cascade wipe it, with no submission-state guard. The seal-lock (block `update` / `delete` of submitted registries except controlled transitions) is tracked in **AID-220**. For this conceptual decision, documenting the rule here is sufficient.
+The seal-lock is **in code** since AID-220. Until then this section said «enforcement is not yet in code», which stayed true far longer than intended: the ticket was closed on its documentation deliverable (PR #54, this note) while the enforcement it described — its actual scope — never landed. It was reopened on 2026-07-31 and implemented.
+
+What it does: once a registry carries an agency verdict (`SENT`, `ACCEPTED` or `REJECTED`), its fiscal artefact and the identity it was filed under are immutable, and the record cannot be deleted. `Invoice::deleting` still cascades to unfiled registries but **skips filed ones** — which is exactly the division of labour this note describes: the invoice may be erased, the sealed record may not.
+
+`REJECTED` is included on purpose. That record was presented too, and `amendRejected()` reads its persisted XML to prove the subsanación carries the same `IDFactura`.
+
+**Declared limit.** Enforcement rides on Eloquent model events, and Eloquent fires none for query-builder writes, so `Registry::query()->delete()` and `DB::table(...)->update(...)` bypass it by construction. The consumer's ordinary path is closed; that residue is stated in the README and pinned by a test rather than left implicit. A guarantee that is claimed but not given is worse than one that is bounded and honest.
 
 ### Legal basis
 

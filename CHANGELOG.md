@@ -55,6 +55,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pending, where `doesntHave('registry')` hid it. That is a pathological state
   being surfaced, not a new one being created.
 
+### Security
+
+- **A registry the agency has ruled on can no longer be altered or deleted**
+  (AID-220). The rule was decided and documented for v1.0, but its enforcement
+  never reached the code: the design note still said «Enforcement is not yet in
+  code», `Invoice::deleting` cascaded a soft-delete straight into a filed record,
+  and nothing stopped a consumer from rewriting one.
+
+  Once a registry is `SENT`, `ACCEPTED` or `REJECTED`, its fiscal artefact
+  (`xml`, `signed_xml`, `hash`, `previous_hash`, `hash_generated_at`) and the
+  identity it was filed under (`invoice_id`, `registry_number`, `registry_date`,
+  `registry_type`, `subsanacion`, `rechazo_previo`, `amends_registry_id`) are
+  immutable, and the record cannot be deleted. Corrections go through a
+  **subsequent** record — `cancel()` or `amendRejected()` — as RD 1007/2023
+  arts. 8 & 16 require. `REJECTED` is included deliberately: that record was
+  presented too, and `amendRejected()` reads its persisted XML to prove the
+  subsanación carries the same `IDFactura`.
+
+  **Behaviour change to be aware of.** Deleting an invoice still soft-deletes
+  its unfiled registries, but now **leaves the filed ones intact**. A
+  soft-deleted invoice whose sealed registry is still alive is the correct
+  outcome, not a leak: the invoice may go, the record the agency holds may not,
+  for as long as the retention obligation lasts. Consumers that assumed the
+  cascade removed everything should expect the filed rows to remain.
+
+  The columns recording what the agency *answered* (`status`, `submitted_at`,
+  `aeat_csv`, `aeat_response`, `aeat_error`, `submission_attempts`) stay
+  writable — they are the conversation, not the artefact, and the package's own
+  transitions need them.
+
+  **Declared limit, stated rather than papered over.** The seal is enforced with
+  Eloquent model events, and Eloquent fires none for query-builder writes, so
+  `Registry::query()->delete()` and `DB::table(...)->update(...)` bypass it by
+  construction. What is closed is the consumer's ordinary path
+  (`$registry->delete()`, `->forceDelete()`, `->save()`). A test pins the limit
+  so this statement cannot drift away from the code.
+
 ### Added
 
 - **`Invoice::registries()`** — the `HasMany` the domain actually has. Use it
@@ -62,6 +99,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the singular accessor for the current record.
 - **`Invoice::pendingRegistration()`** scope — «no registration of record»,
   counting soft-deleted rows and filtering by registry type.
+- **`RegistryStatusEnum::agencyVerdictValues()`** — the `hasAgencyVerdict()` set
+  as raw column values, for query-builder writes that cannot ask an instance.
 
 ## [1.2.0] - 2026-07-31
 

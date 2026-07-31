@@ -110,7 +110,14 @@ it('chains the amendment after the last generated link, not the rejected record'
 
 it('guard 1: rejects amending a cancellation registry', function () {
     [$rejected, $invoice] = rejectedRegistration($this->registryManager);
-    $rejected->update(['registry_type' => RegistryTypeEnum::CANCELLATION->value]);
+
+    // Straight to the table: the seal lock (AID-220) refuses this through the
+    // model, and rightly so — registry_type is part of what was presented, and
+    // an alta and an anulación are different documents. The fixture needs the
+    // state, not the write path.
+    tamperRegistryColumns($rejected->getId(), [
+        'registry_type' => RegistryTypeEnum::CANCELLATION->value,
+    ]);
 
     expect(fn () => $this->registrar->amendRejected($rejected->fresh(), $invoice))
         ->toThrow(VerifactuException::class);
@@ -190,7 +197,13 @@ it('guard 5: rejects a second amendment even when the first amendment has been s
     $firstAmendment = $this->registrar->amendRejected($rejected, $invoice);
 
     // Soft-delete the first amendment — the withTrashed() guard must still see it.
-    $firstAmendment->delete();
+    //
+    // Through the table, not the model: the amendment was submitted, so the
+    // seal lock (AID-220) refuses $firstAmendment->delete(). The scenario this
+    // test protects is still reachable — a query-builder write is the declared
+    // limit of the seal — so the fixture now takes the path that can actually
+    // produce it.
+    tamperRegistryColumns($firstAmendment->getId(), ['deleted_at' => now()]);
 
     expect(fn () => $this->registrar->amendRejected($rejected->fresh(), $invoice))
         ->toThrow(VerifactuException::class);

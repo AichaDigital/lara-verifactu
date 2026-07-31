@@ -239,6 +239,28 @@ the bundled `Invoice` model (native mode) is optional. See
   replaces the signature. XAdES signing is available behind
   `verifactu.signing.enabled` (default `false`) for the non-Verifactu
   modality.
+- **Filed records are sealed.** Once the agency has ruled on a registry
+  (`SENT`, `ACCEPTED` or `REJECTED`), its fiscal artefact — `xml`,
+  `signed_xml`, `hash`, `previous_hash`, `hash_generated_at` — and the identity
+  it was filed under — `invoice_id`, `registry_number`, `registry_date`,
+  `registry_type`, `subsanacion`, `rechazo_previo`, `amends_registry_id` — can
+  no longer be changed, and the record can no longer be deleted. Corrections are
+  made by a **subsequent** record: `cancel()` for a `RegistroAnulacion`,
+  `amendRejected()` for a subsanación (RD 1007/2023 arts. 8 & 16). Deleting an
+  invoice still soft-deletes its unfiled registries, but **leaves the filed ones
+  intact** — the invoice may go, the record the agency holds may not.
+
+  The columns that record what the agency *answered* (`status`, `submitted_at`,
+  `aeat_csv`, `aeat_response`, `aeat_error`, `submission_attempts`) stay
+  writable: they are the conversation, not the artefact.
+
+  **Declared limit.** The seal is enforced through Eloquent model events, and
+  Eloquent fires none for query-builder writes. `Registry::query()->delete()`
+  and `DB::table('verifactu_registries')->update(...)` therefore bypass it by
+  construction. What is closed is the consumer's ordinary path —
+  `$registry->delete()`, `$registry->forceDelete()`, `$registry->save()`. This
+  limit is stated rather than papered over, and pinned by a test so the
+  statement cannot drift away from the code.
 - Cancellations are **links of the fingerprint chain** in their own right
   (`registry_type`), keeping the chain verifiable end to end.
 - Submissions are sequential by design (dedicated `fiscal_verification`
