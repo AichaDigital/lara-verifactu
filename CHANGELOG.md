@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **PHP 8.5 in the CI matrix** (AID-768). The `pest` matrix now runs
+  PHP 8.3/8.4/8.5 × Laravel 12/13 × MySQL 8.4/MariaDB 12.3 (12 jobs). The
+  `composer.json` constraint was already `^8.3`, so nothing changes for
+  consumers — the difference is that the 8.5 support the constraint promises
+  is now exercised on every pipeline instead of assumed.
+
 ## [1.3.1] - 2026-07-31
 
 ### Removed
