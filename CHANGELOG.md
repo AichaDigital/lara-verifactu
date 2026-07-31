@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- **`RetryFailedVerificationCommand`, a class Composer could never autoload**
+  (AID-743). It declared `...\Console\Commands` while living in `src/Console/`,
+  so every autoload strategy skipped it — `composer dump-autoload -o` warns and
+  moves on, `class_exists()` returns `false` — and removing it can break
+  nobody. Its `verifactu:retry-failed` signature duplicated the real command's,
+  and it kept the retry-on-missing-registry semantics that AID-717 replaced
+  with retry-on-ERROR-registry. A new architecture test now fails the build if
+  any production class drifts from the PSR-4 map again.
+
+- **Config keys `verifactu.lock.enabled` and `verifactu.lock.retry_delay`,
+  which never did anything** (AID-746). No code ever read them: setting
+  `VERIFACTU_LOCK_ENABLED=false` never disabled the sequential-processing
+  lock, and `VERIFACTU_LOCK_RETRY_DELAY` never changed the job's fixed
+  `release(10)` cadence. If your published copy of `config/verifactu.php`
+  still carries them they are harmless — but any expectation built on them was
+  never met. `lock.timeout` is read by both locks and stays. There is
+  deliberately no switch to disable the locks: they guard the ordering of the
+  fiscal chain, which is not a consumer preference. A new architecture test
+  fails if a key published under `lock` has no matching read in `src/`.
+
 ## [1.3.0] - 2026-07-31
 
 ### Fixed

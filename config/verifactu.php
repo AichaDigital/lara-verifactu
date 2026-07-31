@@ -192,21 +192,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Lock Configuration (v2.0 NEW)
+    | Lock Configuration
     |--------------------------------------------------------------------------
     |
-    | Configure lock behavior for sequential processing.
+    | Time-to-live in seconds for the package's overlap locks: the
+    | sequential-processing lock taken by ProcessInvoiceRegistrationJob and
+    | the single-run lock taken by verifactu:retry-failed. Both require a
+    | cross-process cache store (array/null stores are rejected at runtime).
     |
-    | v2.0: New configuration section for unique lock management.
-    | The lock ensures only ONE invoice is processed at a time for fiscal
-    | compliance.
+    | There is deliberately no switch to disable these locks: they guard the
+    | ordering of the fiscal chain, which is not a consumer preference.
     |
     */
 
     'lock' => [
-        'enabled' => env('VERIFACTU_LOCK_ENABLED', true),
         'timeout' => env('VERIFACTU_LOCK_TIMEOUT', 300), // 5 minutes
-        'retry_delay' => env('VERIFACTU_LOCK_RETRY_DELAY', 10), // 10 seconds
     ],
 
     /*
