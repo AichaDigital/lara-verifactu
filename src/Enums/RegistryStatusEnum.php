@@ -65,6 +65,24 @@ enum RegistryStatusEnum: string
         return in_array($this, [self::SENT, self::ACCEPTED, self::REJECTED], true);
     }
 
+    /**
+     * The same set as hasAgencyVerdict(), as raw column values.
+     *
+     * For query-builder writes, which fire no model event and therefore cannot
+     * ask an instance — the Invoice cascade being the one that matters
+     * (AID-220). Derived from the cases rather than restated, so the two can
+     * never drift apart.
+     *
+     * @return list<string>
+     */
+    public static function agencyVerdictValues(): array
+    {
+        return array_values(array_map(
+            static fn (self $case): string => $case->value,
+            array_filter(self::cases(), static fn (self $case): bool => $case->hasAgencyVerdict()),
+        ));
+    }
+
     public function canRetry(): bool
     {
         // REJECTED is a validation outcome (AID-257), not a transport retry.

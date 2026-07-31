@@ -125,7 +125,7 @@ it('exposes every registry of the invoice through registries()', function () {
 // AID-734 — the cascade must stay whole (pin: GREEN today, on purpose)
 // ---------------------------------------------------------------------------
 
-it('cascades the soft-delete to EVERY registry of the invoice', function () {
+it('cascades the soft-delete to every registry the agency has not ruled on', function () {
     // This pin passes against the current code. It is NOT test-driven: it exists
     // because nothing guards the cascade today, and the obvious fix for the
     // relation would silently break it.
@@ -137,6 +137,9 @@ it('cascades the soft-delete to EVERY registry of the invoice', function () {
     // compiles without error, because SoftDeletingScope qualifies the column
     // when joins are present. ChainSoftDeleteTest does not catch it: its invoice
     // holds exactly one registry, where "the latest" and "all" are the same row.
+    // Three rows: the REJECTED registration (the agency ruled on it, so the
+    // seal lock of AID-220 keeps it), its amendment and a cancellation (both
+    // PENDING, so both cascade).
     [$invoice] = invoiceWithAmendment($this->registryManager, $this->registrar);
     $this->registryManager->createCancellationRegistry($invoice);
 
@@ -144,7 +147,13 @@ it('cascades the soft-delete to EVERY registry of the invoice', function () {
 
     $invoice->delete();
 
-    expect(Registry::query()->where('invoice_id', $invoice->id)->count())->toBe(0)
+    // What matters for the trap is the COUNT that came through: two unsealed
+    // rows, not one. With latestOfMany() the join narrows this to a single row
+    // and the other survives alive under a deleted invoice.
+    $alive = Registry::query()->where('invoice_id', $invoice->id)->get();
+
+    expect($alive)->toHaveCount(1)
+        ->and($alive->first()->status)->toBe(RegistryStatusEnum::REJECTED)
         ->and(Registry::withTrashed()->where('invoice_id', $invoice->id)->count())->toBe(3);
 });
 

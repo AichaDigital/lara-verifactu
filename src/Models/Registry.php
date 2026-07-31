@@ -10,6 +10,7 @@ use AichaDigital\LaraVerifactu\Database\Factories\RegistryFactory;
 use AichaDigital\LaraVerifactu\Enums\RechazoPrevioEnum;
 use AichaDigital\LaraVerifactu\Enums\RegistryStatusEnum;
 use AichaDigital\LaraVerifactu\Enums\RegistryTypeEnum;
+use AichaDigital\LaraVerifactu\Exceptions\VerifactuException;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -112,6 +113,97 @@ class Registry extends Model implements RegistryContract
             'status' => RegistryStatusEnum::class,
             'aeat_response' => 'array',
         ];
+    }
+
+    /**
+     * The fiscal artefact — the bytes presented to the agency and the identity
+     * they were presented under (AID-220).
+     *
+     * Once the agency has ruled, these may never change: RD 1007/2023 arts. 8
+     * and 16 require integridad and inalterabilidad, and a correction is a
+     * SUBSEQUENT record (RegistroAnulacion, subsanación), never a mutation of
+     * the original. `amendRejected()` also reads the rejected record's persisted
+     * XML to build its guards, so a rejected artefact is load-bearing too.
+     *
+     * Deliberately NOT sealed: status, submitted_at, aeat_csv, aeat_response,
+     * aeat_error and submission_attempts. Those record what the agency ANSWERED
+     * — the conversation, not the artefact — and the package's own markAs*
+     * transitions write them. They have their own guards against downgrade
+     * (AID-729).
+     *
+     * @var list<string>
+     */
+    private const SEALED_ATTRIBUTES = [
+        'invoice_id',
+        'registry_number',
+        'registry_date',
+        'registry_type',
+        'subsanacion',
+        'rechazo_previo',
+        'amends_registry_id',
+        'hash',
+        'previous_hash',
+        'hash_generated_at',
+        'xml',
+        'signed_xml',
+    ];
+
+    /**
+     * Seal a record the agency has ruled on (AID-220).
+     *
+     * `hasAgencyVerdict()`, not `isFiledAtAeat()`: a REJECTED record was
+     * presented too, its XML is what the agency saw, and `amendRejected()`
+     * reads it back to prove the subsanación carries the same IDFactura.
+     *
+     * KNOWN AND DECLARED LIMIT: Eloquent fires no model event for a
+     * query-builder write, so `Registry::query()->...->delete()` and
+     * `DB::table(...)->update(...)` are beyond reach by construction. This is
+     * stated in the README and pinned by a test rather than papered over —
+     * claiming a protection the code does not give is the mistake AID-725's
+     * comment made. What is closed here is the consumer's path: `$registry->
+     * delete()`, `$registry->forceDelete()` and `$registry->save()`.
+     */
+    protected static function booted(): void
+    {
+        static::deleting(function (Registry $registry): void {
+            if ($registry->status->hasAgencyVerdict()) {
+                throw VerifactuException::make(sprintf(
+                    'Registry %s was filed with the agency (status %s) and cannot be deleted. '
+                    . 'A filed record must stay intact while the retention obligation lasts '
+                    . '(RD 1007/2023 arts. 8 & 16); corrections are made by a subsequent record — '
+                    . 'cancel() for a RegistroAnulacion, amendRejected() for a subsanación.',
+                    $registry->registry_number,
+                    $registry->status->value,
+                ));
+            }
+        });
+
+        static::updating(function (Registry $registry): void {
+            if (! $registry->status->hasAgencyVerdict()) {
+                return;
+            }
+
+            // getOriginal() is the state as loaded, so a transition INTO a
+            // verdict is not caught here — only edits to a record that already
+            // carried one when it was read.
+            $tampered = array_keys(array_intersect_key(
+                $registry->getDirty(),
+                array_flip(self::SEALED_ATTRIBUTES)
+            ));
+
+            if ($tampered === []) {
+                return;
+            }
+
+            throw VerifactuException::make(sprintf(
+                'Registry %s was filed with the agency (status %s); its fiscal artefact is sealed. '
+                . 'Refused change to: %s. The bytes presented to the agency and the identity they '
+                . 'were presented under are immutable (RD 1007/2023 arts. 8 & 16).',
+                $registry->registry_number,
+                $registry->status->value,
+                implode(', ', $tampered),
+            ));
+        });
     }
 
     /**
