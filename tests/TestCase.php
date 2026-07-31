@@ -76,6 +76,19 @@ class TestCase extends Orchestra
             config()->set('verifactu.transaction_guard.baseline_level', 1);
         }
 
+        // A cache store the overlapping processes can actually share.
+        //
+        // Testbench defaults to `array`, which lives in the memory of ONE
+        // process. Both of this package's overlap locks — the retry pass and
+        // the sequential-submission queue — are void on such a store, so the
+        // harness would have been testing them against a mechanism a real
+        // consumer never runs. OverlapLockStore now refuses it outright.
+        //
+        // `file` is shared through the filesystem, which is what a forked child
+        // needs too (tests/Concurrency). Kept out of the repository via the
+        // testbench skeleton's own storage path.
+        config()->set('cache.default', 'file');
+
         config()->set('database.default', 'testing');
         config()->set('database.connections.testing', [
             'driver' => env('DB_DRIVER', 'mariadb'),

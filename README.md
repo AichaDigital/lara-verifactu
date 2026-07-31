@@ -265,6 +265,22 @@ the bundled `Invoice` model (native mode) is optional. See
   (`registry_type`), keeping the chain verifiable end to end.
 - Submissions are sequential by design (dedicated `fiscal_verification`
   queue with a unique lock) to preserve chain ordering.
+- **The overlap locks require a shared cache store.** Two guarantees ride on
+  `Cache::lock()`: submissions stay sequential, and two `verifactu:retry-failed`
+  passes never race over one record. Both are only as good as the store behind
+  them, so the package **refuses to run** on one that cannot carry a lock across
+  processes:
+
+  | Store | Overlap lock | |
+  |---|---|---|
+  | `null` | **none** | hands out a `NoLock` whose `acquire()` returns `true` unconditionally — every check passes |
+  | `array` | **none across processes** | a real lock, but in the memory of one process |
+  | `file` | per host | fine for several processes on one machine |
+  | `database`, `redis`, `memcached` | across hosts | what a multi-node deployment needs |
+
+  Set `CACHE_STORE` accordingly. On `null` or `array` the package throws a
+  `ConfigurationException` naming the store and the setting, rather than letting
+  a scheduled command report a success it never serialised.
 - `AceptadoConErrores` responses map to success: AEAT registered the
   record, so it must not be resubmitted; the error details are persisted.
 - **Rectifications**: `TipoRectificativa` derives from

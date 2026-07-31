@@ -9,6 +9,7 @@ use AichaDigital\LaraVerifactu\Models\Invoice;
 use AichaDigital\LaraVerifactu\Models\Registry;
 use AichaDigital\LaraVerifactu\Services\InvoiceRegistrar;
 use AichaDigital\LaraVerifactu\Support\AeatLogSanitizer;
+use AichaDigital\LaraVerifactu\Support\OverlapLockStore;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -68,6 +69,12 @@ class ProcessInvoiceRegistrationJob implements ShouldQueue
      */
     public function handle(InvoiceRegistrar $registrar): void
     {
+        // The sequential-processing lock is only worth what the store behind
+        // it is worth: on a per-process store it is decorative, and silently so.
+        // Checked before acquiring, so the failure names the cause instead of
+        // surfacing later as an out-of-order chain.
+        OverlapLockStore::assertUsable('fiscal_verification_queue');
+
         // v2.0: Acquire unique lock to ensure sequential processing
         $lockTimeout = config('verifactu.lock.timeout', 300); // 5 minutes default
         $lock = Cache::lock('fiscal_verification_queue', $lockTimeout);

@@ -38,4 +38,24 @@ final class ConfigurationException extends VerifactuException
             . 'Valid environments: production, sandbox. Valid certificate types: ciudadano, representante, sello.'
         );
     }
+
+    /**
+     * The resolved cache store cannot carry an overlap lock across processes.
+     */
+    public static function overlapLockStoreNotShared(string $lockName, string $driver, bool $isNullStore): self
+    {
+        $why = $isNullStore
+            ? 'the null store hands out a NoLock, whose acquire() returns true unconditionally, so every '
+              . 'overlap check passes and nothing is ever serialised'
+            : 'the array store keeps its locks in the memory of a single process, so two workers never see '
+              . "each other's";
+
+        return self::make(
+            "Cache store '{$driver}' cannot carry the overlap lock '{$lockName}': {$why}. "
+            . 'This lock is what stops two verifactu:retry-failed passes from racing over one record, and what '
+            . 'keeps registration submissions sequential — guarantees that would be silently void here. '
+            . 'Set CACHE_STORE to a store the overlapping processes share: database, redis or memcached across '
+            . 'hosts, file for several processes on one host.'
+        );
+    }
 }
