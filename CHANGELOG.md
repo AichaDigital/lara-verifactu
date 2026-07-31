@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-07-31
+
 ### Fixed
 
 - **`Invoice::registry()` returned an undefined row when an invoice held more
@@ -1029,7 +1031,8 @@ This release introduces **critical fiscal compliance features** required for pro
 - **PHPStan: Level 8 ✅ (12 legitimate framework false positives baselined)**
 - **Code Style: PSR-12 ✅**
 
-[Unreleased]: https://github.com/aichadigital/lara-verifactu/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/aichadigital/lara-verifactu/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/aichadigital/lara-verifactu/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/aichadigital/lara-verifactu/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/aichadigital/lara-verifactu/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/aichadigital/lara-verifactu/compare/v1.0.0-rc2...v1.0.0
