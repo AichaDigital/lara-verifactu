@@ -92,6 +92,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`$registry->delete()`, `->forceDelete()`, `->save()`). A test pins the limit
   so this statement cannot drift away from the code.
 
+- **The package now refuses to run its overlap locks on a cache store that
+  cannot share them.** Two guarantees ride on `Cache::lock()`: submissions stay
+  sequential (`ProcessInvoiceRegistrationJob`), and two `verifactu:retry-failed`
+  passes never race over one record (AID-731). Both are conditional on the
+  consumer's cache store, and the package neither stated the requirement nor
+  checked it.
+
+  Measured, not assumed: the `null` store hands out a `NoLock` whose
+  `acquire()` returns `true` **unconditionally** — every overlap check passes
+  and nothing is ever serialised — and the `array` store returns a real lock
+  that lives in the memory of a single process, so two queue workers never see
+  each other's. On either, both guarantees were void, and silently.
+
+  Both now throw a `ConfigurationException` naming the store and the setting to
+  change, before the lock is taken. `file` and above are accepted; note that
+  `file` is shared between processes of **one host**, so a multi-node consumer
+  needs `database`, `redis` or `memcached`. That distinction is documented
+  rather than enforced — the package cannot tell how many hosts it runs on.
+
+  **Upgrade note.** If your app runs on `CACHE_STORE=array` or `null`, set a
+  shared store before upgrading. Nothing changes for consumers already on
+  `database`, `redis`, `memcached` or `file`.
+
 ### Added
 
 - **`Invoice::registries()`** — the `HasMany` the domain actually has. Use it
@@ -101,6 +124,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   counting soft-deleted rows and filtering by registry type.
 - **`RegistryStatusEnum::agencyVerdictValues()`** — the `hasAgencyVerdict()` set
   as raw column values, for query-builder writes that cannot ask an instance.
+- **`Support\OverlapLockStore::assertUsable()`** — the cache-store check above,
+  should a consumer want to run it at boot rather than wait for the first lock.
 
 ## [1.2.0] - 2026-07-31
 

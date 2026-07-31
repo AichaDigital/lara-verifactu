@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace AichaDigital\LaraVerifactu\Commands;
 
 use AichaDigital\LaraVerifactu\Services\InvoiceRegistrar;
+use AichaDigital\LaraVerifactu\Support\OverlapLockStore;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Cache;
 
@@ -42,6 +43,12 @@ class RetryFailedCommand extends Command
         // A cache lock rather than the scheduler's withoutOverlapping(): the
         // consumer decides how this command is scheduled, and the package must
         // protect itself either way.
+        // The lock is only worth what the store behind it is worth: on a
+        // per-process store it is decorative, and silently so. Checked before
+        // acquiring rather than after, so the operator is told instead of the
+        // command reporting a success it did not serialise.
+        OverlapLockStore::assertUsable('verifactu:retry-failed');
+
         $lock = Cache::lock('verifactu:retry-failed', (int) config('verifactu.lock.timeout', 300));
 
         if (! $lock->get()) {
