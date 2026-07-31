@@ -55,6 +55,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pending, where `doesntHave('registry')` hid it. That is a pathological state
   being surfaced, not a new one being created.
 
+### Changed
+
+- **The retry-overlap lock (AID-731) now has an empirical gate** (AID-735). It
+  shipped with deterministic tests only — they prove the command skips while
+  another pass holds the lock, but not that the lock holds under real
+  concurrency. `tests/Concurrency/RetryOverlapForkTest.php` forks real
+  processes, releases them on an absolute-time barrier, and asserts the tax
+  agency was called **once**.
+
+  The count is measured, not guessed: with the lock disabled, 2 passes already
+  go red in 3 of 3 rounds on both engines, and the failure is total — N passes
+  produce N transmissions, never fewer. Shipped at 4. Unlike the chain-fork gate
+  this one has **no ceiling**: a pass that cannot take the lock returns
+  immediately instead of queueing, so there is no timeout pressure to run into.
+  Both figures and the reasoning live in the test's docblock, so nobody raises
+  the number «for safety» later.
+
+  No pipeline change was needed — the `concurrency` job already runs the whole
+  directory against both engines, with its anti-skip guard and an asserted
+  `pcntl`.
+
 ### Security
 
 - **A registry the agency has ruled on can no longer be altered or deleted**
