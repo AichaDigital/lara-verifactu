@@ -113,7 +113,7 @@ rather than sending XSD-valid XML the AEAT would reject — or accept *con error
 
 ## Requirements
 
-- PHP 8.3+
+- PHP 8.3+ (CI-tested on 8.3, 8.4 and 8.5)
 - Laravel 12.x or 13.x
 - Extensions: `soap`, `openssl`, `dom`, `libxml`
 - A digital certificate (PKCS#12) for AEAT submission: `representante`,

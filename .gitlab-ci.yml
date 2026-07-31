@@ -1,9 +1,9 @@
 # CI de aichadigital/lara-verifactu en GitLab self-hosted (ADE-295 — Fase 3).
 # Traducción de .github/workflows/{run-tests,phpstan,fix-php-code-style-issues}.yml.
-# Runner: aichadigital-runner01 (VM 891 en prohe03), tags [aichadigital, docker].
+# Runner: aichadigital-runner01 (VM 891 en prohe04), tags [aichadigital, docker].
 # El runner es opt-in (run_untagged=false): sin estos tags no se ejecuta nada.
 #
-# La matriz más ancha de la umbrela: PHP × Laravel × MOTOR DE BD. Son 8 jobs, y el
+# La matriz más ancha de la umbrela: PHP × Laravel × MOTOR DE BD. Son 12 jobs, y el
 # motor no es decorativo — este paquete firma registros fiscales (VeriFactu) y la
 # cadena de encadenamiento depende del comportamiento real del motor, así que se
 # prueba contra MySQL 8.4 y MariaDB 12.3 por separado.
@@ -48,10 +48,10 @@ default:
   interruptible: true
   # GitHub fijaba timeout-minutes: 15. Aquí no basta, y no por lentitud del
   # runner: la suite hace migraciones contra BD REAL en cada test (3-6 s por
-  # test medidos), y las 8 combinaciones corren de cuatro en cuatro compartiendo
-  # 12 cores con sus cuatro contenedores de base de datos. Medido: ~25 min por
-  # job con esa contención. 45 min deja margen sin dejar de ser una red de
-  # seguridad — un job colgado sigue muriendo, solo que más tarde.
+  # test medidos), y las combinaciones de la matriz corren de cuatro en cuatro
+  # compartiendo 12 cores con sus cuatro contenedores de base de datos. Medido:
+  # ~25 min por job con esa contención. 45 min deja margen sin dejar de ser una
+  # red de seguridad — un job colgado sigue muriendo, solo que más tarde.
   timeout: 45 minutes
 
 variables:
@@ -71,7 +71,7 @@ variables:
 # no había pasado por la matriz de motores, el gate de concurrencia de AID-710,
 # PHPStan ni los tests que el README y el CHANGELOG anuncian.
 #
-# Ningún job declara `rules` propias, así que los diez corren también en tag.
+# Ningún job declara `rules` propias, así que todos corren también en tag.
 workflow:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
@@ -125,22 +125,22 @@ pest:
   image: aichadigital/laravel-ci:$PHP_VERSION
   parallel:
     matrix:
-      - PHP_VERSION: ["8.3", "8.4"]
+      - PHP_VERSION: ["8.3", "8.4", "8.5"]
         LARAVEL: "12.*"
         TESTBENCH: "10.*"
         DB_DRIVER: "mysql"
         DB_IMAGE: "mysql:8.4"
-      - PHP_VERSION: ["8.3", "8.4"]
+      - PHP_VERSION: ["8.3", "8.4", "8.5"]
         LARAVEL: "12.*"
         TESTBENCH: "10.*"
         DB_DRIVER: "mariadb"
         DB_IMAGE: "mariadb:12.3"
-      - PHP_VERSION: ["8.3", "8.4"]
+      - PHP_VERSION: ["8.3", "8.4", "8.5"]
         LARAVEL: "13.*"
         TESTBENCH: "11.*"
         DB_DRIVER: "mysql"
         DB_IMAGE: "mysql:8.4"
-      - PHP_VERSION: ["8.3", "8.4"]
+      - PHP_VERSION: ["8.3", "8.4", "8.5"]
         LARAVEL: "13.*"
         TESTBENCH: "11.*"
         DB_DRIVER: "mariadb"
