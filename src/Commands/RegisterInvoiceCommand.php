@@ -113,8 +113,14 @@ class RegisterInvoiceCommand extends Command
         int $batchSize,
         bool $submitToAeat
     ): int {
-        // Get invoices without registry
-        $invoices = Invoice::doesntHave('registry')
+        // Invoices with no registration of record.
+        //
+        // pendingRegistration(), not doesntHave('registry') (AID-741): the old
+        // predicate handed batchRegister() invoices whose registration was
+        // merely soft-deleted — work items assertNoRootRegistration() can only
+        // reject — so every run reported failures it could never resolve, and
+        // the batch never drained.
+        $invoices = Invoice::pendingRegistration()
             ->limit($batchSize)
             ->get();
 

@@ -24,8 +24,17 @@ class RetryFailedVerificationCommand extends Command
     {
         $this->info('🔍 Searching for failed verifications...');
 
+        // pendingRegistration(), not whereDoesntHave('registry') (AID-741).
+        //
+        // NOTE: this class is dead code and the query is fixed only so a sweep
+        // of the predicate leaves nothing behind. Its namespace
+        // (...\Console\Commands) does not match its path (src/Console/), so it
+        // is not autoloadable under the package PSR-4 map, it is not registered
+        // in the ServiceProvider, and its signature collides with the real
+        // src/Commands/RetryFailedCommand.php. It is not deleted here because
+        // removing a public class is a MAJOR; its fate is tracked separately.
         $query = Invoice::query()
-            ->whereDoesntHave('registry')
+            ->pendingRegistration()
             ->orderBy('serie')
             ->orderBy('issue_datetime');
 
