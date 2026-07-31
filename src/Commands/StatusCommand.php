@@ -73,7 +73,11 @@ class StatusCommand extends Command
         $pendingRegistries = Registry::where('status', RegistryStatusEnum::PENDING->value)->count();
         $sentRegistries = Registry::where('status', RegistryStatusEnum::SENT->value)->count();
         $errorRegistries = Registry::where('status', RegistryStatusEnum::ERROR->value)->count();
-        $unregisteredInvoices = Invoice::doesntHave('registry')->count();
+        // pendingRegistration(), not doesntHave('registry') (AID-741): the old
+        // predicate counted invoices whose registration was merely soft-deleted
+        // — records register() refuses — and missed invoices holding only a
+        // cancellation, which genuinely have no alta.
+        $unregisteredInvoices = Invoice::pendingRegistration()->count();
 
         $stats = [
             ['Total Invoices', $totalInvoices],

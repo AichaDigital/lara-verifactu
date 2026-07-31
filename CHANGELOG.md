@@ -7,6 +7,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`Invoice::registry()` returned an undefined row when an invoice held more
+  than one registry** (AID-734). The relation is singular by contract but the
+  domain is 1→N: a subsanación (AID-137) adds a **second** `registration` row,
+  and a cancellation adds another. `hasOne()` carried no order, so which row
+  came back was whatever the engine returned first.
+
+  **Behaviour change to be aware of.** For an invoice with more than one
+  registry the relation now returns **the most recent one**, matching
+  `Verifactu::status()`, which the README already documents as «latest registry
+  of an invoice» — two APIs of one package must not contradict each other about
+  the same invoice. In practice: after an amendment, code reading
+  `$invoice->registry` (huella, CSV, AEAT status — the fields a consumer panel
+  renders) now sees the **amendment** instead of the rejected record. That is
+  the fiscally current state; the rejected one carries no CSV and a superseded
+  status. Ordering is by `id`, not by `registry_date` — the latter is the key of
+  `RegistryManager::getPreviousRegistry()`, which answers a different question
+  (the head of the **global** chain).
+
+- **Every «does this invoice have a registry?» check was blind to soft-deleted
+  rows and to the registry type** (AID-741). `Registry` uses `SoftDeletes`, so
+  the relation's `EXISTS` subquery carried `deleted_at is null`. Consequences,
+  worst first:
+
+  - `ProcessInvoiceRegistrationJob` blocked issuance. A predecessor in the same
+    serie whose registration had been soft-deleted read as an unregistered gap,
+    so `ensureSequentialOrder()` threw `RuntimeException` and **no later invoice
+    of that serie and fiscal year could be registered**.
+  - The job's own «already registered?» guard let such an invoice through to
+    `register()`, where `assertNoRootRegistration()` — which does count trashed
+    rows — refused it. The job then failed and logged
+    `critical: Fiscal verification system BLOCKED`, a false alarm.
+  - `verifactu:register --all` picked those invoices on every run and reported
+    failures it could never resolve, so the batch never drained.
+  - `verifactu:status` counted them as pending.
+
+  All of these now use the new `Invoice::pendingRegistration()` scope, whose
+  predicate is **identical** to `assertNoRootRegistration()`: `withTrashed()`
+  plus `registry_type = registration`. An invoice whose registration was
+  soft-deleted is **not** pending — the package refuses to register it anyway,
+  and the chain links over what existed (AID-728).
+
+  **Behaviour change in the counters.** Because the predicate now discriminates
+  by type, an invoice holding **only a cancellation** — no alta — is reported as
+  pending, where `doesntHave('registry')` hid it. That is a pathological state
+  being surfaced, not a new one being created.
+
+### Added
+
+- **`Invoice::registries()`** — the `HasMany` the domain actually has. Use it
+  for anything reasoning over an invoice's whole chain; `registry()` stays as
+  the singular accessor for the current record.
+- **`Invoice::pendingRegistration()`** scope — «no registration of record»,
+  counting soft-deleted rows and filtering by registry type.
+
 ## [1.2.0] - 2026-07-31
 
 ### Changed

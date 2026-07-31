@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace AichaDigital\LaraVerifactu\Jobs;
 
+use AichaDigital\LaraVerifactu\Enums\RegistryTypeEnum;
 use AichaDigital\LaraVerifactu\Models\Invoice;
+use AichaDigital\LaraVerifactu\Models\Registry;
 use AichaDigital\LaraVerifactu\Services\InvoiceRegistrar;
 use AichaDigital\LaraVerifactu\Support\AeatLogSanitizer;
 use Illuminate\Bus\Queueable;
@@ -94,8 +96,21 @@ class ProcessInvoiceRegistrationJob implements ShouldQueue
                 return;
             }
 
-            // Check if already registered
-            if ($invoice->registry()->exists()) {
+            // Check if already registered.
+            //
+            // Registry::withTrashed() + registry_type, NOT $invoice->registry():
+            // the relation applies SoftDeletingScope, so a soft-deleted
+            // registration was invisible here (AID-741) while
+            // RegistryManager::assertNoRootRegistration() — which counts trashed
+            // rows — still refused it. The job sailed past this guard and threw
+            // downstream, and failed() logged the system as BLOCKED. This
+            // predicate must stay identical to that assertion.
+            $alreadyRegistered = Registry::withTrashed()
+                ->where('invoice_id', $invoice->getKey())
+                ->where('registry_type', RegistryTypeEnum::REGISTRATION->value)
+                ->exists();
+
+            if ($alreadyRegistered) {
                 Log::channel(config('verifactu.logging.channel', 'single'))
                     ->debug('Invoice already has a registry, skipping', [
                         'invoice_id' => $this->invoiceId,
@@ -171,7 +186,11 @@ class ProcessInvoiceRegistrationJob implements ShouldQueue
         $previousUnregistered = Invoice::where('serie', $invoice->serie)
             ->whereYear('issue_datetime', $fiscalYear)
             ->where('id', '<', $invoice->id) // Use ID as fallback for ordering
-            ->whereDoesntHave('registry')
+            // pendingRegistration(), not whereDoesntHave('registry') (AID-741):
+            // a predecessor whose registration was merely soft-deleted read as
+            // an unregistered gap and blocked the whole serie for the fiscal
+            // year with a RuntimeException — an issuance outage, not a bad count.
+            ->pendingRegistration()
             ->exists();
 
         if ($previousUnregistered) {

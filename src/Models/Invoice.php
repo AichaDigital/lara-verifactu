@@ -11,7 +11,9 @@ use AichaDigital\LaraVerifactu\Database\Factories\InvoiceFactory;
 use AichaDigital\LaraVerifactu\Enums\IdTypeEnum;
 use AichaDigital\LaraVerifactu\Enums\InvoiceTypeEnum;
 use AichaDigital\LaraVerifactu\Enums\RegimeTypeEnum;
+use AichaDigital\LaraVerifactu\Enums\RegistryTypeEnum;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -47,6 +49,7 @@ use Illuminate\Support\Collection;
  * @property Carbon $updated_at
  * @property Carbon|null $deleted_at
  * @property-read Registry|null $registry
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, Registry> $registries
  * @property-read \Illuminate\Database\Eloquent\Collection<int, InvoiceBreakdown> $breakdowns
  */
 class Invoice extends Model implements InvoiceContract
@@ -106,14 +109,104 @@ class Invoice extends Model implements InvoiceContract
     }
 
     /**
-     * Get the invoice registry.
+     * The invoice's CURRENT registry — the most recent link of its chain.
+     *
+     * Singular by contract, not by domain. An invoice holds 1→N registries: a
+     * subsanación (AID-137) adds a SECOND `registration` row, and a cancellation
+     * adds another. With no order, `hasOne()` handed back whichever row the
+     * engine felt like returning first, so after an amendment a consumer panel
+     * could show the REJECTED record — no CSV, superseded status — as the live
+     * one (AID-734).
+     *
+     * `orderByDesc('id')`, deliberately NOT `latestOfMany()`. `ofMany()` sets
+     * isOneOfMany, which registers a beforeQuery callback that joins an
+     * aggregate subquery onto the relation's OWN builder. Every write issued
+     * through the relation would then carry that join and touch a single row —
+     * silently turning the cascade in boot() into a partial one, because
+     * SoftDeletingScope qualifies the column when joins are present and Laravel
+     * compiles it without complaint. Measured: with latestOfMany() two of three
+     * registries survive alive under a deleted invoice. An ORDER BY lives only
+     * in the read path (getResults() calls first(); eager loading takes the
+     * first row per parent), leaves writes without a LIMIT, and is invisible to
+     * whereHas()/doesntHave(), which build their EXISTS subquery from a fresh
+     * builder.
+     *
+     * Ordered by `id` to match Verifactu::status(), which the README documents
+     * as "latest registry of an invoice" — two APIs of one package must not
+     * contradict each other about the same invoice. NOT by `registry_date`:
+     * that is RegistryManager::getPreviousRegistry()'s key, and it answers a
+     * different question (the head of the GLOBAL chain, ordered by fiscal
+     * timestamp).
+     *
+     * Soft-deleted rows stay excluded, on purpose. This relation is
+     * PRESENTATION: a trashed row must never surface as live state. Chain
+     * questions — "does a registration of record exist?" — are answered by
+     * scopePendingRegistration() and RegistryManager::assertNoRootRegistration(),
+     * which count trashed rows because the chain links over what EXISTED
+     * (AID-728).
      *
      * @return HasOne<Registry, static>
      */
     public function registry(): HasOne
     {
         /** @var HasOne<Registry, static> */
-        return $this->hasOne(Registry::class);
+        return $this->hasOne(Registry::class)->orderByDesc('id');
+    }
+
+    /**
+     * Every registry of this invoice — the honest shape of the domain.
+     *
+     * `registry()` is the singular accessor kept for the published contract;
+     * this is the real cardinality. Anything reasoning over the whole chain of
+     * an invoice belongs here.
+     *
+     * Deliberately UNORDERED: this relation carries the cascade in boot(), and
+     * an ORDER BY is harmless on an UPDATE only while no LIMIT is set — a
+     * property no future edit should have to know about.
+     *
+     * Soft-deleted rows are excluded (SoftDeletingScope); for chain questions
+     * use ->withTrashed().
+     *
+     * @return HasMany<Registry, static>
+     */
+    public function registries(): HasMany
+    {
+        /** @var HasMany<Registry, static> */
+        return $this->hasMany(Registry::class);
+    }
+
+    /**
+     * Scope: invoices with no registration OF RECORD (AID-741).
+     *
+     * NOT `doesntHave('registry')`, for two independent reasons:
+     *
+     *  1. Registry uses SoftDeletes, so the relation's EXISTS subquery carries
+     *     `deleted_at is null`. An invoice whose registration was soft-deleted
+     *     came back as "pending", and the work item that produced could only
+     *     fail: assertNoRootRegistration() counts trashed rows, so register()
+     *     throws — and the job's failed() handler logs that as "Fiscal
+     *     verification system BLOCKED". The chain links over what EXISTED
+     *     (AID-728); a trashed root still holds its slot.
+     *  2. The relation does not discriminate registry_type. An invoice holding
+     *     only a `cancellation` has no alta and IS pending; `doesntHave` said
+     *     otherwise and hid the pathology.
+     *
+     * The predicate is deliberately IDENTICAL to assertNoRootRegistration().
+     * Any drift between the two re-opens the "queue a job that can only throw"
+     * failure mode.
+     *
+     * @param  Builder<static>  $query
+     */
+    public function scopePendingRegistration(Builder $query): void
+    {
+        $query->whereNotExists(
+            Registry::withTrashed()
+                ->whereColumn(
+                    (new Registry)->qualifyColumn('invoice_id'),
+                    $this->qualifyColumn($this->getKeyName()),
+                )
+                ->where('registry_type', RegistryTypeEnum::REGISTRATION->value)
+        );
     }
 
     /**
@@ -479,8 +572,13 @@ class Invoice extends Model implements InvoiceContract
                 return; // Let database cascade handle it
             }
 
-            // Soft delete registry
-            $invoice->registry()->delete();
+            // Soft delete EVERY registry (AID-734). The cascade is 1→N and must
+            // never be expressed through the singular relation: any determinism
+            // trick on registry() — latestOfMany(), ofMany(), a LIMIT — would
+            // silently narrow this to one row and leave the rest alive under a
+            // deleted invoice. Measured, not feared: with latestOfMany() two of
+            // three registries survived.
+            $invoice->registries()->delete();
 
             // Soft delete breakdowns
             $invoice->breakdowns()->delete();
