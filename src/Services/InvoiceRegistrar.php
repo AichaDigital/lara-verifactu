@@ -54,6 +54,8 @@ final class InvoiceRegistrar
      */
     public function register(InvoiceContract $invoice, bool $submitToAeat = true): RegistryContract
     {
+        $this->assertCanSubmitFromHere($submitToAeat, 'register');
+
         // The transaction covers creating and signing the record — and NOTHING
         // else (AID-717). It used to wrap the AEAT call and the event too, which
         // held the AID-258 chain lock across the whole round trip to the agency
@@ -74,7 +76,11 @@ final class InvoiceRegistrar
             return $registry;
         });
 
-        // Committed: the chain lock is released and the link exists on its own.
+        // Durable: the chain lock is released and the link exists on its own —
+        // guaranteed because assertCanSubmitFromHere() refused to get here from
+        // inside a caller's transaction, where this commit would have been a
+        // RELEASE SAVEPOINT and the row still revertible (AID-725).
+        //
         // A submission that now fails leaves a persisted record in ERROR that
         // RetryFailedCommand can re-send — the same link, hash and number, never
         // a new one.
@@ -97,6 +103,8 @@ final class InvoiceRegistrar
      */
     public function cancel(InvoiceContract $invoice, bool $submitToAeat = true): RegistryContract
     {
+        $this->assertCanSubmitFromHere($submitToAeat, 'cancel');
+
         // Same boundary as register() (AID-717): the transaction ends where the
         // record is durable, and the AEAT call happens outside it.
         $registry = DB::transaction(function () use ($invoice) {
@@ -138,76 +146,44 @@ final class InvoiceRegistrar
      */
     public function submitToAeat(RegistryContract $registry): AeatResponse
     {
-        try {
-            Log::channel(config('verifactu.logging.channel', 'single'))
-                ->debug('Submitting registry to AEAT', [
-                    'registry_number' => $registry->getRegistryNumber(),
-                ]);
+        Log::channel(config('verifactu.logging.channel', 'single'))
+            ->debug('Submitting registry to AEAT', [
+                'registry_number' => $registry->getRegistryNumber(),
+            ]);
 
-            // Refresh to get the latest persisted state before deciding.
-            if ($registry instanceof Registry) {
-                $registry->refresh();
+        // Refresh to get the latest persisted state before deciding. Outside the
+        // try: none of this is transport, and misreporting it as a connection
+        // failure is the defect AID-729 fixes.
+        if ($registry instanceof Registry) {
+            $registry->refresh();
 
-                // Idempotency check: skip if already sent
-                if ($registry->status === RegistryStatusEnum::SENT) {
-                    Log::channel(config('verifactu.logging.channel', 'single'))
-                        ->debug('Registry already sent, skipping', [
-                            'registry_number' => $registry->getRegistryNumber(),
-                            'csv' => $registry->aeat_csv,
-                        ]);
+            // Idempotency check: skip if the agency already holds it —
+            // SENT, or ACCEPTED via a duplicate answer (AID-727).
+            if ($registry->status->isFiledAtAeat()) {
+                Log::channel(config('verifactu.logging.channel', 'single'))
+                    ->debug('Registry already filed at AEAT, skipping', [
+                        'registry_number' => $registry->getRegistryNumber(),
+                        'csv' => $registry->aeat_csv,
+                    ]);
 
-                    return new AeatResponse(
-                        success: true,
-                        code: $registry->aeat_csv,
-                        message: 'Already submitted'
-                    );
-                }
-            }
-
-            // Submit to AEAT
-            $response = $this->aeatClient->sendRegistration($registry);
-
-            // Update registry based on response
-            if ($response->isSuccess()) {
-                $this->registryManager->markAsSubmitted(
-                    $registry,
-                    $response->getCsv() ?? '',
-                    $response->getMessage() ?? ''
+                return new AeatResponse(
+                    success: true,
+                    code: $registry->aeat_csv,
+                    message: 'Already submitted'
                 );
-
-                Log::channel(config('verifactu.logging.channel', 'single'))
-                    ->info('Registry submitted successfully', [
-                        'registry_number' => $registry->getRegistryNumber(),
-                        'csv' => $response->getCsv(),
-                    ]);
-
-                // Dispatch success event
-                event(new RegistrySubmittedEvent($registry, $response));
-            } else {
-                if ($response->isValidationRejection()) {
-                    $this->registryManager->markAsRejected(
-                        $registry,
-                        $response->getErrorMessage(),
-                        $response->getData()
-                    );
-                } else {
-                    $this->registryManager->markAsFailed(
-                        $registry,
-                        $response->getErrorMessage()
-                    );
-                }
-
-                Log::channel(config('verifactu.logging.channel', 'single'))
-                    ->error('Registry submission failed', [
-                        'registry_number' => $registry->getRegistryNumber(),
-                        'error' => AeatLogSanitizer::redactText((string) $response->getErrorMessage()),
-                    ]);
-
-                // Dispatch failure event
-                event(new RegistryFailedEvent($registry, $response->getErrorMessage(), $registry->getSubmissionAttempts()));
             }
 
-            return $response;
+            // The bytes about to leave must still be the bytes the stored hash
+            // covers (AID-730). A retry can happen long after the first attempt,
+            // and presenting different bytes under the same registry number
+            // would diverge from what the agency may already hold.
+            $this->registryManager->assertSubmissionPayloadIntact($registry);
+        }
+
+        try {
+            // Submit to AEAT. This call, and ONLY this call, is what the catch
+            // below is allowed to classify as a transport failure (AID-729).
+            $response = $this->aeatClient->sendRegistration($registry);
         } catch (\Throwable $e) {
             $this->registryManager->markAsFailed($registry, $e->getMessage());
 
@@ -218,10 +194,100 @@ final class InvoiceRegistrar
                     ...AeatLogSanitizer::traceContext($e),
                 ]);
 
-            // Dispatch failure event
-            event(new RegistryFailedEvent($registry, $e->getMessage(), $registry->getSubmissionAttempts()));
+            $this->dispatchQuietly(
+                new RegistryFailedEvent($registry, $e->getMessage(), $registry->getSubmissionAttempts()),
+                $registry,
+            );
 
             throw AeatException::connectionFailed($e->getMessage());
+        }
+
+        // Past this point the agency has answered. The outcome of the operation
+        // is fixed by that answer, and nothing that happens now may reclassify
+        // it — which is exactly what the old single catch did (AID-729).
+        if ($response->isSuccess()) {
+            if ($response->isDuplicate()) {
+                // The agency already holds this record (AID-727): the expected
+                // answer when a submission was accepted and its response lost.
+                // Reconcile instead of refusing.
+                $this->registryManager->markAsAccepted(
+                    $registry,
+                    $response->getCsv(),
+                    $response->getMessage() ?? ''
+                );
+            } else {
+                $this->registryManager->markAsSubmitted(
+                    $registry,
+                    $response->getCsv(),
+                    $response->getMessage() ?? ''
+                );
+            }
+
+            Log::channel(config('verifactu.logging.channel', 'single'))
+                ->info('Registry submitted successfully', [
+                    'registry_number' => $registry->getRegistryNumber(),
+                    'csv' => $response->getCsv(),
+                    'duplicate' => $response->isDuplicate(),
+                ]);
+
+            $this->dispatchQuietly(new RegistrySubmittedEvent($registry, $response), $registry);
+
+            return $response;
+        }
+
+        if ($response->isValidationRejection()) {
+            $this->registryManager->markAsRejected(
+                $registry,
+                $response->getErrorMessage(),
+                $response->getData()
+            );
+        } else {
+            $this->registryManager->markAsFailed(
+                $registry,
+                $response->getErrorMessage()
+            );
+        }
+
+        Log::channel(config('verifactu.logging.channel', 'single'))
+            ->error('Registry submission failed', [
+                'registry_number' => $registry->getRegistryNumber(),
+                'error' => AeatLogSanitizer::redactText((string) $response->getErrorMessage()),
+            ]);
+
+        $this->dispatchQuietly(
+            new RegistryFailedEvent($registry, $response->getErrorMessage(), $registry->getSubmissionAttempts()),
+            $registry,
+        );
+
+        return $response;
+    }
+
+    /**
+     * Dispatch an outcome event without letting a consumer listener rewrite the
+     * outcome (AID-729).
+     *
+     * These events are dispatched AFTER the agency's answer has been persisted.
+     * A listener that throws is a defect in the consumer, not a failure of the
+     * round trip, and must not turn a successful submission into
+     * AeatException::connectionFailed nor a terminal REJECTED into a retryable
+     * ERROR — both of which the previous single catch did.
+     *
+     * The failure is logged rather than propagated: the operation's result is
+     * already durable and already returned. Swallowing it here keeps the return
+     * value and the persisted state truthful about what the agency said.
+     */
+    private function dispatchQuietly(object $event, RegistryContract $registry): void
+    {
+        try {
+            event($event);
+        } catch (\Throwable $e) {
+            Log::channel(config('verifactu.logging.channel', 'single'))
+                ->error('A listener threw while handling a Verifactu outcome event', [
+                    'registry_number' => $registry->getRegistryNumber(),
+                    'event' => $event::class,
+                    'error' => AeatLogSanitizer::redactText($e->getMessage()),
+                    ...AeatLogSanitizer::traceContext($e),
+                ]);
         }
     }
 
@@ -330,6 +396,8 @@ final class InvoiceRegistrar
         InvoiceContract $correctedInvoice,
         bool $submitToAeat = true
     ): RegistryContract {
+        $this->assertCanSubmitFromHere($submitToAeat, 'amendRejected');
+
         $registry = DB::transaction(function () use ($rejectedRegistry, $correctedInvoice) {
             // Guard 1: only a REGISTRATION can be amended by rejection.
             if ($rejectedRegistry->getRegistryType() !== RegistryTypeEnum::REGISTRATION) {
@@ -511,6 +579,50 @@ final class InvoiceRegistrar
     }
 
     /**
+     * Refuse to submit to the AEAT from inside a transaction the CALLER opened
+     * (AID-725).
+     *
+     * AID-717 took the AEAT call out of the transaction this package opens. It
+     * could do nothing about one the consumer already had open: from inside it,
+     * `DB::transaction()` here is a SAVEPOINT and its close is a RELEASE
+     * SAVEPOINT, not a COMMIT. The record is not durable, the SOAP call leaves
+     * anyway, and an outer rollback erases a record the agency has accepted —
+     * a divergence with the tax agency that cannot be reconciled locally.
+     *
+     * Only the damaging combination is refused. Creating the record inside a
+     * caller's transaction WITHOUT submitting stays supported: with no external
+     * effect there is nothing to diverge from, and composing issuance with the
+     * registry in one unit of work is a legitimate consumer pattern.
+     *
+     * @throws VerifactuException
+     */
+    private function assertCanSubmitFromHere(bool $submitToAeat, string $operation): void
+    {
+        if (! $submitToAeat) {
+            return;
+        }
+
+        $baseline = (int) config('verifactu.transaction_guard.baseline_level', 0);
+        $level = DB::transactionLevel();
+
+        if ($level <= $baseline) {
+            return;
+        }
+
+        throw VerifactuException::make(sprintf(
+            '%s() cannot submit to the AEAT from inside a database transaction '
+            . '(nesting level %d, baseline %d). The record would not be durable when the '
+            . 'submission leaves, so an outer rollback would erase a record the agency had '
+            . 'already accepted. Either commit before submitting, or call %s(..., submitToAeat: false) '
+            . 'inside the transaction and submit afterwards.',
+            $operation,
+            $level,
+            $baseline,
+            $operation,
+        ));
+    }
+
+    /**
      * Sign the registry XML when signing is enabled.
      *
      * Signing is opt-in (verifactu.signing.enabled, default false): in
@@ -533,7 +645,9 @@ final class InvoiceRegistrar
             $signedXml = $this->signXml($xml);
 
             if ($registry instanceof Registry) {
-                $registry->update(['signed_xml' => $signedXml]);
+                // forceFill: signed_xml is out of $fillable (AID-730), and this
+                // is the code that generates it.
+                $registry->forceFill(['signed_xml' => $signedXml])->save();
             }
         } catch (\Throwable $e) {
             Log::channel(config('verifactu.logging.channel', 'single'))

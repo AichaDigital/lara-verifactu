@@ -212,7 +212,9 @@ final class Verifactu
      */
     private function fakeRegistry(InvoiceContract $invoice, RegistryTypeEnum $type): Registry
     {
-        return new Registry([
+        // forceFill: hash and hash_generated_at are out of $fillable (AID-730),
+        // and this stub is never persisted.
+        return (new Registry)->forceFill([
             'registry_number' => 'FAKE-' . $invoice->getInvoiceNumber(),
             'registry_date' => Carbon::now(),
             'registry_type' => $type->value,

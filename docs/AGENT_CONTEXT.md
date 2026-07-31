@@ -107,12 +107,13 @@ AID-344, `Registry::invoice()` resolves the class from
 `verifactu_invoices` is gone** — any Eloquent model (any table, integer PK)
 implementing `InvoiceContract` now works through the facade
 (`register`/`cancel`/`status`). What's still native-only: `verifactu:register`,
-`ProcessInvoiceRegistrationJob`, `verifactu:retry-failed`, `verifactu:status`
+`ProcessInvoiceRegistrationJob`, `verifactu:status`
 — these query the native `Invoice` Eloquent model directly (`Invoice::find()`,
 `Invoice::doesntHave('registry')`, sequential-order validation), not the
 config binding. Don't advertise those CLI/queue entry points as
 custom-mode-ready — see the README's "Custom invoice models" section for the
-exact split.
+exact split. `verifactu:retry-failed` is already model-agnostic — it never
+queries `Invoice`, only pending `Registry` submissions.
 
 ## 📁 Package Structure
 

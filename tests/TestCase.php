@@ -62,6 +62,20 @@ class TestCase extends Orchestra
 
     public function getEnvironmentSetUp($app): void
     {
+        // The AID-725 guard refuses to submit to the AEAT from inside a
+        // transaction the caller opened. RefreshDatabase — applied to Feature
+        // only (tests/Pest.php) — wraps every test in one, so there level 1 is
+        // the harness's, not a caller's, and the baseline must say so or every
+        // test that submits would fail for the wrong reason. Unit tests get no
+        // such wrapper and keep the production default of 0.
+        //
+        // This does NOT opt out of the guard: a transaction a test opens itself
+        // is level 2, still above the baseline, and still refused. That is what
+        // AeatSubmissionOutsideTransactionTest asserts.
+        if ($this->isFeatureTest()) {
+            config()->set('verifactu.transaction_guard.baseline_level', 1);
+        }
+
         config()->set('database.default', 'testing');
         config()->set('database.connections.testing', [
             'driver' => env('DB_DRIVER', 'mariadb'),

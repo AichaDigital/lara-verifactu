@@ -38,7 +38,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - A record the agency had already accepted could be rolled back by anything
     that threw afterwards — a consumer listener on `InvoiceRegisteredEvent`, for
     instance — leaving the record filed at the AEAT and absent locally. That is
-    no longer possible.
+    no longer possible **when the caller is not already inside a transaction of
+    its own**; the remaining half of that hole is closed by AID-725 below.
   - `markAsFailed()` was rolled back along with everything else, so a failed
     submission left nothing behind and `verifactu:retry-failed` had nothing to
     retry. The package's own retry mechanism was inert on this path.
@@ -55,8 +56,201 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   leaves the remote outcome unknown; what changes is that there is now local
   state to reconcile it against.
 
+- **Submitting to the AEAT from inside a transaction the caller opened is now
+  refused** (AID-725). AID-717 moved the submission out of the transaction *this
+  package* opens, but could do nothing about one the consumer already had open:
+  nested, `DB::transaction()` is a SAVEPOINT, so the commit was a
+  `RELEASE SAVEPOINT`, the record was not durable when the SOAP call left, and an
+  outer rollback erased a record the agency had already accepted. The guarantee
+  claimed in the AID-717 entry above held only for callers outside a transaction.
+
+  `register()`, `cancel()` and `amendRejected()` now throw `VerifactuException`
+  when asked to submit from a nesting level above
+  `verifactu.transaction_guard.baseline_level` (default `0`, i.e. any caller
+  transaction).
+
+  **Only the damaging combination is refused.** Creating the record inside your
+  own transaction without submitting is still supported and still the right way
+  to compose issuance with its registry:
+
+  ```php
+  DB::transaction(fn () => $registrar->register($invoice, submitToAeat: false));
+  // submit afterwards, once the row is durable
+  ```
+
+  Consumers on the queued path (`ProcessInvoiceRegistrationJob::dispatch(...)
+  ->afterCommit()`) are unaffected: the job runs after the commit, outside any
+  transaction. Test harnesses that wrap each test in a transaction
+  (`RefreshDatabase`) set `baseline_level` to `1`; this does not disable the
+  guard, since a transaction the caller opens is still one level above it.
+
+- **One invoice now gets one root registration** (AID-726). Nothing used to stop
+  a second one: there is no unique on `invoice_id`, and the unique on `hash` does
+  not help because the hash includes the generation timestamp, so two attempts
+  hash differently and both went in.
+
+  The sequence AID-717 made reachable: submit → timeout → the record survives in
+  `ERROR` → the operator re-runs `verifactu:register`, which is the natural
+  reflex → a second chain link, with a new timestamp, hash and XML, for an
+  invoice the agency may already have on file. `register()` and `cancel()` now
+  throw `VerifactuException` instead, naming the existing record and pointing at
+  `verifactu:retry-failed`, which re-sends it.
+
+  The check runs inside the AID-258 chain lock, so two concurrent callers cannot
+  both clear it, and it counts soft-deleted rows: the chain links over what
+  existed, so a deleted root still holds its place.
+
+  **`amendRejected()` is unaffected** — the «subsanación» of AID-137 is the one
+  legitimate second registration, and it is recognised by its circumstances.
+  No unique index was added: `UNIQUE(invoice_id, registry_type)` would break that
+  flow, and a constraint invalidating already-persisted data would be a MAJOR
+  under `VERSIONING.md`.
+
+- **An AEAT «registro duplicado» answer is no longer treated as a rejection**
+  (AID-727). The sequence: the agency accepts a submission, the response is lost
+  to a timeout, the record stays in `ERROR`, `verifactu:retry-failed` re-sends it,
+  and the agency answers *duplicado* — because it does already have it. That
+  answer was classified as a validation rejection, so the record landed in
+  `REJECTED`: terminal, without CSV, and not retryable. A record the agency holds
+  as filed ended up locally as refused, with no automatic way out.
+
+  This path was unreachable in v1.1.0, where a failed submission rolled back and
+  left nothing to retry. AID-717 opens it, and with it the gap in the response
+  taxonomy between «you refuse this» and «you already had it».
+
+  Such a record now reaches `RegistryStatusEnum::ACCEPTED` — an existing case,
+  already final and non-retryable — keeping the CSV when the answer carries one.
+  **No new enum case was added**, so an exhaustive `match` in consumer code
+  cannot break; but code that treats only `SENT` as «submitted» should now also
+  accept `ACCEPTED`. Every idempotency guard in the package was updated
+  accordingly (new `RegistryStatusEnum::isFiledAtAeat()`), so a reconciled record
+  is never re-submitted.
+
+  Reconciliation requires an explicit `EstadoRegistroDuplicado` signal naming a
+  record the agency holds, and every line of the response must carry one; a
+  mixed answer stays a rejection. List L21 of the AEAT web service description
+  (`Veri-Factu_Descripcion_SWeb.pdf`, v1.0.3, p. 43) defines three values, and
+  two of them mean filed:
+
+  - `Correcta` — the previously filed record is correct.
+  - `AceptadaConErrores` — it carries errors that do not cause its rejection.
+    List L19 of the same document: «Se registra en el sistema».
+  - `Anulada` — it was annulled. This one stays a **rejection**: what the agency
+    holds is an annulled record, not ours, and reusing that number is refused
+    for good (`FAQs-Desarrolladores.pdf` §6).
+
+  Both filed states were verified against the AEAT external testing environment
+  (prewww1), not against fixtures. Which of the two comes back depends on the
+  quality of the **original** submission, not on whether it is on file: a record
+  the sandbox accepted seconds earlier with a CSV is reported as
+  `AceptadaConErrores`, because its submission was `ParcialmenteCorrecto`.
+  Watch the gender when reading the spec — L19 spells the submission state
+  `AceptadoConErrores`, L21 spells the duplicate state `AceptadaConErrores`.
+  Any value outside the three stays a rejection: guessing «already filed» would
+  stop retrying something that may never have been filed.
+
+- **Fixed:** a submission whose response carried no CSV persisted `''` rather
+  than `null` in `aeat_csv`, which has a UNIQUE index — so the *second* such
+  record collided on it. `markAsSubmitted()` now accepts `?string`.
+
+- **The fingerprint chain can no longer fork through a soft-delete, and
+  verification no longer hides one** (AID-728). `Registry` uses `SoftDeletes`, so
+  the global scope hid deleted rows from the two queries holding the chain up:
+  `getPreviousRegistry()` and `verifyBlockchain()`. Delete head *B* of a chain
+  `A → B → C` and the next record chained against *A* instead — leaving *B* and
+  *C* both declaring the same predecessor, which is a fork, the one state the
+  chain exists to make impossible. Nothing raised an alarm, because the tool
+  whose job is to catch it excluded the deleted rows as well and reported valid.
+
+  Both now walk `withTrashed()`: the chain links over what *existed*, not over
+  what is still visible. `verifyBlockchain()` **reports** a deleted link as a
+  chain error rather than walking around it.
+
+  Preexisting, not introduced by this release — but AID-710 put the fork test in
+  CI and this entry would otherwise have claimed an invariant that only held on
+  the concurrency axis.
+
+  **Deleting a registry is still permitted**; it is now visible. Note that
+  `verifyBlockchain()` will report chains that were already carrying deleted
+  links before upgrading. That is the pre-existing damage becoming visible, not
+  new breakage.
+
+- **A consumer listener that throws no longer rewrites the agency's answer**
+  (AID-729). The `catch` in `submitToAeat()` covered the whole method body,
+  including the `event()` calls dispatched *after* the definitive outcome had
+  been persisted — so a listener defect was handled as a transport failure.
+
+  After a **successful** submission the state held, but the caller received
+  `AeatException::connectionFailed` for a submission that went through, and both
+  the success and failure events fired for one operation. That false failure is
+  what pushes an operator into re-registering, the dangerous path of AID-726.
+
+  After a **rejection** the state was corrupted: the guard in `markAsFailed()`
+  protected only `SENT`, so a terminal `REJECTED` became a retryable `ERROR` and
+  the package would re-send something the agency had refused on validation
+  grounds. `markAsFailed()` now refuses to overwrite any agency verdict (new
+  `RegistryStatusEnum::hasAgencyVerdict()`).
+
+  The `try` now covers the network call and nothing else. Outcome events are
+  dispatched outside it, and a listener that throws is logged rather than
+  propagated: the result is already durable and already returned, so the return
+  value and the persisted state stay truthful about what the agency said.
+  A genuine transport failure still throws, still marks the record retryable and
+  still dispatches the failure event.
+
+- **The bytes sent to the agency must still be the bytes the hash covers**
+  (AID-730). v1.1.0 had no window between attempts: a failed submission rolled
+  back and left no record. AID-717 opens one deliberately, and the CHANGELOG
+  above sells it — rightly — as re-sending *the same* record: same link, hash and
+  number. But sameness was guaranteed by the identity of the row, not by the
+  immutability of its contents.
+
+  The integrity attributes (`hash`, `previous_hash`, `hash_generated_at`, `xml`,
+  `signed_xml`) were mass-assignable, and the client transmitted
+  `signed_xml ?? xml` verbatim without checking it still matched the stored hash.
+  A consumer observer or a data backfill was enough for a retry to present the
+  agency different bytes under the same registry number.
+
+  Those attributes are now **out of `$fillable`** — written only by the code that
+  generates them — and a submission is refused, loudly, when the payload no
+  longer matches the hash. Verified against the payload that actually leaves
+  (`signed_xml ?? xml`), so tampering with the signed copy does not slip past.
+
+  **Breaking for code that mass-assigned them.** `Registry::create([...])` or
+  `$registry->update([...])` with any of those five keys now silently ignores
+  them; use `forceFill()` if you genuinely need to. Model factories are
+  unaffected (they already bypass `$fillable`).
+
+- **Two retry passes can no longer overlap** (AID-731). `verifactu:retry-failed`
+  neither claimed nor locked its candidates, so two overlapping runs could hand
+  the same record to both and race to write its outcome. The command now takes a
+  cache lock and skips when another pass holds it — a lock rather than the
+  scheduler's `withoutOverlapping()`, because the consumer decides how the
+  command is scheduled and the package must protect itself either way.
+
+  The outcome writers (`markAsSubmitted()`, `markAsAccepted()`, `markAsFailed()`,
+  `markAsRejected()`) now re-read the row under `lockForUpdate()`. A plain
+  `refresh()` reads the `REPEATABLE READ` snapshot — the default on MySQL and
+  MariaDB — so a worker could see a stale `ERROR` while another's `SENT` was
+  still uncommitted, clear the guard, and write afterwards.
+
+  Relevant now because AID-717 makes records in `ERROR` routine and this the main
+  recovery path; before it, a failed submission rolled back and left almost
+  nothing to retry.
+
+### Fixed
+
+- **Tags now build a pipeline** (AID-732). `workflow.rules` covered only
+  `merge_request_event` and the default branch. A GitLab tag pipeline is neither
+  — it has no `CI_COMMIT_BRANCH` — so tagging created no pipeline at all, and the
+  artefact reaching consumers through Packagist was the one commit that had
+  passed neither the engine matrix, nor the AID-710 concurrency gate, nor PHPStan,
+  nor the tests. Packagist stable versions are immutable, so this could not be
+  corrected after the fact by re-tagging. It became load-bearing in this same
+  batch, which retired the GitHub Actions workflows: no other net was left.
+
 The first two entries changed no runtime behaviour: that work left `src/`
-untouched. The third one does, as its own note says.
+untouched. The rest do, as their own notes say.
 
 ### Fixed
 

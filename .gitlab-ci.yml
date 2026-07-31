@@ -60,10 +60,23 @@ variables:
   COMPOSER_PROCESS_TIMEOUT: "0"
   GIT_DEPTH: "20"
 
+# Tres contextos, y el tercero es el que se publica.
+#
+# Un pipeline de tag NO es `merge_request_event` y NO tiene `CI_COMMIT_BRANCH`,
+# así que sin la tercera regla taggear no creaba pipeline alguno (AID-732). Eso
+# importa más aquí que en otros repos: lo que llega a los consumidores por
+# Packagist es el tag, las versiones estables son inmutables y no se reescriben,
+# y en este mismo lote se retiraron los workflows de GitHub Actions — no quedaba
+# ninguna otra red. El artefacto publicado era exactamente el único commit que
+# no había pasado por la matriz de motores, el gate de concurrencia de AID-710,
+# PHPStan ni los tests que el README y el CHANGELOG anuncian.
+#
+# Ningún job declara `rules` propias, así que los diez corren también en tag.
 workflow:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG
 
 # Paquete: sin composer.lock versionado → `composer update`, como en GitHub.
 .php:

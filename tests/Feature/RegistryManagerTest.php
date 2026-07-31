@@ -118,8 +118,10 @@ describe('verifyBlockchain', function () {
         it('returns invalid when chain is broken', function () {
             $registry = $this->registryManager->createRegistry(Invoice::factory()->create());
 
-            // Corrupt the stored hash so the next registry's previous_hash won't match.
-            $registry->update(['hash' => strtoupper(hash('sha256', 'tampered'))]);
+            // Corrupt the stored hash so the next registry's previous_hash won't
+            // match. Written straight to the table: since AID-730 the integrity
+            // attributes are out of $fillable, so update() no longer reaches them.
+            tamperRegistryColumns($registry->getKey(), ['hash' => strtoupper(hash('sha256', 'tampered'))]);
 
             $this->registryManager->createRegistry(Invoice::factory()->create());
 
@@ -339,12 +341,36 @@ describe('markAsRejected', function () {
 // ========================================
 
 describe('submitToAeat outcome routing', function () {
+    beforeEach(function () {
+        config()->set('verifactu.company.tax_id', '89890001K');
+        config()->set('verifactu.company.name', 'Empresa Ejemplo SL');
+        config()->set('verifactu.system.vendor_name', 'AichaDigital SL');
+        config()->set('verifactu.system.vendor_nif', 'B70123456');
+        config()->set('verifactu.system.name', 'LaraVerifactu');
+        config()->set('verifactu.system.id', 'LV');
+        config()->set('verifactu.system.version', '1.0');
+        config()->set('verifactu.system.installation_number', '1');
+
+        $qrGenerator = Mockery::mock(QrGeneratorContract::class);
+        $qrGenerator->shouldReceive('generateUrl')->andReturn('https://example.test/qr');
+        $qrGenerator->shouldReceive('generateSvg')->andReturn('<svg/>');
+        $qrGenerator->shouldReceive('generatePng')->andReturn('png-binary');
+
+        // Real collaborators, same pattern as the «with real XmlBuilder» group:
+        // since AID-730 a submission needs a payload that genuinely matches its
+        // stored hash, which only the real generator and builder produce.
+        $this->registryManager = new RegistryManager(
+            new HashGenerator,
+            $qrGenerator,
+            new XmlBuilder,
+        );
+    });
+
     it('routes a validation rejection to REJECTED, not ERROR', function () {
-        $invoice = Invoice::factory()->create();
-        $registry = Registry::factory()->create([
-            'invoice_id' => $invoice->id,
-            'status' => RegistryStatusEnum::PENDING->value,
-        ]);
+        // Built through createRegistry(), not the factory: since AID-730 a
+        // submission is refused unless the payload still matches the stored
+        // hash, and a factory row pairs an arbitrary hash with an arbitrary XML.
+        $registry = $this->registryManager->createRegistry(Invoice::factory()->create());
 
         $aeatClient = Mockery::mock(AeatClientContract::class);
         $aeatClient->shouldReceive('sendRegistration')->andReturn(
@@ -369,11 +395,8 @@ describe('submitToAeat outcome routing', function () {
     });
 
     it('routes a transport failure to ERROR', function () {
-        $invoice = Invoice::factory()->create();
-        $registry = Registry::factory()->create([
-            'invoice_id' => $invoice->id,
-            'status' => RegistryStatusEnum::PENDING->value,
-        ]);
+        // Same reason as above (AID-730).
+        $registry = $this->registryManager->createRegistry(Invoice::factory()->create());
 
         $aeatClient = Mockery::mock(AeatClientContract::class);
         $aeatClient->shouldReceive('sendRegistration')->andReturn(
