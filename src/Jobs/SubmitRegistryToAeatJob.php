@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace AichaDigital\LaraVerifactu\Jobs;
 
-use AichaDigital\LaraVerifactu\Enums\RegistryStatusEnum;
 use AichaDigital\LaraVerifactu\Exceptions\AeatException;
 use AichaDigital\LaraVerifactu\Models\Registry;
 use AichaDigital\LaraVerifactu\Services\InvoiceRegistrar;
@@ -66,10 +65,11 @@ class SubmitRegistryToAeatJob implements ShouldQueue
             return;
         }
 
-        // Idempotency check: skip if already sent successfully
-        if ($registry->status === RegistryStatusEnum::SENT) {
+        // Idempotency check: skip if the agency already holds it — SENT, or
+        // ACCEPTED via a duplicate answer (AID-727).
+        if ($registry->status->isFiledAtAeat()) {
             Log::channel(config('verifactu.logging.channel', 'single'))
-                ->debug('Registry already sent, skipping job', [
+                ->debug('Registry already filed at AEAT, skipping job', [
                     'registry_id' => $this->registryId,
                     'registry_number' => $registry->registry_number,
                     'csv' => $registry->aeat_csv,

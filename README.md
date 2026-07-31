@@ -222,12 +222,16 @@ the bundled `Invoice` model (native mode) is optional. See
 > cancelled and queried through the facade (`register`/`cancel`/`status`).
 >
 > **Still native-only:** the `verifactu:register` artisan command (single-ID
-> and `--all`), `ProcessInvoiceRegistrationJob`, `verifactu:retry-failed` and
-> `verifactu:status` resolve/query the native `Invoice` Eloquent model
-> directly and don't go through the config binding — use the facade
-> programmatically for a custom model instead of those entry points. A
-> non-integer/string invoice primary key is also not supported
-> (`InvoiceContract::getId(): ?int` and `invoice_id` are int-only).
+> and `--all`), `ProcessInvoiceRegistrationJob` and `verifactu:status`
+> resolve/query the native `Invoice` Eloquent model directly and don't go
+> through the config binding — use the facade programmatically for a
+> custom model instead of those entry points. A non-integer/string invoice
+> primary key is also not supported (`InvoiceContract::getId(): ?int` and
+> `invoice_id` are int-only).
+>
+> **Already model-agnostic:** `verifactu:retry-failed` never touches the
+> `Invoice` model — it retries pending `Registry` submissions directly, so
+> it works the same way regardless of which invoice model registered them.
 
 ## Architecture notes
 

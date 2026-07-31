@@ -6,6 +6,7 @@ namespace AichaDigital\LaraVerifactu\Commands;
 
 use AichaDigital\LaraVerifactu\Services\InvoiceRegistrar;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * Retry Failed Registries Command
@@ -30,6 +31,36 @@ class RetryFailedCommand extends Command
      * Execute the console command.
      */
     public function handle(InvoiceRegistrar $registrar): int
+    {
+        // Never run two of these at once (AID-731). Candidate selection neither
+        // claims nor locks, so two overlapping runs would hand the same record
+        // to both and race to write its outcome. Since AID-717 there are
+        // routinely records in ERROR to retry and this is the main recovery
+        // path, so a short schedule interval makes the overlap real rather than
+        // theoretical.
+        //
+        // A cache lock rather than the scheduler's withoutOverlapping(): the
+        // consumer decides how this command is scheduled, and the package must
+        // protect itself either way.
+        $lock = Cache::lock('verifactu:retry-failed', (int) config('verifactu.lock.timeout', 300));
+
+        if (! $lock->get()) {
+            $this->warn('Another verifactu:retry-failed run is still in progress — skipping.');
+
+            return self::SUCCESS;
+        }
+
+        try {
+            return $this->retry($registrar);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    /**
+     * Run the retry pass. Always called while holding the overlap lock.
+     */
+    private function retry(InvoiceRegistrar $registrar): int
     {
         $maxAttempts = (int) $this->option('max-attempts');
         $limit = (int) $this->option('limit');

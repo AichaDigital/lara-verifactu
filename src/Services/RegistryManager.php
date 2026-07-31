@@ -21,6 +21,7 @@ use AichaDigital\LaraVerifactu\Support\RegistryChain;
 use Carbon\Carbon;
 use DOMDocument;
 use DOMXPath;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -61,6 +62,11 @@ final class RegistryManager
             // Serialize concurrent chain writes before reading the head (AID-258).
             $this->acquireChainLock();
 
+            // One invoice, one root registration (AID-726). Deliberately INSIDE
+            // the lock: checked before it, two concurrent callers would clear
+            // the same check and both insert.
+            $this->assertNoRootRegistration($invoice, $circumstances);
+
             // Get previous registry for blockchain chaining
             $previousRegistry = $this->getPreviousRegistry();
             $previousHash = $previousRegistry?->hash;
@@ -78,12 +84,7 @@ final class RegistryManager
             $chain = new RegistryChain(
                 hash: $hash,
                 generatedAt: $generatedAt,
-                previous: $previousRegistry !== null ? new PreviousRegistry(
-                    issuerTaxId: $previousRegistry->invoice->getIssuerTaxId(),
-                    invoiceNumber: $previousRegistry->invoice->getInvoiceNumber(),
-                    issueDate: $previousRegistry->invoice->getIssueDatetime(),
-                    hash: $previousRegistry->hash,
-                ) : null,
+                previous: $this->describePrevious($previousRegistry),
             );
 
             $xml = $this->xmlBuilder->buildRegistrationXml($invoice, $chain, $circumstances);
@@ -93,8 +94,11 @@ final class RegistryManager
             $qrSvg = $this->qrGenerator->generateSvg($invoice);
             $qrPng = $this->qrGenerator->generatePng($invoice);
 
-            // Create registry
-            $registry = Registry::create([
+            // Create registry. The integrity attributes are forceFill'd: they
+            // are out of $fillable on purpose (AID-730), so this generator is
+            // the only thing that writes them.
+            $registry = new Registry;
+            $registry->forceFill([
                 'invoice_id' => $invoice->getId(),
                 'registry_number' => $registryNumber,
                 'registry_date' => Carbon::now(),
@@ -110,7 +114,7 @@ final class RegistryManager
                 'xml' => $xml,
                 'status' => RegistryStatusEnum::PENDING->value,
                 'submission_attempts' => 0,
-            ]);
+            ])->save();
 
             // Dispatch event
             event(new RegistryCreatedEvent($registry, $invoice));
@@ -133,6 +137,10 @@ final class RegistryManager
         return DB::transaction(function () use ($invoice) {
             // Serialize concurrent chain writes before reading the head (AID-258).
             $this->acquireChainLock();
+
+            // One invoice, one cancellation (AID-726). Same reason as in
+            // createRegistry() for living inside the lock.
+            $this->assertNoCancellation($invoice);
 
             $previousRegistry = $this->getPreviousRegistry();
             $previousHash = $previousRegistry?->hash;
@@ -157,17 +165,14 @@ final class RegistryManager
             $chain = new RegistryChain(
                 hash: $hash,
                 generatedAt: $generatedAt,
-                previous: $previousRegistry !== null ? new PreviousRegistry(
-                    issuerTaxId: $previousRegistry->invoice->getIssuerTaxId(),
-                    invoiceNumber: $previousRegistry->invoice->getInvoiceNumber(),
-                    issueDate: $previousRegistry->invoice->getIssueDatetime(),
-                    hash: $previousRegistry->hash,
-                ) : null,
+                previous: $this->describePrevious($previousRegistry),
             );
 
             $xml = $this->xmlBuilder->buildCancellationXml($record, $chain);
 
-            $registry = Registry::create([
+            // forceFill for the same reason as createRegistry() (AID-730).
+            $registry = new Registry;
+            $registry->forceFill([
                 'invoice_id' => $invoice->getId(),
                 'registry_number' => $registryNumber,
                 'registry_date' => Carbon::now(),
@@ -178,7 +183,7 @@ final class RegistryManager
                 'xml' => $xml,
                 'status' => RegistryStatusEnum::PENDING->value,
                 'submission_attempts' => 0,
-            ]);
+            ])->save();
 
             event(new RegistryCreatedEvent($registry, $invoice));
 
@@ -204,11 +209,155 @@ final class RegistryManager
     }
 
     /**
+     * Describe the previous link for the chain data of the record being built.
+     *
+     * Resolves the previous record's invoice INCLUDING soft-deleted ones. Since
+     * AID-728 the chain links over what existed, so the previous link may well
+     * be one whose invoice was deleted — Invoice::delete() cascades to its
+     * registries, so the pair goes together. Without this, building the next
+     * record died on a null invoice.
+     *
+     * The consumer's invoice model is configurable (AID-344) and need not use
+     * SoftDeletes, so the scope is only lifted when it actually applies.
+     */
+    private function describePrevious(?Registry $previousRegistry): ?PreviousRegistry
+    {
+        if ($previousRegistry === null) {
+            return null;
+        }
+
+        $relation = $previousRegistry->invoice();
+        $usesSoftDeletes = in_array(
+            SoftDeletes::class,
+            class_uses_recursive($relation->getRelated()),
+            true,
+        );
+
+        $invoice = $usesSoftDeletes
+            ? $relation->withTrashed()->first()
+            : $relation->first();
+
+        if (! $invoice instanceof InvoiceContract) {
+            throw VerifactuException::make(sprintf(
+                'Cannot chain over registry %s: its invoice (id %s) is missing, so the '
+                . 'previous link cannot be described. The chain requires every link it '
+                . 'builds upon to remain resolvable.',
+                $previousRegistry->registry_number,
+                (string) $previousRegistry->invoice_id,
+            ));
+        }
+
+        return new PreviousRegistry(
+            issuerTaxId: $invoice->getIssuerTaxId(),
+            invoiceNumber: $invoice->getInvoiceNumber(),
+            issueDate: $invoice->getIssueDatetime(),
+            hash: $previousRegistry->hash,
+        );
+    }
+
+    /**
+     * Refuse a second root registration for an invoice (AID-726).
+     *
+     * Nothing used to stop one: no unique on invoice_id, and the unique on
+     * `hash` does not help because the hash includes the generation timestamp,
+     * so two attempts hash differently and both go in. The reachable sequence,
+     * opened by AID-717: submit → timeout → the record survives in ERROR → the
+     * operator re-runs `verifactu:register`, which is the natural thing to do →
+     * a second chain link, with a new timestamp, hash and XML, for an invoice
+     * the agency may already have on file.
+     *
+     * A «subsanación» is the ONE legitimate second registration (AID-137), and
+     * it is identified by its circumstances, not by amends_registry_id: that
+     * column is still null at this point, because amendRejected() creates the
+     * row first and links it afterwards.
+     *
+     * withTrashed() on purpose: the chain links over what EXISTED (AID-728), so
+     * a soft-deleted root still holds its place. This mirrors Guard 5 of
+     * amendRejected(), which already reasons over trashed rows.
+     *
+     * No UNIQUE index backs this up, deliberately. UNIQUE(invoice_id,
+     * registry_type) would break amendRejected's legitimate second row, and a
+     * constraint invalidating already-persisted consumer data is a MAJOR under
+     * VERSIONING.md — outside the authorised 1.x line.
+     *
+     * @throws VerifactuException
+     */
+    private function assertNoRootRegistration(
+        InvoiceContract $invoice,
+        ?RegistrationCircumstances $circumstances
+    ): void {
+        if ($circumstances?->subsanacion === true) {
+            return;
+        }
+
+        $existing = Registry::withTrashed()
+            ->where('invoice_id', $invoice->getId())
+            ->where('registry_type', RegistryTypeEnum::REGISTRATION->value)
+            ->orderBy('id')
+            ->first();
+
+        if ($existing === null) {
+            return;
+        }
+
+        throw VerifactuException::make(sprintf(
+            'Invoice %s already has a registration (%s, status %s). Creating another would '
+            . 'add a second chain link for one invoice, with a different hash and XML from the '
+            . 'one already filed. To re-send the existing record use `verifactu:retry-failed`; '
+            . 'to correct a rejected one use amendRejected().',
+            (string) $invoice->getId(),
+            $existing->registry_number,
+            $existing->status->value,
+        ));
+    }
+
+    /**
+     * Refuse a second cancellation for an invoice (AID-726).
+     *
+     * Same reasoning as assertNoRootRegistration(): an anulación is a chain link
+     * of its own, so issuing two for one invoice forks the record just as a
+     * double alta does. There is no «subsanación» equivalent here.
+     *
+     * @throws VerifactuException
+     */
+    private function assertNoCancellation(InvoiceContract $invoice): void
+    {
+        $existing = Registry::withTrashed()
+            ->where('invoice_id', $invoice->getId())
+            ->where('registry_type', RegistryTypeEnum::CANCELLATION->value)
+            ->orderBy('id')
+            ->first();
+
+        if ($existing === null) {
+            return;
+        }
+
+        throw VerifactuException::make(sprintf(
+            'Invoice %s already has a cancellation (%s, status %s). To re-send it use '
+            . '`verifactu:retry-failed`.',
+            (string) $invoice->getId(),
+            $existing->registry_number,
+            $existing->status->value,
+        ));
+    }
+
+    /**
      * Get the previous registry in the chain, or null if this is the first.
+     *
+     * withTrashed() is load-bearing (AID-728). Registry uses SoftDeletes, so
+     * without it a deleted head is invisible here and the next record chains
+     * against the one BEFORE it — leaving two records declaring the same
+     * predecessor. That is a fork, the one state the VeriFactu chain exists to
+     * make impossible, and it happened silently: verifyBlockchain() excluded the
+     * deleted rows too, so it walked a chain that looked linear and reported
+     * valid.
+     *
+     * The chain links over what EXISTED, not over what is still visible.
      */
     public function getPreviousRegistry(): ?Registry
     {
-        return Registry::orderBy('registry_date', 'desc')
+        return Registry::withTrashed()
+            ->orderBy('registry_date', 'desc')
             ->orderBy('id', 'desc')
             ->first();
     }
@@ -233,13 +382,33 @@ final class RegistryManager
     public function verifyBlockchain(): array
     {
         $errors = [];
-        $registries = Registry::orderBy('registry_date', 'asc')
+
+        // withTrashed(), for the same reason as getPreviousRegistry() (AID-728):
+        // the chain is built over every link that ever existed. Excluding the
+        // deleted ones made the remaining links look like a well-formed chain
+        // and returned valid — a compliance tool reporting green on a broken
+        // chain, which is the worst failure mode available to it.
+        $registries = Registry::withTrashed()
+            ->orderBy('registry_date', 'asc')
             ->orderBy('id', 'asc')
             ->get();
 
         $previousHash = null;
 
         foreach ($registries as $registry) {
+            // A deleted link is reported, not hidden. The record was declared to
+            // the tax agency and remains part of the chain; a local delete does
+            // not remove it from what was filed. Cancelling a record is what
+            // RegistroAnulacion is for.
+            if ($registry->deleted_at !== null) {
+                $errors[] = sprintf(
+                    'Registry %s is soft-deleted but remains part of the chain (deleted at %s). '
+                    . 'A filed link cannot be removed locally; use a cancellation record instead.',
+                    $registry->registry_number,
+                    $registry->deleted_at->toIso8601String(),
+                );
+            }
+
             // Check if previous hash matches
             if ($registry->previous_hash !== $previousHash) {
                 $errors[] = sprintf(
@@ -287,9 +456,9 @@ final class RegistryManager
      * missing node returns false (chain invalid). Covers RegistroAlta and
      * RegistroAnulacion (both had the mutable-invoice bug).
      */
-    private function verifyRegistryHash(Registry $registry): bool
+    private function verifyRegistryHash(Registry $registry, ?string $xmlOverride = null): bool
     {
-        $xml = $registry->xml;
+        $xml = $xmlOverride ?? $registry->xml;
 
         if ($xml === null || $xml === '') {
             return false;
@@ -389,6 +558,74 @@ final class RegistryManager
     }
 
     /**
+     * Re-read a registry under a row lock before deciding its outcome (AID-731).
+     *
+     * A plain refresh() reads the transaction's snapshot. Under REPEATABLE READ
+     * — the default on MySQL and MariaDB — that snapshot is fixed at the
+     * transaction's first read, so a worker could see a stale ERROR while
+     * another worker's SENT was still uncommitted, clear the guard, and write
+     * afterwards. lockForUpdate() reads the committed row and holds it for the
+     * rest of the transaction, which closes that window.
+     *
+     * Must be called inside the caller's transaction: outside one, the lock
+     * would be released immediately and buy nothing.
+     */
+    private function lockAndRefresh(Registry $registry): void
+    {
+        $locked = Registry::withTrashed()
+            ->whereKey($registry->getKey())
+            ->lockForUpdate()
+            ->first();
+
+        if ($locked !== null) {
+            $registry->setRawAttributes($locked->getAttributes(), sync: true);
+        }
+    }
+
+    /**
+     * Refuse to transmit a payload that no longer matches the stored hash
+     * (AID-730).
+     *
+     * AID-717 created a window that did not exist before: a failed submission
+     * now persists in ERROR and `verifactu:retry-failed` re-sends it later. That
+     * is sold, rightly, as re-sending THE SAME record — but sameness was
+     * guaranteed by the identity of the row, not by the immutability of its
+     * contents. If anything rewrites the XML between attempts, the retry
+     * presents the agency bytes different from those it may already have
+     * accepted, under the same registry number.
+     *
+     * Checked against the bytes that will actually leave — `signed_xml ?? xml`,
+     * the same expression AeatClient::sendRegistration() uses — not just the
+     * unsigned XML, or tampering with the signed copy would slip past.
+     *
+     * @throws VerifactuException
+     */
+    public function assertSubmissionPayloadIntact(Registry $registry): void
+    {
+        $payload = $registry->signed_xml ?? $registry->xml;
+
+        if ($payload === null || $payload === '') {
+            throw VerifactuException::make(sprintf(
+                'Registry %s has no XML to submit.',
+                $registry->registry_number,
+            ));
+        }
+
+        if ($this->verifyRegistryHash($registry, $payload)) {
+            return;
+        }
+
+        throw VerifactuException::make(sprintf(
+            'Registry %s will not be submitted: its XML no longer matches the stored hash %s. '
+            . 'The record was modified after its fingerprint was generated, so transmitting it '
+            . 'would present the agency different bytes under the same registry number. '
+            . 'Investigate what rewrote it; the chain link itself must not be edited.',
+            $registry->registry_number,
+            mb_substr($registry->hash, 0, 16) . '…',
+        ));
+    }
+
+    /**
      * Mark a registry as submitted to AEAT
      *
      * Uses atomic update with state verification to prevent
@@ -396,16 +633,17 @@ final class RegistryManager
      */
     public function markAsSubmitted(
         RegistryContract $registry,
-        string $aeatCsv,
+        ?string $aeatCsv,
         string $aeatResponse
     ): void {
         if ($registry instanceof Registry) {
             DB::transaction(function () use ($registry, $aeatCsv, $aeatResponse): void {
                 // Refresh to get latest state within transaction
-                $registry->refresh();
+                // Locked read: a plain refresh sees the REPEATABLE READ snapshot (AID-731).
+                $this->lockAndRefresh($registry);
 
-                // Only update if not already sent (idempotency)
-                if ($registry->status === RegistryStatusEnum::SENT) {
+                // Only update if the agency does not already hold it (idempotency)
+                if ($registry->status->isFiledAtAeat()) {
                     return;
                 }
 
@@ -415,6 +653,44 @@ final class RegistryManager
                 $registry->update([
                     'status' => RegistryStatusEnum::SENT->value,
                     'submitted_at' => Carbon::now(),
+                    'aeat_csv' => $aeatCsv,
+                    'aeat_response' => $aeatResponse,
+                    'submission_attempts' => $currentAttempts + 1,
+                ]);
+            });
+        }
+    }
+
+    /**
+     * Mark a registry as already filed at the agency (AID-727).
+     *
+     * Reached when AEAT answers «registro duplicado»: it holds this record, so
+     * the outcome is success, not refusal. ACCEPTED is final and non-retryable,
+     * which is what that means.
+     *
+     * The CSV stays null when the duplicate answer carries none — never '',
+     * which would collide on the UNIQUE index of `aeat_csv` for the second such
+     * record.
+     */
+    public function markAsAccepted(
+        RegistryContract $registry,
+        ?string $aeatCsv,
+        string $aeatResponse
+    ): void {
+        if ($registry instanceof Registry) {
+            DB::transaction(function () use ($registry, $aeatCsv, $aeatResponse): void {
+                // Locked read: a plain refresh sees the REPEATABLE READ snapshot (AID-731).
+                $this->lockAndRefresh($registry);
+
+                if ($registry->status->isFiledAtAeat()) {
+                    return;
+                }
+
+                $currentAttempts = $registry->submission_attempts ?? 0;
+
+                $registry->update([
+                    'status' => RegistryStatusEnum::ACCEPTED->value,
+                    'submitted_at' => $registry->submitted_at ?? Carbon::now(),
                     'aeat_csv' => $aeatCsv,
                     'aeat_response' => $aeatResponse,
                     'submission_attempts' => $currentAttempts + 1,
@@ -436,10 +712,15 @@ final class RegistryManager
         if ($registry instanceof Registry) {
             DB::transaction(function () use ($registry, $error): void {
                 // Refresh to get latest state within transaction
-                $registry->refresh();
+                // Locked read: a plain refresh sees the REPEATABLE READ snapshot (AID-731).
+                $this->lockAndRefresh($registry);
 
-                // Never overwrite SENT status with ERROR (idempotency)
-                if ($registry->status === RegistryStatusEnum::SENT) {
+                // Never overwrite an outcome the agency already produced with
+                // ERROR (idempotency). That includes REJECTED, which is a
+                // verdict and terminal: downgrading it to a retryable ERROR
+                // would make the package re-send something the agency refused
+                // on validation grounds (AID-729).
+                if ($registry->status->hasAgencyVerdict()) {
                     return;
                 }
 
@@ -469,9 +750,10 @@ final class RegistryManager
     ): void {
         if ($registry instanceof Registry) {
             DB::transaction(function () use ($registry, $error, $aeatResponse): void {
-                $registry->refresh();
+                // Locked read: a plain refresh sees the REPEATABLE READ snapshot (AID-731).
+                $this->lockAndRefresh($registry);
 
-                if ($registry->status === RegistryStatusEnum::SENT) {
+                if ($registry->status->isFiledAtAeat()) {
                     return;
                 }
 

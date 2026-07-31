@@ -211,6 +211,33 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Transaction Guard (AID-725)
+    |--------------------------------------------------------------------------
+    |
+    | Submitting to the AEAT from inside a transaction the CALLER opened is
+    | unsafe: a nested DB::transaction() is a SAVEPOINT, so the record is not
+    | durable when the submission leaves, and an outer rollback erases a record
+    | the agency already accepted. register()/cancel()/amendRejected() refuse
+    | that combination.
+    |
+    | This value is the nesting level the environment considers "not inside a
+    | caller's transaction".
+    |
+    | In production it is ALWAYS 0. Raise it to 1 ONLY in a test harness that
+    | wraps every test in a transaction of its own (Laravel's RefreshDatabase
+    | does): there, level 1 belongs to the harness, not to a caller, and leaving
+    | this at 0 would make every test that submits fail for the wrong reason.
+    | It is not a way to opt out of the guard — at any baseline, a transaction
+    | the caller opens is still one level above it, and still refused.
+    |
+    */
+
+    'transaction_guard' => [
+        'baseline_level' => env('VERIFACTU_TRANSACTION_BASELINE_LEVEL', 0),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Retry Configuration (v2.0)
     |--------------------------------------------------------------------------
     |

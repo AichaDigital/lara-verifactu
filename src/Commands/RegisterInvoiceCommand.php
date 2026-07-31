@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AichaDigital\LaraVerifactu\Commands;
 
+use AichaDigital\LaraVerifactu\Exceptions\VerifactuException;
 use AichaDigital\LaraVerifactu\Models\Invoice;
 use AichaDigital\LaraVerifactu\Services\InvoiceRegistrar;
 use Illuminate\Console\Command;
@@ -89,6 +90,14 @@ class RegisterInvoiceCommand extends Command
             );
 
             return self::SUCCESS;
+        } catch (VerifactuException $e) {
+            // Chiefly the AID-726 idempotency guard. Re-running this command
+            // after a submission timed out is the natural operator reflex, and
+            // the message says where to go instead — surface it as an
+            // actionable notice, not as a generic failure.
+            $this->error("✗ {$e->getMessage()}");
+
+            return self::FAILURE;
         } catch (\Throwable $e) {
             $this->error("✗ Failed to register invoice: {$e->getMessage()}");
 

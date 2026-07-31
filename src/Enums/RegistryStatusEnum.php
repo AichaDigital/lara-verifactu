@@ -38,6 +38,33 @@ enum RegistryStatusEnum: string
         return $this === self::ACCEPTED;
     }
 
+    /**
+     * The agency holds this record as filed — do not submit it again (AID-727).
+     *
+     * SENT is our own acknowledgement of a successful submission; ACCEPTED is
+     * reached when AEAT answers «registro duplicado», i.e. it already had it.
+     * Every idempotency guard must treat both alike: recognising only SENT would
+     * re-send a record the agency already holds.
+     */
+    public function isFiledAtAeat(): bool
+    {
+        return in_array($this, [self::SENT, self::ACCEPTED], true);
+    }
+
+    /**
+     * The agency has already ruled on this record — never overwrite it with a
+     * local failure (AID-729).
+     *
+     * Wider than isFiledAtAeat(): a REJECTED record is a verdict too. It is
+     * terminal, since getRetryableRegistries() selects only ERROR, so
+     * downgrading it to ERROR would make the package retry something the agency
+     * refused on validation grounds.
+     */
+    public function hasAgencyVerdict(): bool
+    {
+        return in_array($this, [self::SENT, self::ACCEPTED, self::REJECTED], true);
+    }
+
     public function canRetry(): bool
     {
         // REJECTED is a validation outcome (AID-257), not a transport retry.

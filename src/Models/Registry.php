@@ -64,6 +64,15 @@ class Registry extends Model implements RegistryContract
     /**
      * The attributes that are mass assignable.
      *
+     * The chain's integrity attributes are deliberately ABSENT (AID-730):
+     * `hash`, `previous_hash`, `hash_generated_at`, `xml` and `signed_xml`.
+     * They are written only by the code that generates them, via forceFill().
+     *
+     * They used to be here, so any consumer `update()`, observer or data
+     * backfill could rewrite them without resistance — and since AID-717 opened
+     * a window between submission attempts, a rewritten XML meant a retry
+     * presenting the agency different bytes under the same registry number.
+     *
      * @var list<string>
      */
     protected $fillable = [
@@ -74,14 +83,9 @@ class Registry extends Model implements RegistryContract
         'subsanacion',
         'rechazo_previo',
         'amends_registry_id',
-        'hash',
-        'previous_hash',
-        'hash_generated_at',
         'qr_url',
         'qr_svg',
         'qr_png',
-        'xml',
-        'signed_xml',
         'status',
         'submitted_at',
         'aeat_csv',

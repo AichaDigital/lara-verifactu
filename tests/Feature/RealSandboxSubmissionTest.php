@@ -10,6 +10,7 @@ use AichaDigital\LaraVerifactu\Enums\RegistryStatusEnum;
 use AichaDigital\LaraVerifactu\Models\Invoice;
 use AichaDigital\LaraVerifactu\Models\InvoiceBreakdown;
 use AichaDigital\LaraVerifactu\Services\InvoiceRegistrar;
+use Carbon\CarbonInterface;
 
 /**
  * REAL submission against the AEAT external testing environment (sandbox).
@@ -57,6 +58,44 @@ function createSandboxInvoice(): Invoice
         'tax_amount' => 2.10,
         'total_amount' => 12.10,
         'description' => 'Prueba de integracion lara-verifactu',
+    ]);
+
+    InvoiceBreakdown::factory()->create([
+        'invoice_id' => $invoice->id,
+        'tax_rate' => 21.00,
+        'base_amount' => 10.00,
+        'tax_amount' => 2.10,
+        'exempt' => false,
+    ]);
+
+    return $invoice->refresh();
+}
+
+/**
+ * A sandbox invoice with an EXPLICIT fiscal identity.
+ *
+ * The agency keys a registro de facturación on IDFactura — issuer + number +
+ * issue date (FAQs-Desarrolladores.pdf §6) — not on our primary key. Calling
+ * this twice with the same arguments yields two distinct invoice rows that AEAT
+ * sees as the same record, which is the only way to reach the duplicate path
+ * without disabling the AID-726 guard (scoped per invoice_id).
+ */
+function createSandboxTwinInvoice(string $number, CarbonInterface $issuedAt): Invoice
+{
+    $invoice = Invoice::factory()->withoutBreakdowns()->create([
+        'serie' => null,
+        'number' => $number,
+        'issue_datetime' => $issuedAt,
+        'type' => InvoiceTypeEnum::SIMPLIFIED, // F2: no recipient validation
+        'recipient_nif' => null,
+        'recipient_id_type' => null,
+        'recipient_id' => null,
+        'recipient_name' => null,
+        'recipient_country' => null,
+        'base_amount' => 10.00,
+        'tax_amount' => 2.10,
+        'total_amount' => 12.10,
+        'description' => 'Prueba de duplicado lara-verifactu',
     ]);
 
     InvoiceBreakdown::factory()->create([
@@ -418,4 +457,76 @@ it('submits a real intra-EU B2B service (N2 + IDOtro 02) to the AEAT sandbox (AI
 
     expect($registry->status)->toBe(RegistryStatusEnum::SENT)
         ->and($registry->aeat_csv)->not->toBeNull();
+})->skip(! $certificateAvailable, 'Real AEAT sandbox certificate not available');
+
+it('provokes a real «registro duplicado» and records the EstadoRegistroDuplicado the agency returns (AID-727)', function () {
+    $number = 'DUP-' . now()->format('YmdHis') . '-' . strtoupper(substr(uniqid(), -5));
+    $issuedAt = now();
+    $registrar = app(InvoiceRegistrar::class);
+
+    // First filing: the agency takes it and answers with a CSV.
+    $first = $registrar
+        ->register(createSandboxTwinInvoice($number, $issuedAt), submitToAeat: true)
+        ->refresh();
+
+    expect($first->status)->toBe(RegistryStatusEnum::SENT)
+        ->and($first->aeat_csv)->not->toBeNull();
+
+    // Second filing of the SAME IDFactura from a different invoice row. This is
+    // the answer AID-727 reasons over, and the value of EstadoRegistroDuplicado
+    // decides whether we reconcile or keep retrying a record already on file.
+    $second = $registrar
+        ->register(createSandboxTwinInvoice($number, $issuedAt), submitToAeat: true)
+        ->refresh();
+
+    $lines = $second->aeat_response['lineas'] ?? [];
+
+    dump([
+        'first_status' => $first->status->value,
+        'first_csv' => $first->aeat_csv,
+        'second_status' => $second->status->value,
+        'second_error' => $second->aeat_error,
+        'second_lines' => $lines,
+    ]);
+
+    // The agency must have answered with the duplicate block, and its state must
+    // be one of the three values of list L21 (Veri-Factu_Descripcion_SWeb.pdf,
+    // v1.0.3, p. 43): Correcta | AceptadaConErrores | Anulada.
+    expect($lines)->not->toBeEmpty();
+
+    foreach ($lines as $line) {
+        expect($line['registro_duplicado'])->toBeTrue()
+            ->and($line['registro_duplicado_estado'])
+            ->toBeIn(['Correcta', 'AceptadaConErrores', 'Anulada']);
+    }
+})->skip(! $certificateAvailable, 'Real AEAT sandbox certificate not available');
+
+it('records the EstadoRegistroDuplicado of a previously ANNULLED record (FAQ §6 recipe, AID-727)', function () {
+    $number = 'ANU-' . now()->format('YmdHis') . '-' . strtoupper(substr(uniqid(), -5));
+    $issuedAt = now();
+    $registrar = app(InvoiceRegistrar::class);
+
+    // Alta, then anulación of that same invoice. FAQs-Desarrolladores.pdf §6:
+    // once a cancellation is filed, an alta reusing the number is refused as
+    // duplicate — the case that must NOT reconcile, because what the agency
+    // holds is an annulled record, not ours.
+    $invoice = createSandboxTwinInvoice($number, $issuedAt);
+    $registration = $registrar->register($invoice, submitToAeat: true)->refresh();
+    expect($registration->status)->toBe(RegistryStatusEnum::SENT);
+
+    $cancellation = $registrar->cancel($invoice, submitToAeat: true)->refresh();
+    expect($cancellation->status)->toBe(RegistryStatusEnum::SENT);
+
+    $retry = $registrar
+        ->register(createSandboxTwinInvoice($number, $issuedAt), submitToAeat: true)
+        ->refresh();
+
+    dump([
+        'registration_csv' => $registration->aeat_csv,
+        'registration_response' => $registration->aeat_response,
+        'cancellation_csv' => $cancellation->aeat_csv,
+        'retry_status' => $retry->status->value,
+        'retry_error' => $retry->aeat_error,
+        'retry_lines' => $retry->aeat_response['lineas'] ?? [],
+    ]);
 })->skip(! $certificateAvailable, 'Real AEAT sandbox certificate not available');

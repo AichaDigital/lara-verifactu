@@ -74,7 +74,11 @@ it('detects tampering when a persisted hash no longer matches the chain data', f
 
     testTime()->addHours(1);
 
-    $registry->update(['hash' => strtoupper(hash('sha256', 'tampered'))]);
+    // Written straight to the table. Since AID-730 the integrity attributes are
+    // out of $fillable, so update() no longer reaches them — which is the point.
+    // Tampering is still simulated the way it would really arrive: a backfill,
+    // a migration, a hand-run query.
+    tamperRegistryColumns($registry->getKey(), ['hash' => strtoupper(hash('sha256', 'tampered'))]);
 
     $result = $this->registryManager->verifyBlockchain();
 
@@ -88,7 +92,7 @@ it('fails verification when the persisted XML is missing', function () {
 
     // Empty the XML the verify path depends on (simulating corruption).
     // The xml column is NOT NULL so we use '' rather than null.
-    $registry->update(['xml' => '']);
+    tamperRegistryColumns($registry->getKey(), ['xml' => '']);
 
     $result = $this->registryManager->verifyBlockchain();
 
@@ -100,7 +104,7 @@ it('fails verification when the persisted XML is unparseable', function () {
     $invoice = Invoice::factory()->create();
     $registry = $this->registryManager->createRegistry($invoice);
 
-    $registry->update(['xml' => 'not-xml <<<']);
+    tamperRegistryColumns($registry->getKey(), ['xml' => 'not-xml <<<']);
 
     $result = $this->registryManager->verifyBlockchain();
 

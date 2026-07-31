@@ -234,9 +234,10 @@ Verifactu::register($rectification);
 > `verifactu_invoices` is gone — a genuinely external model (any table,
 > integer PK) registers, cancels and reports status correctly through the
 > facade. **Still native-only:** `verifactu:register`,
-> `ProcessInvoiceRegistrationJob`, `verifactu:retry-failed`,
-> `verifactu:status` — those resolve/query the native `Invoice` Eloquent
-> model directly, not the config binding.
+> `ProcessInvoiceRegistrationJob`, `verifactu:status` — those resolve/query
+> the native `Invoice` Eloquent model directly, not the config binding.
+> `verifactu:retry-failed` is already model-agnostic — it never queries
+> `Invoice`, only pending `Registry` submissions.
 >
 > The sketch below shows the *shape* of an `InvoiceContract` implementation —
 > it deliberately implements only a handful of representative methods for

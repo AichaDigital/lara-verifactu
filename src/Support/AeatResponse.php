@@ -10,6 +10,7 @@ class AeatResponse
      * @param  array<string, mixed>|null  $data
      * @param  array<int, string>|null  $errors
      * @param  bool  $rejection  True when AEAT semantically rejected the submission (EstadoEnvio/EstadoRegistro=Incorrecto), as opposed to a transport failure.
+     * @param  bool  $duplicate  True when AEAT answered «registro duplicado»: it already holds this record as filed (AID-727).
      */
     public function __construct(
         protected bool $success,
@@ -18,6 +19,7 @@ class AeatResponse
         protected ?array $data = null,
         protected ?array $errors = null,
         protected bool $rejection = false,
+        protected bool $duplicate = false,
     ) {}
 
     public function isSuccess(): bool
@@ -33,6 +35,16 @@ class AeatResponse
     public function isValidationRejection(): bool
     {
         return $this->rejection;
+    }
+
+    /**
+     * AEAT answered «registro duplicado»: it already holds this record as filed
+     * (AID-727). Not a rejection — the expected answer when a submission was
+     * accepted and its response lost to a timeout.
+     */
+    public function isDuplicate(): bool
+    {
+        return $this->duplicate;
     }
 
     public function getCode(): ?string
@@ -94,6 +106,7 @@ class AeatResponse
             'data' => $this->data,
             'errors' => $this->errors,
             'rejection' => $this->rejection,
+            'duplicate' => $this->duplicate,
         ];
     }
 
@@ -137,6 +150,33 @@ class AeatResponse
             data: $data,
             errors: $errors,
             rejection: true,
+        );
+    }
+
+    /**
+     * AEAT already holds this record as filed («registro duplicado», AID-727).
+     *
+     * Reported as a SUCCESS: the submission's purpose — the record being filed
+     * at the agency — is met. The CSV stays null when the answer carries none;
+     * never '', which would collide on the UNIQUE index of `aeat_csv` for the
+     * second record without one.
+     *
+     * @param  array<int, string>|null  $errors
+     * @param  array<string, mixed>|null  $data
+     */
+    public static function duplicate(
+        ?string $csv = null,
+        ?string $message = null,
+        ?array $data = null,
+        ?array $errors = null,
+    ): self {
+        return new self(
+            success: true,
+            code: $csv,
+            message: $message,
+            data: $data,
+            errors: $errors,
+            duplicate: true,
         );
     }
 }
