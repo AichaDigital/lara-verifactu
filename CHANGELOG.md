@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-07-31
+
 ### Changed
 
 - The fork-based proof that the fingerprint chain cannot be forked under
@@ -886,7 +888,8 @@ This release introduces **critical fiscal compliance features** required for pro
 - **PHPStan: Level 8 ✅ (12 legitimate framework false positives baselined)**
 - **Code Style: PSR-12 ✅**
 
-[Unreleased]: https://github.com/aichadigital/lara-verifactu/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/aichadigital/lara-verifactu/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/aichadigital/lara-verifactu/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/aichadigital/lara-verifactu/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/aichadigital/lara-verifactu/compare/v1.0.0-rc2...v1.0.0
 [1.0.0-rc2]: https://github.com/aichadigital/lara-verifactu/compare/v1.0.0-rc1...v1.0.0-rc2
