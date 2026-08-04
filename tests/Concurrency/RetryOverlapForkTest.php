@@ -112,27 +112,30 @@ function verifactuRetryForkCount(): int
  * real. Each call appends a line, so the file IS the count of transmissions —
  * the fiscal harm, observed directly rather than inferred from a counter.
  */
-final class RecordingAeatClient implements AeatClientContract
+function verifactuRecordingClient(string $callLog): AeatClientContract
 {
-    public function __construct(private string $callLog) {}
-
-    public function sendRegistration(RegistryContract $registry): AeatResponse
+    return new class($callLog) implements AeatClientContract
     {
-        file_put_contents(
-            $this->callLog,
-            getmypid() . ':' . $registry->getRegistryNumber() . PHP_EOL,
-            FILE_APPEND | LOCK_EX,
-        );
+        public function __construct(private string $callLog) {}
 
-        usleep(400_000);
+        public function sendRegistration(RegistryContract $registry): AeatResponse
+        {
+            file_put_contents(
+                $this->callLog,
+                getmypid() . ':' . $registry->getRegistryNumber() . PHP_EOL,
+                FILE_APPEND | LOCK_EX,
+            );
 
-        return new AeatResponse(success: true, code: 'CSV-' . getmypid(), message: 'Correcto');
-    }
+            usleep(400_000);
 
-    public function sendBatch(Collection $registries): Collection
-    {
-        return $registries->map(fn (RegistryContract $r) => $this->sendRegistration($r));
-    }
+            return new AeatResponse(success: true, code: 'CSV-' . getmypid(), message: 'Correcto');
+        }
+
+        public function sendBatch(Collection $registries): Collection
+        {
+            return $registries->map(fn (RegistryContract $r) => $this->sendRegistration($r));
+        }
+    };
 }
 
 /**
@@ -210,7 +213,7 @@ it('never transmits one record twice when retry passes overlap', function () {
     $qrGenerator->shouldReceive('generatePng')->andReturn('png-binary');
     app()->instance(QrGeneratorContract::class, $qrGenerator);
     app()->instance(CertificateManagerContract::class, Mockery::mock(CertificateManagerContract::class));
-    app()->instance(AeatClientContract::class, new RecordingAeatClient($callLog));
+    app()->instance(AeatClientContract::class, verifactuRecordingClient($callLog));
 
     // One record the agency has NOT got yet, left retryable exactly as a failed
     // submission leaves it since AID-717.
