@@ -76,3 +76,10 @@ it('verify blockchain job has correct configuration', function () {
     expect($job->tries)->toBe(1)
         ->and($job->timeout)->toBeGreaterThan(0);
 });
+
+it('resolves the retry job budget from the config when none is given', function () {
+    config()->set('verifactu.retry.max_submission_attempts', 7);
+
+    expect((new RetryFailedRegistriesJob)->maxAttempts)->toBe(7)
+        ->and((new RetryFailedRegistriesJob(18))->maxAttempts)->toBe(18);
+});

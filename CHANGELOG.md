@@ -9,11 +9,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Typed submission outcomes** (AID-1626). Two new registry statuses:
+  `accepted_with_errors` (AEAT registered the record with warnings; filed,
+  sealed, never resent; the agency's lines persisted in
+  `aeat_response.lineas`) and `exhausted` (submission budget spent). New
+  `RegistryStatusEnum::isRegistered()`. New `RegistryStatusChangedEvent`,
+  fired after commit for every real change of outcome including creation,
+  and `RegistryRetriesExhaustedEvent`, fired once on the crossing. New config
+  keys `retry.max_submission_attempts` (default 3), `retry.resend_pending`
+  (default `false`) and `retry.pending_grace` (default 300 s). New
+  `--include-exhausted` option on `verifactu:retry-failed`. See
+  `UPGRADE-1.4.md`.
 - **PHP 8.5 in the CI matrix** (AID-768). The `pest` matrix now runs
   PHP 8.3/8.4/8.5 × Laravel 12/13 × MySQL 8.4/MariaDB 12.3 (12 jobs). The
   `composer.json` constraint was already `^8.3`, so nothing changes for
   consumers — the difference is that the 8.5 support the constraint promises
   is now exercised on every pipeline instead of assumed.
+
+### Changed
+
+- **`verifactu:retry-failed` can resend `pending` registries** older than
+  `retry.pending_grace` — only when `retry.resend_pending` is enabled (off by
+  default), because a `pending` row may have been created on purpose with
+  `submitToAeat: false` (AID-1626).
+- **`verifactu:retry-failed` moves `error` registries at or past the budget to
+  `exhausted`**, firing the new events; before, they silently dropped out of
+  the retry query.
+- **`markAsFailed()` writes `exhausted`** when a failure reaches the budget.
+  `--max-attempts` keeps governing the run; unset, it reads
+  `retry.max_submission_attempts`.
+- **`verifactu:retry-failed` rejects malformed `--max-attempts` and `--limit`
+  values** (`1O`, `18x`, `0`) instead of truncating them; before,
+  `--max-attempts=1O` ran with a budget of 1.
+- **`InvoiceRegistrar::retryFailed()` and `RetryFailedRegistriesJob` — not
+  only the command — sweep over-budget `error` registries to `exhausted`**
+  (and resend `pending` ones when `retry.resend_pending` is enabled), with the
+  budget of the run. **`RetryFailedRegistriesJob` now takes the
+  `verifactu:retry-failed` overlap lock** and does nothing while it is held.
+  Like the command, **the job now throws `ConfigurationException` on a
+  per-process cache store (`array`, `null`)**, where the lock would be
+  decorative; before, it ran unprotected. Candidates are selected before the
+  sweep, so a registry swept to `exhausted` gets its `--include-exhausted`
+  attempt on the next run.
+- **`Registry::isSubmitted()` and `hasErrors()` keep their 1.3 answers**:
+  `isSubmitted()` is also true for `accepted_with_errors` (it was `sent`) and
+  `hasErrors()` is also true for `exhausted` (it was `error`). Both predicates
+  (and `RegistryContract`) were widened for that.
+- **A `ParcialmenteCorrecto` / `AceptadoConErrores` answer is persisted as
+  `accepted_with_errors`**, not `sent`; a duplicate `AceptadaConErrores`, not
+  `accepted`; for that duplicate, `lineas` and `estado_envio` come from the
+  duplicate answer (code 3000, `Incorrecto`), not from the original
+  warnings. A data migration converts the legacy `sent` rows; its `down()`
+  also reverts `exhausted` to `error` so a 1.3 install can load every row.
+- `InvoiceRegistrar::submitToAeat()` resolves the submission budget before
+  transmitting anything, so an invalid budget fails before the agency is
+  contacted. An invalid `retry.pending_grace` (with `resend_pending` on) fails
+  the run with a `VerifactuException`.
+- `InvoiceRegistrar::retryFailed()` returns an extra `exhausted` key; `skipped`
+  stays, always 0.
+
+### Deprecated
+
+- **`RegistryStatusEnum::isPending()` and `isSuccessful()`** (AID-1626): the
+  first reports a registered `sent` record as pending, the second misses it.
+  Use `isRegistered()`. Their answers are unchanged in 1.x.
 
 ## [1.3.1] - 2026-07-31
 

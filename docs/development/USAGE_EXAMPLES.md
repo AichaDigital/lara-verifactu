@@ -56,6 +56,7 @@ VERIFACTU_QUEUE=fiscal_verification
 
 # Retry settings
 VERIFACTU_RETRY_MAX_ATTEMPTS=3
+VERIFACTU_RETRY_MAX_SUBMISSION_ATTEMPTS=3
 VERIFACTU_RETRY_DELAY=60
 ```
 
@@ -120,6 +121,8 @@ $registry = Verifactu::register($invoice, submitToAeat: false);
 // (see "Working with Jobs" below)
 \AichaDigital\LaraVerifactu\Jobs\SubmitRegistryToAeatJob::dispatch($registry->getId());
 ```
+
+Such registries stay `pending`; `verifactu:retry-failed` resends them only when `VERIFACTU_RETRY_RESEND_PENDING=true`.
 
 ## Native Mode
 
@@ -412,10 +415,12 @@ php artisan verifactu:register --all
 php artisan verifactu:register --all --no-submit
 ```
 
+Such registries stay `pending`; `verifactu:retry-failed` resends them only when `VERIFACTU_RETRY_RESEND_PENDING=true`.
+
 ### Retry Failed Submissions
 
 ```bash
-php artisan verifactu:retry-failed --max-attempts=3 --limit=50
+php artisan verifactu:retry-failed --max-attempts=3 --limit=50 # add --include-exhausted to retry exhausted registries
 ```
 
 ### Verify Blockchain Integrity

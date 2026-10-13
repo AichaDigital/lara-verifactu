@@ -11,6 +11,7 @@ class AeatResponse
      * @param  array<int, string>|null  $errors
      * @param  bool  $rejection  True when AEAT semantically rejected the submission (EstadoEnvio/EstadoRegistro=Incorrecto), as opposed to a transport failure.
      * @param  bool  $duplicate  True when AEAT answered «registro duplicado»: it already holds this record as filed (AID-727).
+     * @param  bool  $acceptedWithErrors  True when AEAT registered the record with warnings (ParcialmenteCorrecto / AceptadoConErrores / duplicate AceptadaConErrores, AID-1626).
      */
     public function __construct(
         protected bool $success,
@@ -20,11 +21,22 @@ class AeatResponse
         protected ?array $errors = null,
         protected bool $rejection = false,
         protected bool $duplicate = false,
+        protected bool $acceptedWithErrors = false,
     ) {}
 
     public function isSuccess(): bool
     {
         return $this->success;
+    }
+
+    /**
+     * AEAT registered the record with warnings (AID-1626). Also a success —
+     * the record must never be re-sent — and, for a duplicate answer, also
+     * isDuplicate().
+     */
+    public function isAcceptedWithErrors(): bool
+    {
+        return $this->acceptedWithErrors;
     }
 
     public function isFailure(): bool
@@ -107,6 +119,7 @@ class AeatResponse
             'errors' => $this->errors,
             'rejection' => $this->rejection,
             'duplicate' => $this->duplicate,
+            'accepted_with_errors' => $this->acceptedWithErrors,
         ];
     }
 
@@ -169,6 +182,7 @@ class AeatResponse
         ?string $message = null,
         ?array $data = null,
         ?array $errors = null,
+        bool $acceptedWithErrors = false,
     ): self {
         return new self(
             success: true,
@@ -177,6 +191,31 @@ class AeatResponse
             data: $data,
             errors: $errors,
             duplicate: true,
+            acceptedWithErrors: $acceptedWithErrors,
+        );
+    }
+
+    /**
+     * AEAT registered the record but reported errors that do not cause its
+     * rejection (AID-1626; L19 «se registra en el sistema»). The CSV stays null
+     * when the answer carries none, never '' (UNIQUE index on `aeat_csv`).
+     *
+     * @param  array<string, mixed>|null  $data
+     * @param  array<int, string>|null  $errors
+     */
+    public static function acceptedWithErrors(
+        ?string $csv = null,
+        ?string $message = null,
+        ?array $data = null,
+        ?array $errors = null,
+    ): self {
+        return new self(
+            success: true,
+            code: $csv,
+            message: $message,
+            data: $data,
+            errors: $errors,
+            acceptedWithErrors: true,
         );
     }
 }

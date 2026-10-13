@@ -21,6 +21,7 @@ use AichaDigital\LaraVerifactu\Exceptions\VerifactuException;
 use AichaDigital\LaraVerifactu\Models\Registry;
 use AichaDigital\LaraVerifactu\Support\AeatLogSanitizer;
 use AichaDigital\LaraVerifactu\Support\AeatResponse;
+use AichaDigital\LaraVerifactu\Support\DispatchesQuietly;
 use AichaDigital\LaraVerifactu\Support\RegistrationCircumstances;
 use DOMDocument;
 use DOMXPath;
@@ -35,6 +36,8 @@ use Illuminate\Support\Facades\Log;
  */
 final class InvoiceRegistrar
 {
+    use DispatchesQuietly;
+
     public function __construct(
         private readonly RegistryManager $registryManager,
         private readonly CertificateManagerContract $certificateManager,
@@ -142,10 +145,18 @@ final class InvoiceRegistrar
      * outcome the agency already produced can no longer be rolled back by
      * something that happens afterwards.
      *
+     * @param  int|null  $maxSubmissionAttempts  Budget for the crossing into exhausted (AID-1626); null reads the config.
+     *
      * @throws AeatException
+     * @throws VerifactuException When the resolved budget is below 1.
      */
-    public function submitToAeat(RegistryContract $registry): AeatResponse
+    public function submitToAeat(RegistryContract $registry, ?int $maxSubmissionAttempts = null): AeatResponse
     {
+        // Resolved before anything leaves the process: an invalid budget must
+        // fail here, not after the agency has already filed the record and the
+        // failure path would throw from inside a catch.
+        $budget = $this->registryManager->submissionBudget($maxSubmissionAttempts);
+
         Log::channel(config('verifactu.logging.channel', 'single'))
             ->debug('Submitting registry to AEAT', [
                 'registry_number' => $registry->getRegistryNumber(),
@@ -185,7 +196,7 @@ final class InvoiceRegistrar
             // below is allowed to classify as a transport failure (AID-729).
             $response = $this->aeatClient->sendRegistration($registry);
         } catch (\Throwable $e) {
-            $this->registryManager->markAsFailed($registry, $e->getMessage());
+            $this->registryManager->markAsFailed($registry, $e->getMessage(), $budget);
 
             Log::channel(config('verifactu.logging.channel', 'single'))
                 ->error('Exception during AEAT submission', [
@@ -206,7 +217,16 @@ final class InvoiceRegistrar
         // is fixed by that answer, and nothing that happens now may reclassify
         // it — which is exactly what the old single catch did (AID-729).
         if ($response->isSuccess()) {
-            if ($response->isDuplicate()) {
+            if ($response->isAcceptedWithErrors()) {
+                // Asked first (AID-1626): a duplicate of a record accepted
+                // with errors is accepted with errors too. The parser decided;
+                // nothing here compares strings.
+                $this->registryManager->markAsAcceptedWithErrors(
+                    $registry,
+                    $response->getCsv(),
+                    $this->structuredOutcome($response)
+                );
+            } elseif ($response->isDuplicate()) {
                 // The agency already holds this record (AID-727): the expected
                 // answer when a submission was accepted and its response lost.
                 // Reconcile instead of refusing.
@@ -228,6 +248,7 @@ final class InvoiceRegistrar
                     'registry_number' => $registry->getRegistryNumber(),
                     'csv' => $response->getCsv(),
                     'duplicate' => $response->isDuplicate(),
+                    'accepted_with_errors' => $response->isAcceptedWithErrors(),
                 ]);
 
             $this->dispatchQuietly(new RegistrySubmittedEvent($registry, $response), $registry);
@@ -244,7 +265,8 @@ final class InvoiceRegistrar
         } else {
             $this->registryManager->markAsFailed(
                 $registry,
-                $response->getErrorMessage()
+                $response->getErrorMessage(),
+                $budget
             );
         }
 
@@ -260,35 +282,6 @@ final class InvoiceRegistrar
         );
 
         return $response;
-    }
-
-    /**
-     * Dispatch an outcome event without letting a consumer listener rewrite the
-     * outcome (AID-729).
-     *
-     * These events are dispatched AFTER the agency's answer has been persisted.
-     * A listener that throws is a defect in the consumer, not a failure of the
-     * round trip, and must not turn a successful submission into
-     * AeatException::connectionFailed nor a terminal REJECTED into a retryable
-     * ERROR — both of which the previous single catch did.
-     *
-     * The failure is logged rather than propagated: the operation's result is
-     * already durable and already returned. Swallowing it here keeps the return
-     * value and the persisted state truthful about what the agency said.
-     */
-    private function dispatchQuietly(object $event, RegistryContract $registry): void
-    {
-        try {
-            event($event);
-        } catch (\Throwable $e) {
-            Log::channel(config('verifactu.logging.channel', 'single'))
-                ->error('A listener threw while handling a Verifactu outcome event', [
-                    'registry_number' => $registry->getRegistryNumber(),
-                    'event' => $event::class,
-                    'error' => AeatLogSanitizer::redactText($e->getMessage()),
-                    ...AeatLogSanitizer::traceContext($e),
-                ]);
-        }
     }
 
     /**
@@ -325,37 +318,45 @@ final class InvoiceRegistrar
     }
 
     /**
-     * Retry failed registries
+     * Resend what the package still owes the agency (AID-1626): stale pending
+     * registries, error ones under budget and, when asked, exhausted ones.
+     * Over-budget errors are then swept to exhausted. `skipped` is kept, always
+     * 0, so existing readers of the array do not break.
      *
-     * @return array{success: int, failed: int, skipped: int}
+     * The candidates are selected BEFORE the sweep: selecting validates the
+     * retry configuration (pending_grace), so a misconfiguration fails before
+     * any registry is touched. A registry swept in this run therefore gets its
+     * --include-exhausted attempt on the next run, not in the one that
+     * declared it exhausted.
+     *
+     * @param  int|null  $maxAttempts  Total budget for this run; null reads verifactu.retry.max_submission_attempts.
+     * @return array{success: int, failed: int, skipped: int, exhausted: int}
+     *
+     * @throws VerifactuException When the budget is below 1, or pending_grace is invalid while pending resend is on.
      */
-    public function retryFailed(int $maxAttempts = 3, int $limit = 50): array
+    public function retryFailed(?int $maxAttempts = null, int $limit = 50, bool $includeExhausted = false): array
     {
+        $budget = $this->registryManager->submissionBudget($maxAttempts);
+        $candidates = $this->registryManager->getResubmittableRegistries($budget, $limit, $includeExhausted);
+
         $results = [
             'success' => 0,
             'failed' => 0,
             'skipped' => 0,
+            'exhausted' => $this->registryManager->exhaustOverBudget($budget),
         ];
 
-        $registries = $this->registryManager->getRetryableRegistries($maxAttempts, $limit);
-
-        foreach ($registries as $registry) {
-            // Skip if max attempts reached
-            if ($registry->getSubmissionAttempts() >= $maxAttempts) {
-                $results['skipped']++;
-
-                continue;
-            }
-
+        foreach ($candidates as $registry) {
             try {
-                $response = $this->submitToAeat($registry);
+                // The same budget the selection used decides the crossing.
+                $response = $this->submitToAeat($registry, $budget);
 
                 if ($response->isSuccess()) {
                     $results['success']++;
                 } else {
                     $results['failed']++;
                 }
-            } catch (\Throwable $e) {
+            } catch (\Throwable) {
                 $results['failed']++;
             }
         }
@@ -620,6 +621,23 @@ final class InvoiceRegistrar
             $baseline,
             $operation,
         ));
+    }
+
+    /**
+     * The agency's answer as persisted for an accepted-with-errors record
+     * (AID-1626): never the raw message, always the lines.
+     *
+     * @return array{estado_envio: mixed, csv: ?string, lineas: mixed}
+     */
+    private function structuredOutcome(AeatResponse $response): array
+    {
+        $data = $response->getData() ?? [];
+
+        return [
+            'estado_envio' => $data['estado_envio'] ?? $response->getMessage(),
+            'csv' => $response->getCsv(),
+            'lineas' => $data['lineas'] ?? [],
+        ];
     }
 
     /**

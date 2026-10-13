@@ -385,10 +385,14 @@ class Registry extends Model implements RegistryContract
 
     /**
      * Check if the registry was successfully submitted.
+     *
+     * True for `sent` and for `accepted_with_errors`: a ParcialmenteCorrecto
+     * answer was `sent` in 1.3, and the same AEAT outcome keeps the same
+     * answer here (AID-1626).
      */
     public function isSubmitted(): bool
     {
-        return $this->status === RegistryStatusEnum::SENT;
+        return in_array($this->status, [RegistryStatusEnum::SENT, RegistryStatusEnum::ACCEPTED_WITH_ERRORS], true);
     }
 
     /**
@@ -401,9 +405,12 @@ class Registry extends Model implements RegistryContract
 
     /**
      * Check if the registry has errors.
+     *
+     * True for `error` and `exhausted`: an over-budget failure was `error` in
+     * 1.3, and the same AEAT outcome keeps the same answer here (AID-1626).
      */
     public function hasErrors(): bool
     {
-        return $this->status === RegistryStatusEnum::ERROR;
+        return in_array($this->status, [RegistryStatusEnum::ERROR, RegistryStatusEnum::EXHAUSTED], true);
     }
 }

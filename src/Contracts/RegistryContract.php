@@ -116,6 +116,9 @@ interface RegistryContract
 
     /**
      * Check if the registry was successfully submitted.
+     *
+     * Includes a record accepted with errors: it was `sent` in 1.3 and the
+     * same AEAT outcome keeps the same answer (AID-1626).
      */
     public function isSubmitted(): bool;
 
@@ -126,6 +129,9 @@ interface RegistryContract
 
     /**
      * Check if the registry has errors.
+     *
+     * Includes an exhausted record: it was `error` in 1.3 and the same AEAT
+     * outcome keeps the same answer (AID-1626).
      */
     public function hasErrors(): bool;
 }

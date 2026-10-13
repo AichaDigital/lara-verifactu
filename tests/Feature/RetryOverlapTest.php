@@ -6,6 +6,7 @@ use AichaDigital\LaraVerifactu\Contracts\AeatClientContract;
 use AichaDigital\LaraVerifactu\Contracts\CertificateManagerContract;
 use AichaDigital\LaraVerifactu\Contracts\QrGeneratorContract;
 use AichaDigital\LaraVerifactu\Enums\RegistryStatusEnum;
+use AichaDigital\LaraVerifactu\Jobs\RetryFailedRegistriesJob;
 use AichaDigital\LaraVerifactu\Models\Invoice;
 use AichaDigital\LaraVerifactu\Models\Registry;
 use AichaDigital\LaraVerifactu\Services\HashGenerator;
@@ -99,6 +100,42 @@ it('runs normally once the lock is free, and releases it afterwards', function (
     // expired. The release sits in a finally, so it also covers the throwing
     // path — not asserted here, because forcing a throw would mean inventing a
     // seam through a final class to test a language guarantee.
+    $probe = Cache::lock('verifactu:retry-failed', 10);
+    expect($probe->get())->toBeTrue();
+    $probe->release();
+});
+
+it('makes RetryFailedRegistriesJob skip while the command holds the lock', function () {
+    /** @var Registry $registry */
+    $registry = $this->registryManager->createRegistry(Invoice::factory()->create());
+    $this->registryManager->markAsFailed($registry, 'connection reset');
+
+    $held = Cache::lock('verifactu:retry-failed', 300);
+    expect($held->get())->toBeTrue();
+
+    $this->aeatClient->shouldReceive('sendRegistration')->never();
+
+    (new RetryFailedRegistriesJob)->handle(app(InvoiceRegistrar::class));
+
+    expect($registry->fresh())
+        ->status->toBe(RegistryStatusEnum::ERROR)
+        ->submission_attempts->toBe(1);
+
+    $held->release();
+});
+
+it('lets RetryFailedRegistriesJob run when the lock is free, and releases it', function () {
+    /** @var Registry $registry */
+    $registry = $this->registryManager->createRegistry(Invoice::factory()->create());
+    $this->registryManager->markAsFailed($registry, 'connection reset');
+
+    $this->aeatClient->shouldReceive('sendRegistration')->once()
+        ->andReturn(new AeatResponse(success: true, code: 'CSV-JOB-OK', message: 'Correcto'));
+
+    (new RetryFailedRegistriesJob)->handle(app(InvoiceRegistrar::class));
+
+    expect($registry->fresh()->status)->toBe(RegistryStatusEnum::SENT);
+
     $probe = Cache::lock('verifactu:retry-failed', 10);
     expect($probe->get())->toBeTrue();
     $probe->release();

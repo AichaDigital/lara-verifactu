@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace AichaDigital\LaraVerifactu\Support;
 
 use AichaDigital\LaraVerifactu\Exceptions\ConfigurationException;
+use Closure;
 use Illuminate\Cache\ArrayStore;
 use Illuminate\Cache\NullStore;
 use Illuminate\Support\Facades\Cache;
@@ -61,5 +62,39 @@ final class OverlapLockStore
             (string) config('cache.default'),
             $store instanceof NullStore,
         );
+    }
+
+    /**
+     * Run a retry pass under the single overlap lock every entry point shares
+     * (AID-731, AID-1626): `verifactu:retry-failed`, RetryFailedRegistriesJob.
+     * Passes with different budgets must never overlap, or the one with the
+     * lower budget sweeps rows the other is still retrying.
+     *
+     * @template T
+     *
+     * @param  Closure(): T  $run  Called while holding the lock; released in a finally.
+     * @param  Closure(): T  $onBusy  Called, without touching anything, when another pass holds it.
+     * @return T
+     *
+     * @throws ConfigurationException
+     */
+    public static function exclusively(string $lockName, Closure $run, Closure $onBusy): mixed
+    {
+        // The lock is only worth what the store behind it is worth. Checked
+        // before acquiring, so the operator is told instead of the caller
+        // reporting a success it did not serialise.
+        self::assertUsable($lockName);
+
+        $lock = Cache::lock($lockName, (int) config('verifactu.lock.timeout', 300));
+
+        if (! $lock->get()) {
+            return $onBusy();
+        }
+
+        try {
+            return $run();
+        } finally {
+            $lock->release();
+        }
     }
 }
