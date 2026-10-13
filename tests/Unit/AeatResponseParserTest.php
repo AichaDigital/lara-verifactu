@@ -50,7 +50,8 @@ it('parses a record accepted with errors as success carrying the error details',
     expect($result->isSuccess())->toBeTrue()
         ->and($result->getCsv())->toBe('CSV0987654321')
         ->and($result->hasErrors())->toBeTrue()
-        ->and($result->getErrors())->toContain('2003: Huella incorrecta');
+        ->and($result->getErrors())->toContain('2003: Huella incorrecta')
+        ->and($result->isAcceptedWithErrors())->toBeTrue();
 });
 
 it('parses a rejected submission as failure with line errors', function () {
@@ -118,7 +119,8 @@ it('parses a duplicate of an accepted-with-errors record as already filed', func
 
     expect($result->isDuplicate())->toBeTrue()
         ->and($result->isSuccess())->toBeTrue()
-        ->and($result->isValidationRejection())->toBeFalse();
+        ->and($result->isValidationRejection())->toBeFalse()
+        ->and($result->isAcceptedWithErrors())->toBeTrue();
 });
 
 it('treats a duplicate of an ANNULLED record as a rejection', function () {
@@ -243,4 +245,107 @@ it('treats a non-object response as a transport failure, not a rejection', funct
 
     expect($result->isFailure())->toBeTrue()
         ->and($result->isValidationRejection())->toBeFalse();
+});
+
+it('flags a ParcialmenteCorrecto envelope as accepted with errors and keeps its lines', function () {
+    $result = $this->parser->parse((object) [
+        'CSV' => 'CSV0987654321',
+        'EstadoEnvio' => 'ParcialmenteCorrecto',
+        'RespuestaLinea' => (object) [
+            'EstadoRegistro' => 'AceptadoConErrores',
+            'CodigoErrorRegistro' => '2003',
+            'DescripcionErrorRegistro' => 'Huella incorrecta',
+        ],
+    ]);
+
+    expect($result->isAcceptedWithErrors())->toBeTrue()
+        ->and($result->isSuccess())->toBeTrue()
+        ->and($result->isDuplicate())->toBeFalse()
+        ->and($result->getData()['lineas'])->toBe([[
+            'estado_registro' => 'AceptadoConErrores',
+            'codigo' => '2003',
+            'descripcion' => 'Huella incorrecta',
+            'registro_duplicado' => false,
+            'registro_duplicado_estado' => null,
+        ]]);
+});
+
+it('flags a single AceptadoConErrores line under a Correcto envelope', function () {
+    $result = $this->parser->parse((object) [
+        'CSV' => 'CSV1111111111',
+        'EstadoEnvio' => 'Correcto',
+        'RespuestaLinea' => (object) [
+            'EstadoRegistro' => 'AceptadoConErrores',
+            'CodigoErrorRegistro' => '1142',
+            'DescripcionErrorRegistro' => 'CuotaRepercutida fuera de tolerancia',
+        ],
+    ]);
+
+    expect($result->isAcceptedWithErrors())->toBeTrue()
+        ->and($result->isSuccess())->toBeTrue();
+});
+
+it('does not flag a plain Correcto answer, but still returns its lines', function () {
+    $result = $this->parser->parse((object) [
+        'CSV' => 'CSV2222222222',
+        'EstadoEnvio' => 'Correcto',
+        'RespuestaLinea' => (object) ['EstadoRegistro' => 'Correcto'],
+    ]);
+
+    expect($result->isAcceptedWithErrors())->toBeFalse()
+        ->and($result->isSuccess())->toBeTrue()
+        ->and($result->getData()['lineas'])->toBe([[
+            'estado_registro' => 'Correcto',
+            'codigo' => null,
+            'descripcion' => null,
+            'registro_duplicado' => false,
+            'registro_duplicado_estado' => null,
+        ]]);
+});
+
+it('flags a duplicate of an accepted-with-errors record as accepted with errors', function () {
+    // L21 spells the duplicate state `AceptadaConErrores` (feminine), unlike
+    // the L19 line state `AceptadoConErrores`.
+    $result = $this->parser->parse((object) [
+        'EstadoEnvio' => 'Incorrecto',
+        'RespuestaLinea' => (object) [
+            'EstadoRegistro' => 'Incorrecto',
+            'CodigoErrorRegistro' => '3000',
+            'DescripcionErrorRegistro' => 'Registro de facturación duplicado.',
+            'RegistroDuplicado' => (object) ['EstadoRegistroDuplicado' => 'AceptadaConErrores'],
+        ],
+    ]);
+
+    expect($result->isDuplicate())->toBeTrue()
+        ->and($result->isAcceptedWithErrors())->toBeTrue()
+        ->and($result->isSuccess())->toBeTrue();
+});
+
+it('does not flag a duplicate of a Correcta record', function () {
+    $result = $this->parser->parse((object) [
+        'EstadoEnvio' => 'Incorrecto',
+        'RespuestaLinea' => (object) [
+            'EstadoRegistro' => 'Incorrecto',
+            'CodigoErrorRegistro' => '3000',
+            'DescripcionErrorRegistro' => 'Registro de facturación duplicado.',
+            'RegistroDuplicado' => (object) ['EstadoRegistroDuplicado' => 'Correcta'],
+        ],
+    ]);
+
+    expect($result->isDuplicate())->toBeTrue()
+        ->and($result->isAcceptedWithErrors())->toBeFalse();
+});
+
+it('never flags a rejection as accepted with errors', function () {
+    $result = $this->parser->parse((object) [
+        'EstadoEnvio' => 'Incorrecto',
+        'RespuestaLinea' => (object) [
+            'EstadoRegistro' => 'Incorrecto',
+            'CodigoErrorRegistro' => '1100',
+            'DescripcionErrorRegistro' => 'Valor no permitido',
+        ],
+    ]);
+
+    expect($result->isValidationRejection())->toBeTrue()
+        ->and($result->isAcceptedWithErrors())->toBeFalse();
 });

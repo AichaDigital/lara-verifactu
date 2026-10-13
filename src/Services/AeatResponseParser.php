@@ -14,13 +14,20 @@ use AichaDigital\LaraVerifactu\Support\AeatResponse;
  * Per-line EstadoRegistro: Correcto | AceptadoConErrores | Incorrecto.
  *
  * AceptadoConErrores means AEAT REGISTERED the record (do not resubmit),
- * so it maps to a successful response carrying the error details.
+ * so it maps to a successful response carrying the error details, flagged
+ * isAcceptedWithErrors() (AID-1626).
  */
 final class AeatResponseParser
 {
     private const STATUS_CORRECT = 'Correcto';
 
     private const STATUS_PARTIALLY_CORRECT = 'ParcialmenteCorrecto';
+
+    /** L19 line state of a record registered with warnings (masculine). */
+    private const LINE_ACCEPTED_WITH_ERRORS = 'AceptadoConErrores';
+
+    /** L21 duplicate state of a record registered with warnings (feminine). */
+    private const DUPLICATE_ACCEPTED_WITH_ERRORS = 'AceptadaConErrores';
 
     public function parse(mixed $response): AeatResponse
     {
@@ -34,25 +41,28 @@ final class AeatResponseParser
         $submissionStatus = $this->stringProperty($response, 'EstadoEnvio');
         $csv = $this->stringProperty($response, 'CSV');
         $lineErrors = $this->collectLineErrors($response);
+        $lineDetails = $this->collectLineDetails($response);
 
         $accepted = in_array($submissionStatus, [self::STATUS_CORRECT, self::STATUS_PARTIALLY_CORRECT], true)
             || ($submissionStatus === null && $csv !== null);
 
         if ($accepted) {
-            return new AeatResponse(
-                success: true,
-                code: $csv,
-                message: $submissionStatus ?? self::STATUS_CORRECT,
-                data: [
-                    'csv' => $csv,
-                    'estado_envio' => $submissionStatus,
-                    'timestamp' => $this->presentationTimestamp($response),
-                ],
-                errors: $lineErrors === [] ? null : $lineErrors,
-            );
-        }
+            $message = $submissionStatus ?? self::STATUS_CORRECT;
+            $data = [
+                'csv' => $csv,
+                'estado_envio' => $submissionStatus,
+                'timestamp' => $this->presentationTimestamp($response),
+                'lineas' => $lineDetails,
+            ];
+            $errors = $lineErrors === [] ? null : $lineErrors;
 
-        $lineDetails = $this->collectLineDetails($response);
+            // AID-1626: the parser is the only place that decides «with errors».
+            if ($this->isAcceptedWithErrors($submissionStatus, $lineDetails)) {
+                return AeatResponse::acceptedWithErrors(csv: $csv, message: $message, data: $data, errors: $errors);
+            }
+
+            return new AeatResponse(success: true, code: $csv, message: $message, data: $data, errors: $errors);
+        }
 
         // AID-727: «registro duplicado» is not a refusal, it is the agency
         // telling us it already holds this record — the expected answer when a
@@ -68,6 +78,7 @@ final class AeatResponseParser
                     'lineas' => $lineDetails,
                 ],
                 errors: $lineErrors === [] ? null : $lineErrors,
+                acceptedWithErrors: $this->isDuplicateAcceptedWithErrors($lineDetails),
             );
         }
 
@@ -109,7 +120,7 @@ final class AeatResponseParser
      *
      * @var array<int, string>
      */
-    private const DUPLICATE_STATES_FILED = ['Correcta', 'AceptadaConErrores'];
+    private const DUPLICATE_STATES_FILED = ['Correcta', self::DUPLICATE_ACCEPTED_WITH_ERRORS];
 
     /**
      * Does every line say «the agency already holds this record»? (AID-727)
@@ -148,6 +159,44 @@ final class AeatResponseParser
         }
 
         return true;
+    }
+
+    /**
+     * Registered with warnings (AID-1626): a ParcialmenteCorrecto envelope, or
+     * any line in AceptadoConErrores under any accepted envelope.
+     *
+     * @param  array<int, array{estado_registro: ?string, codigo: ?string, descripcion: ?string, registro_duplicado: bool, registro_duplicado_estado: ?string}>  $lineDetails
+     */
+    private function isAcceptedWithErrors(?string $submissionStatus, array $lineDetails): bool
+    {
+        if ($submissionStatus === self::STATUS_PARTIALLY_CORRECT) {
+            return true;
+        }
+
+        foreach ($lineDetails as $line) {
+            if ($line['estado_registro'] === self::LINE_ACCEPTED_WITH_ERRORS) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * A duplicate answer whose filed original was accepted with errors (L21
+     * `AceptadaConErrores`, feminine — never the L19 constant).
+     *
+     * @param  array<int, array{estado_registro: ?string, codigo: ?string, descripcion: ?string, registro_duplicado: bool, registro_duplicado_estado: ?string}>  $lineDetails
+     */
+    private function isDuplicateAcceptedWithErrors(array $lineDetails): bool
+    {
+        foreach ($lineDetails as $line) {
+            if ($line['registro_duplicado_estado'] === self::DUPLICATE_ACCEPTED_WITH_ERRORS) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

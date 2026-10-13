@@ -192,8 +192,9 @@ it('reconciles a duplicate of an accepted-with-errors record end to end', functi
 
     $this->registrar->register($invoice);
 
+    // AID-1626: the original was accepted with errors, so the reconciled record is too.
     expect(Registry::query()->where('invoice_id', $invoice->id)->firstOrFail()->status)
-        ->toBe(RegistryStatusEnum::ACCEPTED);
+        ->toBe(RegistryStatusEnum::ACCEPTED_WITH_ERRORS);
 });
 
 it('treats a duplicate of an ANNULLED record as a rejection', function () {

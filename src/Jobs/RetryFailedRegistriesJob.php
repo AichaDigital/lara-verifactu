@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace AichaDigital\LaraVerifactu\Jobs;
 
 use AichaDigital\LaraVerifactu\Services\InvoiceRegistrar;
+use AichaDigital\LaraVerifactu\Support\OverlapLockStore;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -36,19 +37,47 @@ class RetryFailedRegistriesJob implements ShouldQueue
     public int $timeout = 300; // 5 minutes for batch processing
 
     /**
+     * Total submission budget for the pass, resolved when the job is created.
+     */
+    public readonly int $maxAttempts;
+
+    /**
      * Create a new job instance.
+     *
+     * @param  int|null  $maxAttempts  Null reads verifactu.retry.max_submission_attempts (AID-1626).
      */
     public function __construct(
-        public readonly int $maxAttempts = 3,
+        ?int $maxAttempts = null,
         public readonly int $limit = 50
     ) {
+        $this->maxAttempts = $maxAttempts ?? (int) config('verifactu.retry.max_submission_attempts', 3);
         $this->onQueue(config('verifactu.queue.name', 'default'));
     }
 
     /**
      * Execute the job.
+     *
+     * Takes the same overlap lock as `verifactu:retry-failed`: this job's
+     * budget (the config one unless given) can be lower than the one the
+     * scheduled command runs with, and a pass with the lower budget would
+     * sweep rows the other is still retrying (AID-1626). When the lock is
+     * held, nothing is touched.
      */
     public function handle(InvoiceRegistrar $registrar): void
+    {
+        OverlapLockStore::exclusively(
+            'verifactu:retry-failed',
+            function () use ($registrar): void {
+                $this->retry($registrar);
+            },
+            function (): void {
+                Log::channel(config('verifactu.logging.channel', 'single'))
+                    ->warning('Another verifactu:retry-failed run is still in progress, skipping the retry job');
+            },
+        );
+    }
+
+    private function retry(InvoiceRegistrar $registrar): void
     {
         Log::channel(config('verifactu.logging.channel', 'single'))
             ->info('Starting retry of failed registries', [
@@ -64,6 +93,7 @@ class RetryFailedRegistriesJob implements ShouldQueue
                     'success' => $results['success'],
                     'failed' => $results['failed'],
                     'skipped' => $results['skipped'],
+                    'exhausted' => $results['exhausted'],
                 ]);
         } catch (\Throwable $e) {
             Log::channel(config('verifactu.logging.channel', 'single'))

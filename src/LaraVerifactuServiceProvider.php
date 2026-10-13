@@ -69,6 +69,10 @@ class LaraVerifactuServiceProvider extends PackageServiceProvider
                 // verifactu_invoices so custom-mode consumers aren't rejected.
                 // MUST be listed here or publishMigrations() never copies it.
                 '2026_07_08_000001_drop_invoice_foreign_key_from_verifactu_registries_table',
+                // AID-1626: legacy ParcialmenteCorrecto rows become
+                // accepted_with_errors. MUST be listed here or
+                // publishMigrations() never copies it to consumers.
+                '2026_10_13_000001_backfill_accepted_with_errors_in_verifactu_registries',
             ])
             ->hasCommand(RegisterInvoiceCommand::class)
             ->hasCommand(RetryFailedCommand::class)

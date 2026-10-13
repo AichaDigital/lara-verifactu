@@ -7,6 +7,7 @@ use AichaDigital\LaraVerifactu\Contracts\CertificateManagerContract;
 use AichaDigital\LaraVerifactu\Contracts\QrGeneratorContract;
 use AichaDigital\LaraVerifactu\Enums\RegistryStatusEnum;
 use AichaDigital\LaraVerifactu\Events\RegistryFailedEvent;
+use AichaDigital\LaraVerifactu\Events\RegistryStatusChangedEvent;
 use AichaDigital\LaraVerifactu\Events\RegistrySubmittedEvent;
 use AichaDigital\LaraVerifactu\Exceptions\AeatException;
 use AichaDigital\LaraVerifactu\Models\Invoice;
@@ -158,6 +159,18 @@ it('still reports a genuine transport failure as one', function () {
     // event. That is the AID-717 contract.
     expect(fn () => $this->registrar->submitToAeat($registry))
         ->toThrow(AeatException::class);
+
+    expect($registry->fresh()->status)->toBe(RegistryStatusEnum::ERROR);
+});
+
+it('keeps a persisted outcome when a RegistryStatusChangedEvent listener throws', function () {
+    Event::listen(RegistryStatusChangedEvent::class, function (): void {
+        throw new RuntimeException('consumer listener blew up');
+    });
+
+    $registry = Registry::factory()->create();
+
+    $this->registryManager->markAsFailed($registry, 'connection reset');
 
     expect($registry->fresh()->status)->toBe(RegistryStatusEnum::ERROR);
 });

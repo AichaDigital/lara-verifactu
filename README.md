@@ -170,6 +170,8 @@ use AichaDigital\LaraVerifactu\Facades\Verifactu;
 // the XML; submits to AEAT unless told otherwise)
 $registry = Verifactu::register($invoice);
 $registry = Verifactu::register($invoice, submitToAeat: false);
+// Such registries stay `pending`; `verifactu:retry-failed` resends them
+// only when `VERIFACTU_RETRY_RESEND_PENDING=true`.
 
 // Cancel an invoice (RegistroAnulacion, chained like any other record)
 $registry = Verifactu::cancel($invoice);
@@ -203,7 +205,7 @@ Verifactu::assertNotSent($otherInvoice);
 ```bash
 php artisan verifactu:test-connection   # certificate + mutual-TLS check
 php artisan verifactu:register {id}     # register an invoice
-php artisan verifactu:retry-failed      # retry failed submissions
+php artisan verifactu:retry-failed      # resend pending, failed and (opt-in) exhausted submissions
 php artisan verifactu:verify-blockchain # verify the fingerprint chain
 php artisan verifactu:status            # system status
 ```
@@ -281,8 +283,7 @@ the bundled `Invoice` model (native mode) is optional. See
   Set `CACHE_STORE` accordingly. On `null` or `array` the package throws a
   `ConfigurationException` naming the store and the setting, rather than letting
   a scheduled command report a success it never serialised.
-- `AceptadoConErrores` responses map to success: AEAT registered the
-  record, so it must not be resubmitted; the error details are persisted.
+- `ParcialmenteCorrecto` / `AceptadoConErrores` responses are persisted as `accepted_with_errors`: AEAT registered the record, so it is never resubmitted; the agency's codes are kept in `aeat_response.lineas`. Follow every outcome change with `RegistryStatusChangedEvent`.
 - **Rectifications**: `TipoRectificativa` derives from
   `getRectificationType()` (`S` substitution / `I` incremental). A substitution
   (`S`) requires the substituted amounts via `getRectificationAmounts()` (native

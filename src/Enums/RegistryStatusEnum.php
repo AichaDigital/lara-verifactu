@@ -11,6 +11,8 @@ enum RegistryStatusEnum: string
     case ACCEPTED = 'accepted';
     case REJECTED = 'rejected';
     case ERROR = 'error';
+    case ACCEPTED_WITH_ERRORS = 'accepted_with_errors';
+    case EXHAUSTED = 'exhausted';
 
     public function getDescription(): string
     {
@@ -20,22 +22,48 @@ enum RegistryStatusEnum: string
             self::ACCEPTED => 'Aceptado por AEAT',
             self::REJECTED => 'Rechazado por AEAT',
             self::ERROR => 'Error en procesamiento',
+            self::ACCEPTED_WITH_ERRORS => 'Aceptado con errores por AEAT',
+            self::EXHAUSTED => 'Reintentos agotados',
         };
     }
 
+    /**
+     * EXHAUSTED is deliberately not final: `verifactu:retry-failed
+     * --include-exhausted` can give it one more attempt (AID-1626).
+     */
     public function isFinal(): bool
     {
-        return in_array($this, [self::ACCEPTED, self::REJECTED]);
+        return in_array($this, [self::ACCEPTED, self::REJECTED, self::ACCEPTED_WITH_ERRORS], true);
     }
 
+    /**
+     * @deprecated Since 1.4: it reports a registered `Correcto` record (SENT) as
+     *             pending. Compare against PENDING, or use isRegistered().
+     *             Kept unchanged for the 1.x line (CONSTITUTION §8).
+     */
     public function isPending(): bool
     {
         return in_array($this, [self::PENDING, self::SENT]);
     }
 
+    /**
+     * @deprecated Since 1.4: it misses a plain `Correcto` answer (SENT) and an
+     *             accepted-with-errors one. Use isRegistered(). Kept unchanged
+     *             for the 1.x line (CONSTITUTION §8).
+     */
     public function isSuccessful(): bool
     {
         return $this === self::ACCEPTED;
+    }
+
+    /**
+     * The agency holds this record as registered (AID-1626): `Correcto` (SENT),
+     * a duplicate `Correcta` (ACCEPTED), or accepted with errors. This is the
+     * helper a consumer should ask «is this invoice registered?».
+     */
+    public function isRegistered(): bool
+    {
+        return in_array($this, [self::SENT, self::ACCEPTED, self::ACCEPTED_WITH_ERRORS], true);
     }
 
     /**
@@ -44,11 +72,13 @@ enum RegistryStatusEnum: string
      * SENT is our own acknowledgement of a successful submission; ACCEPTED is
      * reached when AEAT answers «registro duplicado», i.e. it already had it.
      * Every idempotency guard must treat both alike: recognising only SENT would
-     * re-send a record the agency already holds.
+     * re-send a record the agency already holds. ACCEPTED_WITH_ERRORS is filed
+     * too: AEAT registered it with warnings, so re-sending it would duplicate it
+     * (AID-1626).
      */
     public function isFiledAtAeat(): bool
     {
-        return in_array($this, [self::SENT, self::ACCEPTED], true);
+        return in_array($this, [self::SENT, self::ACCEPTED, self::ACCEPTED_WITH_ERRORS], true);
     }
 
     /**
@@ -58,11 +88,12 @@ enum RegistryStatusEnum: string
      * Wider than isFiledAtAeat(): a REJECTED record is a verdict too. It is
      * terminal, since getRetryableRegistries() selects only ERROR, so
      * downgrading it to ERROR would make the package retry something the agency
-     * refused on validation grounds.
+     * refused on validation grounds. EXHAUSTED is not a verdict: the agency
+     * never ruled, so it behaves like ERROR (AID-1626).
      */
     public function hasAgencyVerdict(): bool
     {
-        return in_array($this, [self::SENT, self::ACCEPTED, self::REJECTED], true);
+        return in_array($this, [self::SENT, self::ACCEPTED, self::ACCEPTED_WITH_ERRORS, self::REJECTED], true);
     }
 
     /**

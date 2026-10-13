@@ -12,9 +12,12 @@ use AichaDigital\LaraVerifactu\Contracts\XmlBuilderContract;
 use AichaDigital\LaraVerifactu\Enums\RegistryStatusEnum;
 use AichaDigital\LaraVerifactu\Enums\RegistryTypeEnum;
 use AichaDigital\LaraVerifactu\Events\RegistryCreatedEvent;
+use AichaDigital\LaraVerifactu\Events\RegistryRetriesExhaustedEvent;
+use AichaDigital\LaraVerifactu\Events\RegistryStatusChangedEvent;
 use AichaDigital\LaraVerifactu\Exceptions\VerifactuException;
 use AichaDigital\LaraVerifactu\Models\Registry;
 use AichaDigital\LaraVerifactu\Support\CancellationRecord;
+use AichaDigital\LaraVerifactu\Support\DispatchesQuietly;
 use AichaDigital\LaraVerifactu\Support\PreviousRegistry;
 use AichaDigital\LaraVerifactu\Support\RegistrationCircumstances;
 use AichaDigital\LaraVerifactu\Support\RegistryChain;
@@ -33,6 +36,8 @@ use Illuminate\Support\Facades\DB;
  */
 final class RegistryManager
 {
+    use DispatchesQuietly;
+
     /** AEAT SuministroInformacion namespace — the sf: prefix used in persisted XML. */
     private const SF_NS = 'https://www2.agenciatributaria.gob.es/static_files/common/internet/dep/aplicaciones/es/aeat/tike/cont/ws/SuministroInformacion.xsd';
 
@@ -118,6 +123,7 @@ final class RegistryManager
 
             // Dispatch event
             event(new RegistryCreatedEvent($registry, $invoice));
+            $this->announceTransition($registry, null);
 
             return $registry;
         });
@@ -186,6 +192,7 @@ final class RegistryManager
             ])->save();
 
             event(new RegistryCreatedEvent($registry, $invoice));
+            $this->announceTransition($registry, null);
 
             return $registry;
         });
@@ -583,6 +590,60 @@ final class RegistryManager
     }
 
     /**
+     * Announce a persisted change of outcome (AID-1626).
+     *
+     * Deferred with DB::afterCommit(): called inside the writer's transaction,
+     * it fires only once the outermost transaction commits, and never if a
+     * caller's surrounding transaction rolls back. Outside any transaction it
+     * fires at once. Nothing fires when the status did not change — an
+     * idempotency guard that cuts the write, or a failure that leaves ERROR in
+     * ERROR. The values are captured now, not read at dispatch time.
+     *
+     * @param  array<int, array<string, mixed>>|null  $lines
+     */
+    private function announceTransition(
+        Registry $registry,
+        ?RegistryStatusEnum $from,
+        ?string $error = null,
+        ?array $lines = null,
+    ): void {
+        $to = $registry->status;
+
+        if ($from === $to) {
+            return;
+        }
+
+        $attempts = $registry->submission_attempts;
+
+        DB::afterCommit(function () use ($registry, $from, $to, $error, $lines, $attempts): void {
+            $this->dispatchQuietly(new RegistryStatusChangedEvent($registry, $from, $to, $error, $lines), $registry);
+
+            // A change INTO exhausted is always the crossing: an exhausted row
+            // that fails again keeps its status and never reaches here.
+            if ($to === RegistryStatusEnum::EXHAUSTED) {
+                $this->dispatchQuietly(
+                    new RegistryRetriesExhaustedEvent($registry, $error ?? 'Retry budget exhausted', $attempts),
+                    $registry,
+                );
+            }
+        });
+    }
+
+    /**
+     * The agency lines of a structured response, or null when unknown.
+     *
+     * @param  array<string, mixed>|null  $aeatResponse
+     * @return array<int, array<string, mixed>>|null
+     */
+    private function linesOf(?array $aeatResponse): ?array
+    {
+        $lines = $aeatResponse['lineas'] ?? null;
+
+        /** @var array<int, array<string, mixed>>|null */
+        return is_array($lines) ? $lines : null;
+    }
+
+    /**
      * Refuse to transmit a payload that no longer matches the stored hash
      * (AID-730).
      *
@@ -647,6 +708,8 @@ final class RegistryManager
                     return;
                 }
 
+                $from = $registry->status;
+
                 // Get current attempts before update
                 $currentAttempts = $registry->submission_attempts ?? 0;
 
@@ -657,6 +720,8 @@ final class RegistryManager
                     'aeat_response' => $aeatResponse,
                     'submission_attempts' => $currentAttempts + 1,
                 ]);
+
+                $this->announceTransition($registry, $from);
             });
         }
     }
@@ -686,6 +751,8 @@ final class RegistryManager
                     return;
                 }
 
+                $from = $registry->status;
+
                 $currentAttempts = $registry->submission_attempts ?? 0;
 
                 $registry->update([
@@ -695,22 +762,99 @@ final class RegistryManager
                     'aeat_response' => $aeatResponse,
                     'submission_attempts' => $currentAttempts + 1,
                 ]);
+
+                $this->announceTransition($registry, $from);
             });
         }
     }
 
     /**
-     * Mark a registry as failed
+     * Mark a registry as registered with warnings (AID-1626).
      *
-     * Uses atomic update with state verification to prevent
-     * overwriting a successful submission with an error.
+     * Reached on ParcialmenteCorrecto / AceptadoConErrores, or on a duplicate
+     * whose original was AceptadaConErrores. AEAT holds the record, so it is
+     * filed, sealed and never re-sent; `aeat_error` is left alone because this
+     * is a valid record with warnings, not an error. The agency's lines go in
+     * `aeat_response` so the consumer never has to parse text.
+     *
+     * @param  array<string, mixed>  $aeatResponse  Structured: estado_envio, csv, lineas.
+     */
+    public function markAsAcceptedWithErrors(
+        RegistryContract $registry,
+        ?string $aeatCsv,
+        array $aeatResponse
+    ): void {
+        if ($registry instanceof Registry) {
+            DB::transaction(function () use ($registry, $aeatCsv, $aeatResponse): void {
+                // Locked read: a plain refresh sees the REPEATABLE READ snapshot (AID-731).
+                $this->lockAndRefresh($registry);
+
+                if ($registry->status->isFiledAtAeat()) {
+                    return;
+                }
+
+                $from = $registry->status;
+                $currentAttempts = $registry->submission_attempts ?? 0;
+
+                $registry->update([
+                    'status' => RegistryStatusEnum::ACCEPTED_WITH_ERRORS->value,
+                    'submitted_at' => $registry->submitted_at ?? Carbon::now(),
+                    // Never '': it would collide on the UNIQUE index of aeat_csv.
+                    'aeat_csv' => $aeatCsv === '' ? null : $aeatCsv,
+                    'aeat_response' => $aeatResponse,
+                    'submission_attempts' => $currentAttempts + 1,
+                ]);
+
+                $this->announceTransition($registry, $from, lines: $this->linesOf($aeatResponse));
+            });
+        }
+    }
+
+    /**
+     * The total submission budget per registry (AID-1626).
+     *
+     * The default lives here, at the read point, not only in the published
+     * config: mergeConfigFrom() is shallow, so a consumer who published the
+     * config before 1.4 has no such key and must still get 3.
+     *
+     * @throws VerifactuException
+     */
+    public function submissionBudget(?int $override = null): int
+    {
+        $budget = $override ?? (int) config('verifactu.retry.max_submission_attempts', 3);
+
+        if ($budget < 1) {
+            throw VerifactuException::make(sprintf(
+                'The submission budget must be at least 1, got %d. A budget of 0 would move every '
+                . 'failed registry to exhausted without resending any.',
+                $budget,
+            ));
+        }
+
+        return $budget;
+    }
+
+    /**
+     * Mark a registry as failed, or as exhausted when this failure spends its
+     * submission budget (AID-1626).
+     *
+     * Uses atomic update with state verification to prevent overwriting a
+     * successful submission with an error. The crossing is decided under the
+     * row lock, so two workers cannot both report it. An already exhausted
+     * registry that fails again (a manual --include-exhausted attempt) stays
+     * exhausted and is not a new crossing.
+     *
+     * @param  int|null  $maxSubmissionAttempts  The budget; null reads verifactu.retry.max_submission_attempts.
      */
     public function markAsFailed(
         RegistryContract $registry,
-        string $error
+        string $error,
+        ?int $maxSubmissionAttempts = null
     ): void {
         if ($registry instanceof Registry) {
-            DB::transaction(function () use ($registry, $error): void {
+            $budget = $this->submissionBudget($maxSubmissionAttempts);
+
+            DB::transaction(function () use ($registry, $error, $budget): void {
                 // Refresh to get latest state within transaction
                 // Locked read: a plain refresh sees the REPEATABLE READ snapshot (AID-731).
                 $this->lockAndRefresh($registry);
@@ -724,14 +868,22 @@ final class RegistryManager
                     return;
                 }
 
+                $from = $registry->status;
+
                 // Get current attempts before update
-                $currentAttempts = $registry->submission_attempts ?? 0;
+                $attempts = ($registry->submission_attempts ?? 0) + 1;
+
+                $status = $from === RegistryStatusEnum::EXHAUSTED || $attempts >= $budget
+                    ? RegistryStatusEnum::EXHAUSTED
+                    : RegistryStatusEnum::ERROR;
 
                 $registry->update([
-                    'status' => RegistryStatusEnum::ERROR->value,
+                    'status' => $status->value,
                     'aeat_error' => $error,
-                    'submission_attempts' => $currentAttempts + 1,
+                    'submission_attempts' => $attempts,
                 ]);
+
+                $this->announceTransition($registry, $from, error: $error);
             });
         }
     }
@@ -757,6 +909,8 @@ final class RegistryManager
                     return;
                 }
 
+                $from = $registry->status;
+
                 $currentAttempts = $registry->submission_attempts ?? 0;
 
                 $registry->update([
@@ -765,6 +919,8 @@ final class RegistryManager
                     'aeat_response' => $aeatResponse,
                     'submission_attempts' => $currentAttempts + 1,
                 ]);
+
+                $this->announceTransition($registry, $from, error: $error, lines: $this->linesOf($aeatResponse));
             });
         }
     }
@@ -794,6 +950,122 @@ final class RegistryManager
             ->orderBy('created_at', 'asc')
             ->limit($limit)
             ->get();
+    }
+
+    /**
+     * Registries `verifactu:retry-failed` should send (AID-1626).
+     *
+     * - `pending` older than verifactu.retry.pending_grace seconds, ONLY when
+     *   verifactu.retry.resend_pending is true (off by default: a `pending` row
+     *   may have been created on purpose with submitToAeat=false). They are
+     *   abandoned rows or a crash between the creation commit and the
+     *   submission. The grace avoids racing an in-flight register() or a queued
+     *   SubmitRegistryToAeatJob; if a double submission still happens, AEAT
+     *   answers «duplicate» and AID-727 reconciles it.
+     * - `error` still under the budget.
+     * - `exhausted`, only when asked: one more attempt each, counter kept.
+     *
+     * Oldest first, so the chain is presented in the order it was built.
+     *
+     * @return Collection<int, Registry>
+     *
+     * @throws VerifactuException When resend_pending is on and pending_grace is not an integer >= 0.
+     */
+    public function getResubmittableRegistries(
+        int $maxSubmissionAttempts,
+        int $limit = 50,
+        bool $includeExhausted = false,
+    ): Collection {
+        $staleBefore = (bool) config('verifactu.retry.resend_pending', false)
+            ? Carbon::now()->subSeconds($this->pendingGrace())
+            : null;
+
+        return Registry::query()
+            ->where(function ($query) use ($maxSubmissionAttempts, $includeExhausted, $staleBefore): void {
+                $query->where(function ($error) use ($maxSubmissionAttempts): void {
+                    $error->where('status', RegistryStatusEnum::ERROR->value)
+                        ->where('submission_attempts', '<', $maxSubmissionAttempts);
+                });
+
+                if ($staleBefore !== null) {
+                    $query->orWhere(function ($pending) use ($staleBefore): void {
+                        $pending->where('status', RegistryStatusEnum::PENDING->value)
+                            ->where('created_at', '<', $staleBefore);
+                    });
+                }
+
+                if ($includeExhausted) {
+                    $query->orWhere('status', RegistryStatusEnum::EXHAUSTED->value);
+                }
+            })
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->limit($limit)
+            ->get();
+    }
+
+    /**
+     * @throws VerifactuException
+     */
+    private function pendingGrace(): int
+    {
+        $raw = config('verifactu.retry.pending_grace', 300);
+        $grace = filter_var($raw, FILTER_VALIDATE_INT, ['options' => ['min_range' => 0]]);
+
+        if ($grace === false) {
+            throw VerifactuException::make(sprintf(
+                'verifactu.retry.pending_grace must be an integer number of seconds >= 0, got %s.',
+                is_scalar($raw) ? var_export($raw, true) : gettype($raw),
+            ));
+        }
+
+        return $grace;
+    }
+
+    /**
+     * Move every `error` registry already at or past the budget to `exhausted`
+     * (AID-1626), announcing each crossing.
+     *
+     * This converts rows left behind before 1.4 — when such a row simply
+     * dropped out of the retry query — using the budget of THIS run, i.e. the
+     * consumer's real one, not a guess made at migration time. Each row is
+     * re-read under its lock: a concurrent writer may have moved it on.
+     *
+     * @return int The number of registries swept.
+     */
+    public function exhaustOverBudget(int $maxSubmissionAttempts): int
+    {
+        $candidates = Registry::query()
+            ->where('status', RegistryStatusEnum::ERROR->value)
+            ->where('submission_attempts', '>=', $maxSubmissionAttempts)
+            ->orderBy('id')
+            ->pluck('id');
+
+        $swept = 0;
+
+        foreach ($candidates as $id) {
+            $swept += DB::transaction(function () use ($id, $maxSubmissionAttempts): int {
+                $registry = Registry::query()->whereKey($id)->lockForUpdate()->first();
+
+                if ($registry === null
+                    || $registry->status !== RegistryStatusEnum::ERROR
+                    || $registry->submission_attempts < $maxSubmissionAttempts) {
+                    return 0;
+                }
+
+                $registry->update(['status' => RegistryStatusEnum::EXHAUSTED->value]);
+
+                $this->announceTransition(
+                    $registry,
+                    RegistryStatusEnum::ERROR,
+                    error: $registry->aeat_error ?? 'Retry budget exhausted',
+                );
+
+                return 1;
+            });
+        }
+
+        return $swept;
     }
 
     /**

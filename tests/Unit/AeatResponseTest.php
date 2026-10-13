@@ -174,3 +174,31 @@ describe('toArray', function () {
             ->and($array['errors'])->toBeNull();
     });
 });
+
+describe('acceptedWithErrors', function () {
+    it('is a success carrying the flag and the CSV', function () {
+        $response = AeatResponse::acceptedWithErrors(csv: 'CSV-AWE', message: 'ParcialmenteCorrecto');
+
+        expect($response->isSuccess())->toBeTrue()
+            ->and($response->isAcceptedWithErrors())->toBeTrue()
+            ->and($response->isDuplicate())->toBeFalse()
+            ->and($response->getCsv())->toBe('CSV-AWE');
+    });
+
+    it('can mark a duplicate as accepted with errors', function () {
+        $response = AeatResponse::duplicate(csv: null, acceptedWithErrors: true);
+
+        expect($response->isDuplicate())->toBeTrue()
+            ->and($response->isAcceptedWithErrors())->toBeTrue();
+    });
+
+    it('defaults to false for every other construction', function () {
+        expect((new AeatResponse(true))->isAcceptedWithErrors())->toBeFalse()
+            ->and(AeatResponse::duplicate()->isAcceptedWithErrors())->toBeFalse()
+            ->and(AeatResponse::rejection()->isAcceptedWithErrors())->toBeFalse();
+    });
+
+    it('exposes the flag in toArray()', function () {
+        expect(AeatResponse::acceptedWithErrors()->toArray()['accepted_with_errors'])->toBeTrue();
+    });
+});

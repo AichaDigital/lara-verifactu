@@ -238,21 +238,37 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Retry Configuration (v2.0)
+    | Retry Configuration
     |--------------------------------------------------------------------------
     |
-    | Configure automatic retry behavior for failed submissions.
+    | max_submission_attempts is the TOTAL budget of submissions per registry
+    | (AID-1626). When a failure reaches it, the registry moves to `exhausted`
+    | and RegistryRetriesExhaustedEvent fires once. Set it equal to the
+    | --max-attempts you schedule for `verifactu:retry-failed`, so every path
+    | exhausts at the same number.
     |
-    | v2.0 Changes:
-    | - Default max_attempts changed from 3 to 1
-    | - Manual intervention required after failure
-    | - Use verifactu:retry-failed command to retry
+    | resend_pending: `pending` registries are resent by
+    | `verifactu:retry-failed` ONLY when this is true. It is off by default
+    | because a `pending` row may have been created on purpose with
+    | `submitToAeat: false`; enable it only when you want those rows
+    | transmitted (for example together with the switch that turns real
+    | submission on).
+    |
+    | pending_grace is how old, in seconds, a `pending` registry must be before
+    | `verifactu:retry-failed` resends it (when resend_pending is on). It avoids
+    | racing an in-flight register() or a still-queued SubmitRegistryToAeatJob.
+    |
+    | max_attempts is NOT that budget: it is the queue-level $tries of
+    | SubmitRegistryToAeatJob and of ProcessInvoiceRegistrationJob.
     |
     */
 
     'retry' => [
         'enabled' => env('VERIFACTU_RETRY_ENABLED', true),
-        'max_attempts' => env('VERIFACTU_RETRY_MAX_ATTEMPTS', 1), // v2.0: Changed default
+        'max_attempts' => env('VERIFACTU_RETRY_MAX_ATTEMPTS', 1), // queue $tries of the submission jobs
+        'max_submission_attempts' => env('VERIFACTU_RETRY_MAX_SUBMISSION_ATTEMPTS', 3),
+        'resend_pending' => env('VERIFACTU_RETRY_RESEND_PENDING', false),
+        'pending_grace' => env('VERIFACTU_RETRY_PENDING_GRACE', 300),
         'delay' => env('VERIFACTU_RETRY_DELAY', 60), // Delay between retries in seconds
         'backoff' => [60, 120, 240], // Exponential backoff (if manual retry with >1 attempts)
     ],

@@ -64,6 +64,8 @@ return [
         'accepted' => 'Aceptado por AEAT',
         'rejected' => 'Rechazado por AEAT',
         'error' => 'Error en procesamiento',
+        'accepted_with_errors' => 'Aceptado con errores por AEAT',
+        'exhausted' => 'Reintentos agotados',
     ],
 
     'errors' => [
