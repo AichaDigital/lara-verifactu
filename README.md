@@ -179,6 +179,13 @@ $registry = Verifactu::cancel($invoice);
 // Latest registry of an invoice (null if never registered)
 $registry = Verifactu::status($invoice);
 
+// The chained fingerprint (huella) is computed inside the registry's own
+// transaction: it is readable SYNCHRONOUSLY as soon as register() returns and
+// never waits for the AEAT submission or a queue (AID-1656). Deliver the
+// issued invoice downstream with the fingerprint straight from the status read:
+$fingerprint   = Verifactu::status($invoice)?->getHash();        // 64 uppercase hex chars
+$previousHash  = Verifactu::status($invoice)?->getPreviousHash(); // chain link to the prior registry
+
 // AEAT cotejo QR for an invoice (SVG or PNG per config)
 $qr = Verifactu::qr($invoice);
 
