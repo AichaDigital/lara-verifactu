@@ -22,9 +22,11 @@ use AichaDigital\LaraVerifactu\Models\Registry;
 use AichaDigital\LaraVerifactu\Support\AeatLogSanitizer;
 use AichaDigital\LaraVerifactu\Support\AeatResponse;
 use AichaDigital\LaraVerifactu\Support\DispatchesQuietly;
+use AichaDigital\LaraVerifactu\Support\OverlapLockStore;
 use AichaDigital\LaraVerifactu\Support\RegistrationCircumstances;
 use DOMDocument;
 use DOMXPath;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -336,8 +338,45 @@ final class InvoiceRegistrar
      */
     public function retryFailed(?int $maxAttempts = null, int $limit = 50, bool $includeExhausted = false): array
     {
+        // The sweeper obeys the same chain discipline as SubmitRegistryToAeatJob
+        // (AID-1673): it must not send underneath a running submission job, so
+        // it holds the same sequential lock the job holds — otherwise the two
+        // paths could overlap and hand the agency an out-of-order chain. A busy
+        // lock skips the whole pass (nothing was attempted); the next scheduled
+        // run picks the work up.
+        OverlapLockStore::assertUsable('fiscal_verification_queue');
+
+        $lockTimeout = config('verifactu.lock.timeout', 300); // 5 minutes default
+        $lock = Cache::lock('fiscal_verification_queue', $lockTimeout);
+
+        if (! $lock->get()) {
+            Log::channel(config('verifactu.logging.channel', 'single'))
+                ->debug('Fiscal verification lock is held, skipping the retry pass', []);
+
+            return ['success' => 0, 'failed' => 0, 'skipped' => 0, 'exhausted' => 0];
+        }
+
+        try {
+            return $this->runRetryPass($maxAttempts, $limit, $includeExhausted, $lockTimeout);
+        } finally {
+            // A leaked lock would wedge every later submission until it expired.
+            $lock->release();
+        }
+    }
+
+    /**
+     * Run the retry pass. Always called while holding the
+     * `fiscal_verification_queue` lock.
+     *
+     * @return array{success: int, failed: int, skipped: int, exhausted: int}
+     *
+     * @throws VerifactuException When the budget is below 1, or pending_grace is invalid while pending resend is on.
+     */
+    private function runRetryPass(?int $maxAttempts, int $limit, bool $includeExhausted, int $lockTimeout): array
+    {
         $budget = $this->registryManager->submissionBudget($maxAttempts);
-        $candidates = $this->registryManager->getResubmittableRegistries($budget, $limit, $includeExhausted);
+        $candidates = $this->registryManager->getResubmittableRegistries($budget, $limit, $includeExhausted)
+            ->values();
 
         $results = [
             'success' => 0,
@@ -346,7 +385,39 @@ final class InvoiceRegistrar
             'exhausted' => $this->registryManager->exhaustOverBudget($budget),
         ];
 
-        foreach ($candidates as $registry) {
+        $total = $candidates->count();
+
+        // Laravel cache locks expire silently: a pass that outruns the lease
+        // would keep "holding" a lock another worker can already take
+        // (AID-1673 gate, SUSPECTED). Bound the pass to 80% of the lease and
+        // leave the rest to the next scheduled run.
+        $leaseStartedAt = hrtime(true);
+        $leaseBudgetNs = (int) ($lockTimeout * 1e9 * 0.8);
+
+        foreach ($candidates as $index => $registry) {
+            if (($elapsed = hrtime(true) - $leaseStartedAt) >= $leaseBudgetNs) {
+                Log::channel(config('verifactu.logging.channel', 'single'))
+                    ->debug('Retry pass approaching the sequential-lock lease, stopping early', [
+                        'elapsed_ns' => $elapsed,
+                        'lease_budget_ns' => $leaseBudgetNs,
+                        'skipped' => $total - $index,
+                    ]);
+
+                $results['skipped'] += $total - $index;
+
+                break;
+            }
+
+            // Chain order, the same guard the submission job applies (AID-1673):
+            // never send a record whose predecessor the agency has not ruled
+            // on. Skipped, not failed — the record stays recoverable and a
+            // later pass retries it once the predecessor is filed.
+            if ($this->registryManager->hasUnfiledChainPredecessor($registry)) {
+                $results['skipped']++;
+
+                continue;
+            }
+
             try {
                 // The same budget the selection used decides the crossing.
                 $response = $this->submitToAeat($registry, $budget);
@@ -355,13 +426,50 @@ final class InvoiceRegistrar
                     $results['success']++;
                 } else {
                     $results['failed']++;
+                    $results['skipped'] += $total - $index - 1;
+
+                    // Stop advancing the chain at the first failure (AID-1673):
+                    // every later candidate whose chain runs through this one
+                    // must not be handed to the agency after it just failed —
+                    // exactly what the job's guard refuses.
+                    break;
                 }
             } catch (\Throwable) {
                 $results['failed']++;
+                $results['skipped'] += $total - $index - 1;
+
+                break;
             }
         }
 
         return $results;
+    }
+
+    /**
+     * Mark a registry whose submission scheduling was abandoned (AID-1673).
+     *
+     * SubmitRegistryToAeatJob calls this when it exhausts its hold budget: the
+     * submission could not be scheduled, which IS an error, so the record
+     * becomes ERROR and the default sweeper recovers it — without touching
+     * `resend_pending`, which stays reserved for rows created PENDING while
+     * submission was off (AID-1645).
+     */
+    public function markSchedulingAbandoned(RegistryContract $registry): void
+    {
+        $this->registryManager->markSchedulingAbandoned($registry, 'submission scheduling abandoned after exhausting the queue hold budget');
+    }
+
+    /**
+     * Whether the registry this record chains from is still awaiting its
+     * agency verdict — the shared chain-order guard (AID-1673).
+     *
+     * Thin delegate: the implementation lives in RegistryManager (the chain's
+     * owner); SubmitRegistryToAeatJob and the retry sweeper both go through
+     * it, so the guarantee has ONE implementation.
+     */
+    public function hasUnfiledChainPredecessor(Registry $registry): bool
+    {
+        return $this->registryManager->hasUnfiledChainPredecessor($registry);
     }
 
     /**

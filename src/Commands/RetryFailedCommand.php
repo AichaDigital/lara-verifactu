@@ -86,7 +86,7 @@ class RetryFailedCommand extends Command
                 (bool) $this->option('include-exhausted'),
             );
 
-            if ($results['success'] === 0 && $results['failed'] === 0 && $results['exhausted'] === 0) {
+            if ($results['success'] === 0 && $results['failed'] === 0 && $results['exhausted'] === 0 && $results['skipped'] === 0) {
                 $this->info('No failed registries to retry');
 
                 return self::SUCCESS;
@@ -98,6 +98,7 @@ class RetryFailedCommand extends Command
                 [
                     ['Success', $results['success']],
                     ['Failed', $results['failed']],
+                    ['Skipped', $results['skipped']],
                     ['Swept to exhausted', $results['exhausted']],
                     ['Total resent', $results['success'] + $results['failed']],
                 ]

@@ -93,7 +93,7 @@ class SubmitRegistryToAeatJob implements ShouldQueue
 
         if (! $lock->get()) {
             // Another submission is processing; retry shortly.
-            $this->requeueAfterHold('fiscal verification lock is held', [
+            $this->requeueAfterHold($registrar, 'fiscal verification lock is held', [
                 'registry_id' => $this->registryId,
             ]);
 
@@ -138,13 +138,12 @@ class SubmitRegistryToAeatJob implements ShouldQueue
             return;
         }
 
-        // Chain order (AID-1671): wait behind the predecessor this record chains
-        // from until the agency has ruled on it. The chain head (previous_hash
-        // null) has nobody to wait for. A soft-deleted predecessor reads as no
-        // predecessor on purpose: its registration was rolled back and the
-        // chain behind it is rebuilt by that flow, not by this job.
-        if ($this->hasUnfiledPredecessor($registry)) {
-            $this->requeueAfterHold('chain predecessor not filed at AEAT yet', [
+        // Chain order (AID-1671/1673): wait behind the predecessor this record
+        // chains from until the agency has ruled on it. One shared
+        // implementation in RegistryManager — the sweeper applies the same
+        // guarantee, not a second copy of it.
+        if ($this->hasUnfiledPredecessor($registry, $registrar)) {
+            $this->requeueAfterHold($registrar, 'chain predecessor not filed at AEAT yet', [
                 'registry_id' => $this->registryId,
                 'registry_number' => $registry->registry_number,
                 'previous_hash' => $registry->previous_hash,
@@ -188,29 +187,37 @@ class SubmitRegistryToAeatJob implements ShouldQueue
      * within the bounded hold budget instead of scheduling a future job.
      *
      * NOT release(): a released job re-queues with attempts()+1 and the worker
-     * fails it before handle() once attempts() > maxTries (Worker.php marks it
-     * failed on re-pop) — with the default `retry.max_attempts` of 1, a routine
-     * hold (the guard path is the COMMON case with several workers) would be a
-     * terminal queue failure leaving the registry PENDING, and with
-     * `resend_pending` off nothing would ever submit it. A fresh copy starts
-     * its own attempt budget; the hold counter bounds the loop when a
-     * predecessor never files (then the give-up is logged loudly and the
-     * record stays PENDING for the resend/sweep paths).
-     */
-    /**
+     * fails it before handle() runs again — with the default
+     * `retry.max_attempts` of 1, a routine hold (the guard path is the COMMON
+     * case with several workers) would be a terminal queue failure. A fresh
+     * copy starts its own attempt budget; the hold counter bounds the loop
+     * when a predecessor never files — the give-up then marks the registry
+     * ERROR so the default sweeper recovers it (AID-1673).
+     *
      * @param  array<string, mixed>  $context
      */
-    protected function requeueAfterHold(string $reason, array $context): void
+    protected function requeueAfterHold(InvoiceRegistrar $registrar, string $reason, array $context): void
     {
         $channel = Log::channel(config('verifactu.logging.channel', 'single'));
         $maxHolds = (int) config('verifactu.retry.max_queue_holds', 60);
 
         if ($this->holds >= $maxHolds) {
-            $channel->error('Submission hold budget exhausted, giving up; registry stays PENDING', [
+            $channel->error('Submission hold budget exhausted, giving up; the registry is marked ERROR for the default sweeper', [
                 'reason' => $reason,
                 'holds' => $this->holds,
                 ...$context,
             ]);
+
+            // Abandonment IS a scheduling error: marking the registry ERROR is
+            // what makes the default sweeper recover it (AID-1673). Leaving it
+            // PENDING stranded the record forever with `resend_pending` off.
+            // PENDING stays reserved for rows created with submission off
+            // (AID-1645). markAsFailed is idempotent against filed outcomes.
+            $registry = Registry::find($this->registryId);
+
+            if ($registry && ! $registry->status->isFiledAtAeat()) {
+                $registrar->markSchedulingAbandoned($registry);
+            }
 
             return;
         }
@@ -227,16 +234,14 @@ class SubmitRegistryToAeatJob implements ShouldQueue
     /**
      * Whether the registry this record chains from (its `previous_hash`, a
      * unique `hash`) is still awaiting its agency verdict.
+     *
+     * A thin delegate: the implementation lives in
+     * RegistryManager::hasUnfiledChainPredecessor() so the job and the retry
+     * sweeper share ONE chain-order guard (AID-1673).
      */
-    protected function hasUnfiledPredecessor(Registry $registry): bool
+    protected function hasUnfiledPredecessor(Registry $registry, InvoiceRegistrar $registrar): bool
     {
-        if ($registry->previous_hash === null) {
-            return false;
-        }
-
-        $predecessor = Registry::where('hash', $registry->previous_hash)->first();
-
-        return $predecessor !== null && ! $predecessor->status->isFiledAtAeat();
+        return $registrar->hasUnfiledChainPredecessor($registry);
     }
 
     /**
