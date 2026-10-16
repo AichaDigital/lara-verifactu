@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-10-16
+
 ### Added
 
 - **Synchronous fingerprint availability contract** (AID-1656). Documented in the README and pinned by a feature test: the chained fingerprint (huella, 64 uppercase hex) and the `previous_hash` chain link are readable synchronously through `Verifactu::status($invoice)` as soon as `register()` returns — they never wait for the AEAT submission or a queue. Relevant for consumers that deliver registered invoices downstream the moment they are issued (e.g. openmizan via larabill's outbox). No behavior change: the fingerprint was already computed inside the registry's own transaction at registration time.
