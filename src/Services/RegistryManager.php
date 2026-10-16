@@ -380,6 +380,31 @@ final class RegistryManager
     }
 
     /**
+     * Whether the registry this record chains from is still awaiting its
+     * agency verdict (AID-1673).
+     *
+     * The single implementation of the chain-order guarantee shared by
+     * SubmitRegistryToAeatJob and the retry sweeper: a record must not be
+     * handed to the agency while the predecessor its `previous_hash` points at
+     * (`hash` is UNIQUE) has not been filed — SENT, ACCEPTED or
+     * ACCEPTED_WITH_ERRORS. The chain head (previous_hash null) has nobody to
+     * wait for. A soft-deleted predecessor reads as no predecessor on purpose:
+     * its registration was rolled back and the chain behind it is rebuilt by
+     * that flow, not by a submission. The lookup reads the database fresh, so
+     * a predecessor filed earlier in the same retry pass unblocks its successor.
+     */
+    public function hasUnfiledChainPredecessor(Registry $registry): bool
+    {
+        if ($registry->previous_hash === null) {
+            return false;
+        }
+
+        $predecessor = Registry::where('hash', $registry->previous_hash)->first();
+
+        return $predecessor !== null && ! $predecessor->status->isFiledAtAeat();
+    }
+
+    /**
      * Verify blockchain integrity
      *
      * Checks that all registries in the chain are properly linked.
@@ -886,6 +911,50 @@ final class RegistryManager
                 $this->announceTransition($registry, $from, error: $error);
             });
         }
+    }
+
+    /**
+     * Mark a registry whose submission scheduling was abandoned (AID-1673).
+     *
+     * The hold-budget give-up of SubmitRegistryToAeatJob lands here: the
+     * submission never left for the agency, so the marking does NOT spend the
+     * submission budget — a registry one attempt short of EXHAUSTED stays a
+     * recoverable ERROR for the default sweeper, which is the whole point of
+     * the marking. Same idempotency as markAsFailed: never overwrite an
+     * outcome the agency already produced.
+     */
+    public function markSchedulingAbandoned(RegistryContract $registry, string $error): void
+    {
+        if (! $registry instanceof Registry) {
+            return;
+        }
+
+        DB::transaction(function () use ($registry, $error): void {
+            // Locked read: a plain refresh sees the REPEATABLE READ snapshot (AID-731).
+            $this->lockAndRefresh($registry);
+
+            if ($registry->status->hasAgencyVerdict()) {
+                return;
+            }
+
+            // Scope the marking to PENDING — the only state a scheduling
+            // abandonment creates (AID-1673 gate round 2). An EXHAUSTED record
+            // is a deliberate budget crossing (recovered via
+            // --include-exhausted) and an at-budget ERROR is the budget rule
+            // working; neither is the abandonment's business.
+            if ($registry->status !== RegistryStatusEnum::PENDING) {
+                return;
+            }
+
+            $from = $registry->status;
+
+            $registry->update([
+                'status' => RegistryStatusEnum::ERROR->value,
+                'aeat_error' => $error,
+            ]);
+
+            $this->announceTransition($registry, $from, error: $error);
+        });
     }
 
     /**

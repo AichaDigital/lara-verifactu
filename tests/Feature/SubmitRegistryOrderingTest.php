@@ -176,7 +176,7 @@ it('submits behind a predecessor the agency accepted with errors, not only behin
     expect($second->fresh()->status)->toBe(RegistryStatusEnum::SENT);
 });
 
-it('gives up without submitting once the hold budget is exhausted', function () {
+it('marks the registry ERROR for the default sweeper once the hold budget is exhausted', function () {
     /** @var Registry $first */
     $first = $this->registryManager->createRegistry(Invoice::factory()->create());
     /** @var Registry $second */
@@ -184,12 +184,14 @@ it('gives up without submitting once the hold budget is exhausted', function () 
 
     $this->aeatClient->shouldReceive('sendRegistration')->never();
 
-    // 60 holds served (the default budget): the give-up leaves the record
-    // PENDING for the resend/sweep paths instead of looping forever.
+    // 60 holds served (the default budget): the give-up marks the record
+    // ERROR so the DEFAULT sweeper recovers it (AID-1673) — PENDING would
+    // strand it forever with resend_pending off.
     runSubmissionJob($second->id, holds: 60);
 
     Queue::assertNothingPushed();
 
-    expect($second->fresh()->status)->toBe(RegistryStatusEnum::PENDING)
+    expect($second->fresh()->status)->toBe(RegistryStatusEnum::ERROR)
+        ->and($second->fresh()->aeat_error)->toContain('abandoned')
         ->and($first->fresh()->status)->toBe(RegistryStatusEnum::PENDING);
 });

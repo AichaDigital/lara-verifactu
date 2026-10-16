@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The retry sweeper obeys the chain order, and hold abandonment is recoverable** (AID-1673). Two defects measured against v1.4.1, both found by the clientes adversarial gate:
+
+  - `SubmitRegistryToAeatJob::requeueAfterHold()` left the registry `PENDING` when it gave up after exhausting `retry.max_queue_holds`, and the default sweeper only picks `PENDING` rows when `retry.resend_pending` is on: a successor whose predecessor sat in `ERROR` for ~10 minutes was never sent. The give-up now **marks the registry `ERROR`** (`aeat_error`: `submission scheduling abandoned after exhausting the queue hold budget`), which the default sweeper recovers without enabling `resend_pending`. `resend_pending` keeps its meaning (rows created `PENDING` while submission was off, AID-1645). The marking never consumes a submission attempt — the submission never left for the agency — so a registry one attempt short of `EXHAUSTED` stays recoverable. The retry pass is also bounded to 80% of the sequential-lock lease, so it can never outrun the lock it holds.
+  - `InvoiceRegistrar::retryFailed()` sent out of chain order. It now (1) holds the `fiscal_verification_queue` lock — a busy lock skips the whole pass, nothing attempted; (2) skips any candidate whose chain predecessor (`previous_hash` → the registry carrying it) is not filed at the agency; (3) stops the pass at the first submission failure instead of advancing the chain.
+
+  The predecessor guard has one implementation, `RegistryManager::hasUnfiledChainPredecessor()`, shared by the job and the sweeper. `retryFailed()`'s `skipped` counter now means "selected but not attempted" (guard skips, hold-out remainder after a stop, or — for command consumers — a pass skipped because the sequential lock was busy). Behaviour change of the sweep: see `UPGRADE-1.5.md`.
+
 ## [1.4.1] - 2026-10-16
 
 ### Added

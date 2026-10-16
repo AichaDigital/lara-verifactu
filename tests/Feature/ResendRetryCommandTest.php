@@ -100,14 +100,24 @@ it('leaves a pending registry younger than the grace period alone', function () 
 it('applies a 300 second grace for a published config that predates the key', function () {
     config()->set('verifactu.retry', ['enabled' => true, 'max_attempts' => 1, 'delay' => 60, 'resend_pending' => true]);
 
-    resendCommandTestRegistry($this->registryManager, RegistryStatusEnum::PENDING, ageSeconds: 290);
+    $young = resendCommandTestRegistry($this->registryManager, RegistryStatusEnum::PENDING, ageSeconds: 290);
     $stale = resendCommandTestRegistry($this->registryManager, RegistryStatusEnum::PENDING, ageSeconds: 310);
+
+    // AID-1673: the stale row chains from the young one, which is still
+    // PENDING — the chain-order guard holds it back this pass even though the
+    // grace would select it. It goes once its predecessor is filed.
+    $this->aeatClient->shouldNotReceive('sendRegistration');
+    $this->artisan('verifactu:retry-failed')->assertSuccessful();
+    expect($stale->fresh()->status)->toBe(RegistryStatusEnum::PENDING);
+
+    $this->registryManager->markAsSubmitted($young, 'CSV-YOUNG', json_encode(['estado_envio' => 'Correcto']));
 
     $this->aeatClient->shouldReceive('sendRegistration')->once()
         ->withArgs(fn (RegistryContract $registry) => $registry->getId() === $stale->id)
         ->andReturn(new AeatResponse(success: true, code: 'CSV-GRACE-OK', message: 'Correcto'));
 
     $this->artisan('verifactu:retry-failed')->assertSuccessful();
+    expect($stale->fresh()->status)->toBe(RegistryStatusEnum::SENT);
 });
 
 it('resends an error registry under budget', function () {
@@ -293,4 +303,53 @@ it('keeps the skipped key, at zero, and reports the sweep in retryFailed()', fun
 
     expect(app(InvoiceRegistrar::class)->retryFailed())
         ->toBe(['success' => 0, 'failed' => 0, 'skipped' => 0, 'exhausted' => 1]);
+});
+
+it('reports skipped candidates in the command summary', function () {
+    // R1 succeeds; R2 burns its budget (EXHAUSTED, not a candidate); R3 chains
+    // from R2, so the guard skips it: a pass with success > 0 AND skipped > 0,
+    // which the summary table must surface (AID-1673 gate, VERIFIED #3).
+    $r1 = $this->registryManager->createRegistry(Invoice::factory()->create());
+    $r2 = $this->registryManager->createRegistry(Invoice::factory()->create());
+    $r3 = $this->registryManager->createRegistry(Invoice::factory()->create());
+
+    $this->registryManager->markAsFailed($r1, 'boom');
+    $this->registryManager->markAsFailed($r2, 'boom');
+    $this->registryManager->markAsFailed($r2, 'boom');
+    $this->registryManager->markAsFailed($r2, 'boom');
+    $this->registryManager->markAsFailed($r3, 'boom');
+
+    $this->aeatClient->shouldReceive('sendRegistration')
+        ->once()
+        ->withArgs(fn (RegistryContract $registry) => $registry->getId() === $r1->id)
+        ->andReturn(new AeatResponse(success: true, code: 'CSV-OK', message: 'Correcto'));
+
+    $this->artisan('verifactu:retry-failed')
+        ->expectsOutputToContain('Skipped')
+        ->assertSuccessful();
+
+    expect($r1->fresh()->status)->toBe(RegistryStatusEnum::SENT)
+        ->and($r3->fresh()->status)->toBe(RegistryStatusEnum::ERROR);
+});
+
+it('reports a skip-only pass instead of claiming there was nothing to retry', function () {
+    // R2 burned its budget (EXHAUSTED, not a candidate); R3 chains from R2 and
+    // the guard skips it: the pass attempts nothing, and "No failed registries
+    // to retry" would hide that a guard decision happened (AID-1673 gate
+    // round 2).
+    $r2 = $this->registryManager->createRegistry(Invoice::factory()->create());
+    $r3 = $this->registryManager->createRegistry(Invoice::factory()->create());
+
+    $this->registryManager->markAsFailed($r2, 'boom');
+    $this->registryManager->markAsFailed($r2, 'boom');
+    $this->registryManager->markAsFailed($r2, 'boom');
+    $this->registryManager->markAsFailed($r3, 'boom');
+
+    $this->aeatClient->shouldNotReceive('sendRegistration');
+
+    $this->artisan('verifactu:retry-failed')
+        ->expectsOutputToContain('Skipped')
+        ->assertSuccessful();
+
+    expect($r3->fresh()->status)->toBe(RegistryStatusEnum::ERROR);
 });
