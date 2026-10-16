@@ -7,11 +7,13 @@ namespace AichaDigital\LaraVerifactu\Jobs;
 use AichaDigital\LaraVerifactu\Exceptions\AeatException;
 use AichaDigital\LaraVerifactu\Models\Registry;
 use AichaDigital\LaraVerifactu\Services\InvoiceRegistrar;
+use AichaDigital\LaraVerifactu\Support\OverlapLockStore;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -37,11 +39,24 @@ class SubmitRegistryToAeatJob implements ShouldQueue
     public int $timeout;
 
     /**
+     * How many sequential holds this copy has already served.
+     *
+     * A hold re-dispatches a FRESH copy (see requeueAfterHold) instead of
+     * release(): a released job re-queues with attempts()+1 and the worker
+     * kills it before handle() once attempts() > maxTries — with the default
+     * `retry.max_attempts` of 1, one hold would be a terminal queue failure
+     * with the registry left PENDING (AID-1671 gate, VERIFIED #1).
+     */
+    public int $holds = 0;
+
+    /**
      * Create a new job instance.
      */
     public function __construct(
-        public readonly int $registryId
+        public readonly int $registryId,
+        int $holds = 0
     ) {
+        $this->holds = $holds;
         $this->tries = config('verifactu.retry.max_attempts', 3);
         $this->timeout = config('verifactu.retry.timeout', 60);
         $this->onQueue(config('verifactu.queue.name', 'default'));
@@ -51,8 +66,53 @@ class SubmitRegistryToAeatJob implements ShouldQueue
      * Execute the job.
      *
      * Includes idempotency check to prevent duplicate submissions.
+     *
+     * Submissions keep chain order regardless of the worker count (AID-1671):
+     * since AID-1664 consumers create the registry synchronously at issuance
+     * and dispatch this job afterwards, this job is the only submission path of
+     * the new flow — and it inherits the discipline ProcessInvoiceRegistrationJob
+     * always had. Two mechanisms, for two different windows:
+     *
+     *  - the `fiscal_verification_queue` lock serialises jobs that overlap in
+     *    time (same name and same assertUsable() gate as the old job, so both
+     *    paths exclude each other);
+     *  - the chain-order guard holds a record whose predecessor — the registry
+     *    its `previous_hash` points at — has not been filed at the agency yet,
+     *    the case of two workers picking records created one after another,
+     *    where the lock alone never fires.
      */
     public function handle(InvoiceRegistrar $registrar): void
+    {
+        // The sequential-processing lock is only worth what the store behind it
+        // is worth: on a per-process store it is decorative, and silently so.
+        // Same gate and failure mode as ProcessInvoiceRegistrationJob.
+        OverlapLockStore::assertUsable('fiscal_verification_queue');
+
+        $lockTimeout = config('verifactu.lock.timeout', 300); // 5 minutes default
+        $lock = Cache::lock('fiscal_verification_queue', $lockTimeout);
+
+        if (! $lock->get()) {
+            // Another submission is processing; retry shortly.
+            $this->requeueAfterHold('fiscal verification lock is held', [
+                'registry_id' => $this->registryId,
+            ]);
+
+            return;
+        }
+
+        try {
+            $this->submitWhileHoldingLock($registrar);
+        } finally {
+            // A leaked lock would wedge every later submission until it expired.
+            $lock->release();
+        }
+    }
+
+    /**
+     * Idempotency, chain-order guard and the actual submission. Runs while the
+     * caller holds the `fiscal_verification_queue` lock.
+     */
+    protected function submitWhileHoldingLock(InvoiceRegistrar $registrar): void
     {
         $registry = Registry::find($this->registryId);
 
@@ -74,6 +134,21 @@ class SubmitRegistryToAeatJob implements ShouldQueue
                     'registry_number' => $registry->registry_number,
                     'csv' => $registry->aeat_csv,
                 ]);
+
+            return;
+        }
+
+        // Chain order (AID-1671): wait behind the predecessor this record chains
+        // from until the agency has ruled on it. The chain head (previous_hash
+        // null) has nobody to wait for. A soft-deleted predecessor reads as no
+        // predecessor on purpose: its registration was rolled back and the
+        // chain behind it is rebuilt by that flow, not by this job.
+        if ($this->hasUnfiledPredecessor($registry)) {
+            $this->requeueAfterHold('chain predecessor not filed at AEAT yet', [
+                'registry_id' => $this->registryId,
+                'registry_number' => $registry->registry_number,
+                'previous_hash' => $registry->previous_hash,
+            ]);
 
             return;
         }
@@ -102,6 +177,66 @@ class SubmitRegistryToAeatJob implements ShouldQueue
                 throw $e;
             }
         }
+    }
+
+    /**
+     * Serve a sequential hold by re-dispatching a FRESH copy 10 seconds out.
+     *
+     * Assumes a real async queue connection, like the whole sequential
+     * `fiscal_verification` design does: on a `sync` connection Laravel
+     * executes the delayed dispatch inline, so the loop resolves immediately
+     * within the bounded hold budget instead of scheduling a future job.
+     *
+     * NOT release(): a released job re-queues with attempts()+1 and the worker
+     * fails it before handle() once attempts() > maxTries (Worker.php marks it
+     * failed on re-pop) — with the default `retry.max_attempts` of 1, a routine
+     * hold (the guard path is the COMMON case with several workers) would be a
+     * terminal queue failure leaving the registry PENDING, and with
+     * `resend_pending` off nothing would ever submit it. A fresh copy starts
+     * its own attempt budget; the hold counter bounds the loop when a
+     * predecessor never files (then the give-up is logged loudly and the
+     * record stays PENDING for the resend/sweep paths).
+     */
+    /**
+     * @param  array<string, mixed>  $context
+     */
+    protected function requeueAfterHold(string $reason, array $context): void
+    {
+        $channel = Log::channel(config('verifactu.logging.channel', 'single'));
+        $maxHolds = (int) config('verifactu.retry.max_queue_holds', 60);
+
+        if ($this->holds >= $maxHolds) {
+            $channel->error('Submission hold budget exhausted, giving up; registry stays PENDING', [
+                'reason' => $reason,
+                'holds' => $this->holds,
+                ...$context,
+            ]);
+
+            return;
+        }
+
+        $channel->debug('Submission held, re-dispatching a fresh copy in 10 seconds', [
+            'reason' => $reason,
+            'holds' => $this->holds,
+            ...$context,
+        ]);
+
+        self::dispatch($this->registryId, $this->holds + 1)->delay(10);
+    }
+
+    /**
+     * Whether the registry this record chains from (its `previous_hash`, a
+     * unique `hash`) is still awaiting its agency verdict.
+     */
+    protected function hasUnfiledPredecessor(Registry $registry): bool
+    {
+        if ($registry->previous_hash === null) {
+            return false;
+        }
+
+        $predecessor = Registry::where('hash', $registry->previous_hash)->first();
+
+        return $predecessor !== null && ! $predecessor->status->isFiledAtAeat();
     }
 
     /**

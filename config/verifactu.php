@@ -267,6 +267,7 @@ return [
         'enabled' => env('VERIFACTU_RETRY_ENABLED', true),
         'max_attempts' => env('VERIFACTU_RETRY_MAX_ATTEMPTS', 1), // queue $tries of the submission jobs
         'max_submission_attempts' => env('VERIFACTU_RETRY_MAX_SUBMISSION_ATTEMPTS', 3),
+        'max_queue_holds' => env('VERIFACTU_RETRY_MAX_QUEUE_HOLDS', 60), // sequential holds (AID-1671) before a submission job gives up
         'resend_pending' => env('VERIFACTU_RETRY_RESEND_PENDING', false),
         'pending_grace' => env('VERIFACTU_RETRY_PENDING_GRACE', 300),
         'delay' => env('VERIFACTU_RETRY_DELAY', 60), // Delay between retries in seconds

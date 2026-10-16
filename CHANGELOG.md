@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Synchronous fingerprint availability contract** (AID-1656). Documented in the README and pinned by a feature test: the chained fingerprint (huella, 64 uppercase hex) and the `previous_hash` chain link are readable synchronously through `Verifactu::status($invoice)` as soon as `register()` returns — they never wait for the AEAT submission or a queue. Relevant for consumers that deliver registered invoices downstream the moment they are issued (e.g. openmizan via larabill's outbox). No behavior change: the fingerprint was already computed inside the registry's own transaction at registration time.
 
+### Fixed
+
+- **Sequential AEAT submission order in `SubmitRegistryToAeatJob`** (AID-1671). The job — the only submission path of the flow where consumers create the registry synchronously at issuance (AID-1664) — took neither the `fiscal_verification_queue` lock nor any order guard, so with more than one worker a registry could reach the agency before the one its `previous_hash` references. It now (1) takes the same lock `ProcessInvoiceRegistrationJob` always held, with the same `OverlapLockStore::assertUsable()` gate, releasing it in `finally`, and (2) holds a record whose chain predecessor (the registry carrying its `previous_hash`) has not been filed at the agency yet.
+
+  Holds **re-dispatch a fresh copy of the job** 10 seconds out (bounded by the new `retry.max_queue_holds` config key, default 60) instead of `release()`: with the default `retry.max_attempts` of 1, a released job is killed by the worker on re-pop before `handle()` runs again, and the registry would stay `PENDING` forever with `resend_pending` off. The fresh copy starts its own attempt budget; when the hold budget is exhausted the give-up is logged and the record stays `PENDING`. Note: with `resend_pending` off (the default) a record stranded by an exhausted hold budget is NOT automatically recovered — the same known limitation a pre-check failure always had. The job assumes a real async queue connection (as the sequential `fiscal_verification` design does); on a `sync` connection the hold re-dispatch resolves inline within the bounded budget. No schema or API change.
+
+  Note: the `verifactu:retry-failed` sweep keeps its own `verifactu:retry-failed` lock and does not take the sequential lock or the chain-order guard; it selects `ERROR` records only. If your deployment runs the sweep concurrently with queue submissions, keep an eye on the ordering of records it re-submits.
+
 ## [1.4.0] - 2026-10-13
 
 ### Added
