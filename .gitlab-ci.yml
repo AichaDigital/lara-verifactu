@@ -6,7 +6,7 @@
 # La matriz más ancha de la umbrela: PHP × Laravel × MOTOR DE BD. Son 12 jobs, y el
 # motor no es decorativo — este paquete firma registros fiscales (VeriFactu) y la
 # cadena de encadenamiento depende del comportamiento real del motor, así que se
-# prueba contra MySQL 8.4 y MariaDB 12.3 por separado.
+# prueba contra MySQL 8.4 y MariaDB 11.4 por separado (series congeladas del stack, AID-1320).
 #
 # En GitHub el servicio elegía imagen con un ternario dentro del YAML; aquí cada
 # combinación declara su imagen y su driver como variables, y el servicio se
@@ -134,7 +134,7 @@ pest:
         LARAVEL: "12.*"
         TESTBENCH: "10.*"
         DB_DRIVER: "mariadb"
-        DB_IMAGE: "mariadb:12.3"
+        DB_IMAGE: "mariadb:11.4"
       - PHP_VERSION: ["8.3", "8.4", "8.5"]
         LARAVEL: "13.*"
         TESTBENCH: "11.*"
@@ -144,7 +144,7 @@ pest:
         LARAVEL: "13.*"
         TESTBENCH: "11.*"
         DB_DRIVER: "mariadb"
-        DB_IMAGE: "mariadb:12.3"
+        DB_IMAGE: "mariadb:11.4"
   services:
     - name: $DB_IMAGE
       alias: db
@@ -235,7 +235,7 @@ concurrency:
       - DB_DRIVER: "mysql"
         DB_IMAGE: "mysql:8.4"
       - DB_DRIVER: "mariadb"
-        DB_IMAGE: "mariadb:12.3"
+        DB_IMAGE: "mariadb:11.4"
   services:
     - name: $DB_IMAGE
       alias: db

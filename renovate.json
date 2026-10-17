@@ -6,5 +6,29 @@
     ":timezone(Europe/Madrid)",
     ":semanticCommits"
   ],
-  "schedule": ["before 10am on monday"]
+  "schedule": [
+    "before 10am on monday"
+  ],
+  "packageRules": [
+    {
+      "description": "Operator brake (AID-1320): the stack freezes MariaDB on the 10.11/11.4 series and MySQL on 8.4. Do not propose newer database images.",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "mariadb"
+      ],
+      "allowedVersions": "<11.5"
+    },
+    {
+      "description": "Operator brake (AID-1320): MySQL stays on 8.4.",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "mysql"
+      ],
+      "allowedVersions": "<8.5"
+    }
+  ]
 }
