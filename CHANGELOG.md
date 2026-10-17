@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- **`phpseclib/phpseclib` is no longer a runtime dependency** (AID-1273). It had been declared in `require` since the initial package structure and was never used by `src/`, the tests or the docs; XML signing goes through `robrichards/xmlseclibs` alone. Consumers that relied on it transitively must require it themselves. Dropping it also removes the package from the phpseclib CVE-2026-84308 advisory surface (an X25519 timing issue the package never exercised) and avoids a future conflict: `xmlseclibs` 4 pins `phpseclib ~3.0`.
+
 ### Changed
 
 - **CI tests the database series the stack freezes** (AID-1320). The MariaDB cells of the test and concurrency matrices move from `mariadb:12.3` to `mariadb:11.4`; MySQL stays on `mysql:8.4`. The supported engines are now declared in `composer.json` under `extra.requirements` (`mysql: >=8.4 <9.0`, `mariadb: 10.11.* || 11.4.*`), and Renovate is capped (`mariadb <11.5`, `mysql <8.5`) so it does not propose newer images. No runtime change.
