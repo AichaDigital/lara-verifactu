@@ -115,6 +115,7 @@ rather than sending XSD-valid XML the AEAT would reject — or accept *con error
 
 - PHP 8.3+ (CI-tested on 8.3, 8.4 and 8.5)
 - Laravel 12.x or 13.x
+- Database: MySQL 8.4, or MariaDB 10.11 / 11.4 (CI-tested on MySQL 8.4 and MariaDB 11.4)
 - Extensions: `soap`, `openssl`, `dom`, `libxml`
 - A digital certificate (PKCS#12) for AEAT submission: `representante`,
   `sello` or `ciudadano`
@@ -347,8 +348,10 @@ export DB_DRIVER=mariadb DB_HOST=127.0.0.1 DB_PORT=3307 \
 composer test
 ```
 
-CI runs the full suite against both **MariaDB 12.3** and **MySQL 8.4**. `composer
-test` is serial (parallel testing is intentionally disabled, see AID-259).
+CI runs the full suite against both **MariaDB 11.4** and **MySQL 8.4**, the
+database series this package supports (declared in `composer.json` under
+`extra.requirements`: MySQL 8.4, MariaDB 10.11 or 11.4). `composer test` is
+serial (parallel testing is intentionally disabled, see AID-259).
 
 ## Security
 

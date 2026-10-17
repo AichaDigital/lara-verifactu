@@ -5,6 +5,12 @@ All notable changes to `lara-verifactu` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **CI tests the database series the stack freezes** (AID-1320). The MariaDB cells of the test and concurrency matrices move from `mariadb:12.3` to `mariadb:11.4`; MySQL stays on `mysql:8.4`. The supported engines are now declared in `composer.json` under `extra.requirements` (`mysql: >=8.4 <9.0`, `mariadb: 10.11.* || 11.4.*`), and Renovate is capped (`mariadb <11.5`, `mysql <8.5`) so it does not propose newer images. No runtime change.
+
 ## [1.5.0] - 2026-10-16
 
 ### Fixed
@@ -1147,7 +1153,9 @@ This release introduces **critical fiscal compliance features** required for pro
 - **PHPStan: Level 8 ✅ (12 legitimate framework false positives baselined)**
 - **Code Style: PSR-12 ✅**
 
-[Unreleased]: https://github.com/aichadigital/lara-verifactu/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/aichadigital/lara-verifactu/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/aichadigital/lara-verifactu/compare/v1.4.1...v1.5.0
+[1.4.1]: https://github.com/aichadigital/lara-verifactu/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/aichadigital/lara-verifactu/compare/v1.3.1...v1.4.0
 [1.3.1]: https://github.com/aichadigital/lara-verifactu/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/aichadigital/lara-verifactu/compare/v1.2.0...v1.3.0
