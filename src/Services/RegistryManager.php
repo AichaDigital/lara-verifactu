@@ -17,6 +17,7 @@ use AichaDigital\LaraVerifactu\Events\RegistryStatusChangedEvent;
 use AichaDigital\LaraVerifactu\Exceptions\VerifactuException;
 use AichaDigital\LaraVerifactu\Models\Registry;
 use AichaDigital\LaraVerifactu\Support\CancellationRecord;
+use AichaDigital\LaraVerifactu\Support\CheckedWrite;
 use AichaDigital\LaraVerifactu\Support\DispatchesQuietly;
 use AichaDigital\LaraVerifactu\Support\PreviousRegistry;
 use AichaDigital\LaraVerifactu\Support\RegistrationCircumstances;
@@ -103,7 +104,7 @@ final class RegistryManager
             // are out of $fillable on purpose (AID-730), so this generator is
             // the only thing that writes them.
             $registry = new Registry;
-            $registry->forceFill([
+            $saved = $registry->forceFill([
                 'invoice_id' => $invoice->getId(),
                 'registry_number' => $registryNumber,
                 'registry_date' => Carbon::now(),
@@ -120,6 +121,12 @@ final class RegistryManager
                 'status' => RegistryStatusEnum::PENDING->value,
                 'submission_attempts' => 0,
             ])->save();
+
+            // A vetoed save() returns false without inserting (AID-1855). The
+            // caller must get an exception, inside the chain transaction, so
+            // it rolls back — never a Registry with no row behind it, and
+            // never RegistryCreatedEvent for a link that does not exist.
+            CheckedWrite::orFail($saved, "registration registry {$registryNumber}");
 
             // Dispatch event
             event(new RegistryCreatedEvent($registry, $invoice));
@@ -178,7 +185,7 @@ final class RegistryManager
 
             // forceFill for the same reason as createRegistry() (AID-730).
             $registry = new Registry;
-            $registry->forceFill([
+            $saved = $registry->forceFill([
                 'invoice_id' => $invoice->getId(),
                 'registry_number' => $registryNumber,
                 'registry_date' => Carbon::now(),
@@ -190,6 +197,9 @@ final class RegistryManager
                 'status' => RegistryStatusEnum::PENDING->value,
                 'submission_attempts' => 0,
             ])->save();
+
+            // Same contract as createRegistry() (AID-1855).
+            CheckedWrite::orFail($saved, "cancellation registry {$registryNumber}");
 
             event(new RegistryCreatedEvent($registry, $invoice));
             $this->announceTransition($registry, null);

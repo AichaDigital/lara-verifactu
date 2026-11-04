@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A vetoed registry write now throws instead of returning an unpersisted `Registry`** (AID-1855). `RegistryManager::createRegistry()` and `createCancellationRegistry()` ignored the `false` that Eloquent's `save()` returns when a `saving`/`creating` listener vetoes the insert, so they dispatched `RegistryCreatedEvent`, announced the transition and returned a `Registry` with no row behind it; an issuer wrapping `register()` in its own transaction committed an invoice without a fingerprint. Both now raise `VerifactuException` inside the chain transaction, before any event, so the caller rolls back. The risk was conditional: neither the package nor its known consumers register such a listener. A consumer postcondition that re-reads the registry after `register()` keeps working and becomes a second line of defence.
+
 ### Removed
 
 - **`phpseclib/phpseclib` is no longer a runtime dependency** (AID-1273). It had been declared in `require` since the initial package structure and was never used by `src/`, the tests or the docs; XML signing goes through `robrichards/xmlseclibs` alone. Consumers that relied on it transitively must require it themselves. Dropping it also removes the package from the phpseclib CVE-2026-84308 advisory surface (an X25519 timing issue the package never exercised) and avoids a future conflict: `xmlseclibs` 4 pins `phpseclib ~3.0`.
