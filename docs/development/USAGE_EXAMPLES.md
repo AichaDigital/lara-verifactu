@@ -28,8 +28,7 @@ composer require aichadigital/lara-verifactu
 php artisan verifactu:install
 ```
 
-This command publishes the configuration file and the database migrations,
-and asks whether to run migrations immediately.
+This command publishes the configuration file and the translations, and asks whether to run migrations immediately. The migrations are not published: the package runs them from `vendor/` (since 1.6, AID-1886).
 
 ### Step 3: Configure Environment Variables
 

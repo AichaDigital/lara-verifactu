@@ -120,7 +120,9 @@ class TestCase extends Orchestra
             return;
         }
 
-        $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
+        // The package's own migrations are NOT loaded here: the service
+        // provider runs them from its folder (package-managed, AID-1886), and
+        // the suite must exercise that path, not a copy of it.
         $this->loadMigrationsFrom(__DIR__ . '/Fixtures/migrations');
     }
 

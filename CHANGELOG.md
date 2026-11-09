@@ -5,6 +5,13 @@ All notable changes to `lara-verifactu` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **The package now runs its migrations from `vendor/` and publishes none** (AID-1886). Schema ownership moves from `consumer-published-migrations` to `package-managed`: `composer update` + `php artisan migrate` is the whole install and upgrade. `verifactu:install` no longer publishes migrations (it still publishes config and translations) and the `lara-verifactu-migrations` publish tag is gone. The old mechanism was broken: `verifactu:install` copied only 3 of the 13 migrations, under a new timestamp on every run, so its "already exists" check never matched. The provider now loads the whole migrations folder, so a migration can no longer be shipped without reaching consumers (AID-186, AID-1626).
+- **`php artisan migrate` refuses to run while the application keeps published copies of the package migrations.** It throws `PublishedMigrationsException` before the first migration, listing the files to delete; it never tries to create the schema twice. See `UPGRADE-1.6.md`: the copies are deleted and the database rebuilt with `migrate:fresh`, a path that holds only under the exception the owner signed on 2026-11-08 (review due 2026-11-23) and only while the installation holds no real Verifactu records. `migrate:fresh` drops every table in the database.
+
 ## [1.5.1] - 2026-11-04
 
 ### Fixed
