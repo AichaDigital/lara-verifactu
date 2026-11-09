@@ -125,8 +125,11 @@ rather than sending XSD-valid XML the AEAT would reject — or accept *con error
 ```bash
 composer require aichadigital/lara-verifactu
 
-php artisan verifactu:install
+php artisan verifactu:install   # publishes config and translations
+php artisan migrate
 ```
+
+The package runs its migrations from `vendor/`; it never copies them into your application. Upgrading is `composer update` + `php artisan migrate`. If you published the migrations with a release before 1.6, read `UPGRADE-1.6.md`.
 
 Configure your environment:
 

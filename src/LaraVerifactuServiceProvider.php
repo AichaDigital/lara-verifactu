@@ -32,6 +32,8 @@ use AichaDigital\LaraVerifactu\Services\ConfigEndpointResolver;
 use AichaDigital\LaraVerifactu\Services\HashGenerator;
 use AichaDigital\LaraVerifactu\Services\QrGenerator;
 use AichaDigital\LaraVerifactu\Services\XmlBuilder;
+use AichaDigital\LaraVerifactu\Support\PublishedMigrationsGuard;
+use Illuminate\Database\Events\MigrationsStarted;
 use Illuminate\Events\Dispatcher;
 use Spatie\LaravelPackageTools\Commands\InstallCommand;
 use Spatie\LaravelPackageTools\Package;
@@ -45,35 +47,6 @@ class LaraVerifactuServiceProvider extends PackageServiceProvider
             ->name('lara-verifactu')
             ->hasConfigFile('verifactu')
             ->hasTranslations()
-            ->hasMigrations([
-                '2025_01_01_000001_create_verifactu_invoices_table',
-                '2025_01_01_000002_create_verifactu_registries_table',
-                '2025_01_01_000003_create_verifactu_invoice_breakdowns_table',
-                '2026_01_25_000001_consolidate_issue_datetime_in_verifactu_invoices',
-                '2026_06_10_000001_add_hash_generated_at_to_verifactu_registries_table',
-                '2026_06_10_000002_add_registry_type_to_verifactu_registries_table',
-                // AID-186 shipped this drop but never registered it here, so
-                // publishMigrations() never copied it to consumers (tests load
-                // the whole folder, which masked the gap). Registered now.
-                '2026_06_17_000001_drop_operation_key_from_verifactu_invoices',
-                '2026_06_17_000002_drop_simplified_from_verifactu_invoices',
-                '2026_06_20_000001_add_calificacion_to_verifactu_invoice_breakdowns_table',
-                // AID-137: subsanación («ALTA POR RECHAZO») columns. MUST be
-                // listed here or publishMigrations() never copies it to
-                // consumers (CI does not catch this — tests load the folder).
-                '2026_06_24_000001_add_subsanacion_to_verifactu_registries_table',
-                // AID-258: chain-lock sentinel table. MUST be listed here or
-                // publishMigrations() never copies it to consumers.
-                '2026_06_26_000001_create_verifactu_chain_locks_table',
-                // AID-344: drops the hardcoded FK from invoice_id to
-                // verifactu_invoices so custom-mode consumers aren't rejected.
-                // MUST be listed here or publishMigrations() never copies it.
-                '2026_07_08_000001_drop_invoice_foreign_key_from_verifactu_registries_table',
-                // AID-1626: legacy ParcialmenteCorrecto rows become
-                // accepted_with_errors. MUST be listed here or
-                // publishMigrations() never copies it to consumers.
-                '2026_10_13_000001_backfill_accepted_with_errors_in_verifactu_registries',
-            ])
             ->hasCommand(RegisterInvoiceCommand::class)
             ->hasCommand(RetryFailedCommand::class)
             ->hasCommand(VerifyBlockchainCommand::class)
@@ -82,7 +55,6 @@ class LaraVerifactuServiceProvider extends PackageServiceProvider
             ->hasInstallCommand(function (InstallCommand $command): void {
                 $command
                     ->publishConfigFile()
-                    ->publishMigrations()
                     ->askToRunMigrations()
                     ->askToStarRepoOnGitHub('aichadigital/lara-verifactu');
             });
@@ -95,6 +67,7 @@ class LaraVerifactuServiceProvider extends PackageServiceProvider
 
     public function packageBooted(): void
     {
+        $this->bootMigrations();
         $this->bootEvents();
 
         // Register install command manually
@@ -103,6 +76,28 @@ class LaraVerifactuServiceProvider extends PackageServiceProvider
                 VerifactuInstallCommand::class,
             ]);
         }
+    }
+
+    /**
+     * The package owns its schema (`package-managed`, AID-1886).
+     *
+     * Migrations run straight from this package's folder in vendor/, so
+     * `composer update` + `php artisan migrate` is the whole upgrade. Loading
+     * the folder, not a list, means a new migration cannot be forgotten in the
+     * provider (AID-186). Nothing is published to the consumer.
+     */
+    protected function bootMigrations(): void
+    {
+        $this->loadMigrationsFrom(PublishedMigrationsGuard::packageMigrationsPath());
+
+        /** @var Dispatcher $events */
+        $events = $this->app->make('events');
+
+        $events->listen(MigrationsStarted::class, function (MigrationsStarted $event): void {
+            if ($event->method === 'up') {
+                $this->app->make(PublishedMigrationsGuard::class)->assertNoPublishedCopies();
+            }
+        });
     }
 
     protected function registerContracts(): void
