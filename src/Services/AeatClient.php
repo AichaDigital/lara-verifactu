@@ -10,8 +10,10 @@ use AichaDigital\LaraVerifactu\Exceptions\AeatAuthenticationException;
 use AichaDigital\LaraVerifactu\Exceptions\AeatConnectionException;
 use AichaDigital\LaraVerifactu\Exceptions\AeatException;
 use AichaDigital\LaraVerifactu\Exceptions\ValidationException;
+use AichaDigital\LaraVerifactu\Exceptions\VerifactuDisabledException;
 use AichaDigital\LaraVerifactu\Support\AeatLogSanitizer;
 use AichaDigital\LaraVerifactu\Support\AeatResponse;
+use AichaDigital\LaraVerifactu\Support\SendAdmission;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 use SoapClient;
@@ -62,9 +64,44 @@ final class AeatClient implements AeatClientContract
     /**
      * Send a registry record (registration or cancellation) to AEAT
      *
+     * Guarded by the activation switch (AID-1907), for direct users of this
+     * class. The registrar never reaches this method: its admitted send goes
+     * through sendCore() with the admission its re-check granted.
+     *
      * @throws AeatConnectionException|AeatAuthenticationException
+     * @throws VerifactuDisabledException When the package is disabled.
      */
     public function sendRegistration(RegistryContract $registry): AeatResponse
+    {
+        return $this->sendCore($registry, SendAdmission::grant(
+            fn () => VerifactuDisabledException::forOperation('AeatClient::sendRegistration'),
+        ));
+    }
+
+    /**
+     * The admitted send (AID-1907, spec §4.1 rule (b)): it reads no activation,
+     * because the caller's admission already carries the decision, and it
+     * cannot be reached without one (gate round 1, finding 1). The admission
+     * is spent here, so it covers this one send.
+     *
+     * @internal
+     *
+     * @throws AeatConnectionException|AeatAuthenticationException
+     * @throws \LogicException When the admission was already spent.
+     */
+    public function sendCore(RegistryContract $registry, SendAdmission $admission): AeatResponse
+    {
+        $admission->spend();
+
+        return $this->transmit($registry);
+    }
+
+    /**
+     * The SOAP exchange of one registry, after admission.
+     *
+     * @throws AeatConnectionException|AeatAuthenticationException
+     */
+    private function transmit(RegistryContract $registry): AeatResponse
     {
         try {
             $this->ensureClientInitialized();
@@ -105,16 +142,44 @@ final class AeatClient implements AeatClientContract
     /**
      * Send batch of registry records to AEAT
      *
+     * A batch is one admitted effect (AID-1907): activation is checked once,
+     * here, and a switch change during the loop neither stops it nor turns
+     * the remaining items into generic failures.
+     *
      * @param  Collection<int, RegistryContract>  $registries
      * @return Collection<int, AeatResponse>
+     *
+     * @throws VerifactuDisabledException When the package is disabled; nothing is sent.
      */
     public function sendBatch(Collection $registries): Collection
     {
+        return $this->sendBatchCore($registries, SendAdmission::grant(
+            fn () => VerifactuDisabledException::forOperation('AeatClient::sendBatch'),
+        ));
+    }
+
+    /**
+     * The admitted batch loop (AID-1907). One admission, spent at entry,
+     * covers the whole batch: the loop reads no activation, so a switch
+     * change mid-batch leaves every item its real answer. Its only callers
+     * are sendBatch() and LazyAeatClient::sendBatch().
+     *
+     * @internal
+     *
+     * @param  Collection<int, RegistryContract>  $registries
+     * @return Collection<int, AeatResponse>
+     *
+     * @throws \LogicException When the admission was already spent.
+     */
+    public function sendBatchCore(Collection $registries, SendAdmission $admission): Collection
+    {
+        $admission->spend();
+
         $responses = collect();
 
         foreach ($registries as $registry) {
             try {
-                $response = $this->sendRegistration($registry);
+                $response = $this->transmit($registry);
                 $responses->push($response);
             } catch (\Throwable $e) {
                 $responses->push(AeatResponse::failure(

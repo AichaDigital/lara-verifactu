@@ -6,6 +6,7 @@ namespace AichaDigital\LaraVerifactu\Jobs;
 
 use AichaDigital\LaraVerifactu\Services\InvoiceRegistrar;
 use AichaDigital\LaraVerifactu\Support\OverlapLockStore;
+use AichaDigital\LaraVerifactu\Support\SkipsWhenDisabled;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -21,7 +22,7 @@ use Illuminate\Support\Facades\Log;
  */
 class RetryFailedRegistriesJob implements ShouldQueue
 {
-    use Dispatchable;
+    use Dispatchable, SkipsWhenDisabled;
     use InteractsWithQueue;
     use Queueable;
     use SerializesModels;
@@ -65,6 +66,12 @@ class RetryFailedRegistriesJob implements ShouldQueue
      */
     public function handle(InvoiceRegistrar $registrar): void
     {
+        // Activation first (AID-1907): before the lock, so a disabled package
+        // never locks, releases, holds, sends or writes; the job is consumed.
+        if ($this->skippedBecauseDisabled()) {
+            return;
+        }
+
         OverlapLockStore::exclusively(
             'verifactu:retry-failed',
             function () use ($registrar): void {

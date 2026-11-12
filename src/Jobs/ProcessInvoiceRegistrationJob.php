@@ -10,6 +10,7 @@ use AichaDigital\LaraVerifactu\Models\Registry;
 use AichaDigital\LaraVerifactu\Services\InvoiceRegistrar;
 use AichaDigital\LaraVerifactu\Support\AeatLogSanitizer;
 use AichaDigital\LaraVerifactu\Support\OverlapLockStore;
+use AichaDigital\LaraVerifactu\Support\SkipsWhenDisabled;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -31,7 +32,7 @@ use Illuminate\Support\Facades\Log;
  */
 class ProcessInvoiceRegistrationJob implements ShouldQueue
 {
-    use Dispatchable;
+    use Dispatchable, SkipsWhenDisabled;
     use InteractsWithQueue;
     use Queueable;
     use SerializesModels;
@@ -69,6 +70,12 @@ class ProcessInvoiceRegistrationJob implements ShouldQueue
      */
     public function handle(InvoiceRegistrar $registrar): void
     {
+        // Activation first (AID-1907): before the lock, so a disabled package
+        // never locks, releases, holds, sends or writes; the job is consumed.
+        if ($this->skippedBecauseDisabled(['invoice_id' => $this->invoiceId])) {
+            return;
+        }
+
         // The sequential-processing lock is only worth what the store behind
         // it is worth: on a per-process store it is decorative, and silently so.
         // Checked before acquiring, so the failure names the cause instead of

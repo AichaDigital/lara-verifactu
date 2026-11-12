@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AichaDigital\LaraVerifactu\Services;
 
+use AichaDigital\LaraVerifactu\Contracts\ActivationContract;
 use AichaDigital\LaraVerifactu\Contracts\HashGeneratorContract;
 use AichaDigital\LaraVerifactu\Contracts\InvoiceContract;
 use AichaDigital\LaraVerifactu\Contracts\QrGeneratorContract;
@@ -14,6 +15,7 @@ use AichaDigital\LaraVerifactu\Enums\RegistryTypeEnum;
 use AichaDigital\LaraVerifactu\Events\RegistryCreatedEvent;
 use AichaDigital\LaraVerifactu\Events\RegistryRetriesExhaustedEvent;
 use AichaDigital\LaraVerifactu\Events\RegistryStatusChangedEvent;
+use AichaDigital\LaraVerifactu\Exceptions\VerifactuDisabledException;
 use AichaDigital\LaraVerifactu\Exceptions\VerifactuException;
 use AichaDigital\LaraVerifactu\Models\Registry;
 use AichaDigital\LaraVerifactu\Support\CancellationRecord;
@@ -64,6 +66,10 @@ final class RegistryManager
         InvoiceContract $invoice,
         ?RegistrationCircumstances $circumstances = null
     ): RegistryContract {
+        // Effect guard (AID-1907): before the transaction and the chain lock,
+        // so no caller reaches the lock, hash, link or insert while disabled.
+        $this->assertEnabled('createRegistry');
+
         return DB::transaction(function () use ($invoice, $circumstances) {
             // Serialize concurrent chain writes before reading the head (AID-258).
             $this->acquireChainLock();
@@ -147,6 +153,9 @@ final class RegistryManager
      */
     public function createCancellationRegistry(InvoiceContract $invoice): RegistryContract
     {
+        // Effect guard (AID-1907), same place as in createRegistry().
+        $this->assertEnabled('createCancellationRegistry');
+
         return DB::transaction(function () use ($invoice) {
             // Serialize concurrent chain writes before reading the head (AID-258).
             $this->acquireChainLock();
@@ -356,6 +365,18 @@ final class RegistryManager
             $existing->registry_number,
             $existing->status->value,
         ));
+    }
+
+    /**
+     * Effect guard of the activation switch (AID-1907).
+     *
+     * @throws VerifactuDisabledException
+     */
+    private function assertEnabled(string $operation): void
+    {
+        if (! app(ActivationContract::class)->isEnabled()) {
+            throw VerifactuDisabledException::forOperation($operation);
+        }
     }
 
     /**

@@ -10,6 +10,7 @@ use AichaDigital\LaraVerifactu\Commands\StatusCommand;
 use AichaDigital\LaraVerifactu\Commands\TestAeatConnectionCommand;
 use AichaDigital\LaraVerifactu\Commands\VerifyBlockchainCommand;
 use AichaDigital\LaraVerifactu\Console\VerifactuInstallCommand;
+use AichaDigital\LaraVerifactu\Contracts\ActivationContract;
 use AichaDigital\LaraVerifactu\Contracts\AeatClientContract;
 use AichaDigital\LaraVerifactu\Contracts\CertificateManagerContract;
 use AichaDigital\LaraVerifactu\Contracts\EndpointResolverContract;
@@ -21,6 +22,7 @@ use AichaDigital\LaraVerifactu\Events\InvoiceRegisteredEvent;
 use AichaDigital\LaraVerifactu\Events\RegistryCreatedEvent;
 use AichaDigital\LaraVerifactu\Events\RegistryFailedEvent;
 use AichaDigital\LaraVerifactu\Events\RegistrySubmittedEvent;
+use AichaDigital\LaraVerifactu\Exceptions\ConfigurationException;
 use AichaDigital\LaraVerifactu\Listeners\LogBlockchainVerification;
 use AichaDigital\LaraVerifactu\Listeners\LogInvoiceRegistration;
 use AichaDigital\LaraVerifactu\Listeners\LogRegistryCreation;
@@ -32,7 +34,10 @@ use AichaDigital\LaraVerifactu\Services\ConfigEndpointResolver;
 use AichaDigital\LaraVerifactu\Services\HashGenerator;
 use AichaDigital\LaraVerifactu\Services\QrGenerator;
 use AichaDigital\LaraVerifactu\Services\XmlBuilder;
+use AichaDigital\LaraVerifactu\Support\Activation;
+use AichaDigital\LaraVerifactu\Support\LazyAeatClient;
 use AichaDigital\LaraVerifactu\Support\PublishedMigrationsGuard;
+use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Database\Events\MigrationsStarted;
 use Illuminate\Events\Dispatcher;
 use Spatie\LaravelPackageTools\Commands\InstallCommand;
@@ -129,20 +134,35 @@ class LaraVerifactuServiceProvider extends PackageServiceProvider
             XmlBuilder::class
         );
 
+        // The single read point of verifactu.enabled (AID-1907). It reads the
+        // config on every call, so the singleton caches nothing but itself.
+        $this->app->singleton(ActivationContract::class, Activation::class);
+
         $this->app->singleton(EndpointResolverContract::class, ConfigEndpointResolver::class);
 
-        $this->app->bind(AeatClientContract::class, function ($app): AeatClient {
-            $environment = (string) config('verifactu.aeat.environment', 'production');
-            $certificateType = (string) config('verifactu.certificate.type', 'representante');
+        $this->app->bind(AeatClientContract::class, function ($app): LazyAeatClient {
+            $factory = static function () use ($app): AeatClient {
+                $environment = (string) config('verifactu.aeat.environment', 'production');
+                $certificateType = (string) config('verifactu.certificate.type', 'representante');
 
-            /** @var EndpointResolverContract $endpointResolver */
-            $endpointResolver = $app->make(EndpointResolverContract::class);
+                /** @var EndpointResolverContract $endpointResolver */
+                $endpointResolver = $app->make(EndpointResolverContract::class);
 
-            return new AeatClient(
-                endpoint: $endpointResolver->resolve($environment, $certificateType),
-                timeout: (int) config('verifactu.aeat.timeout', 30),
-                verifySSL: (bool) config('verifactu.aeat.verify_ssl', true),
-            );
+                return new AeatClient(
+                    endpoint: $endpointResolver->resolve($environment, $certificateType),
+                    timeout: (int) config('verifactu.aeat.timeout', 30),
+                    verifySSL: (bool) config('verifactu.aeat.verify_ssl', true),
+                );
+            };
+
+            // Enabled at resolution: built now, exactly as before 1.7, so an
+            // invalid AEAT configuration still fails here. Disabled (or an
+            // unparseable switch, which every guard will refuse anyway): held
+            // unresolved, so nothing that merely resolves the registrar can
+            // fail on AEAT configuration before an activation guard (AID-1907).
+            return $this->activeAtResolution($app)
+                ? LazyAeatClient::eager($factory)
+                : LazyAeatClient::deferred($factory);
         });
 
         $this->app->bind(
@@ -153,6 +173,20 @@ class LaraVerifactuServiceProvider extends PackageServiceProvider
         $this->app->singleton('verifactu', function ($app) {
             return $app->make(Verifactu::class);
         });
+    }
+
+    /**
+     * Whether the switch is on at the moment the AEAT client binding resolves.
+     * An unparseable value defers the client instead of throwing here: read
+     * methods must keep working, and every write guard reports the value.
+     */
+    private function activeAtResolution(Application $app): bool
+    {
+        try {
+            return $app->make(ActivationContract::class)->isEnabled();
+        } catch (ConfigurationException) {
+            return false;
+        }
     }
 
     protected function bootEvents(): void

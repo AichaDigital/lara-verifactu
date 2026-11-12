@@ -5,6 +5,25 @@ All notable changes to `lara-verifactu` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Package-wide activation switch `verifactu.enabled`, off by default** (AID-1907). Activating Verifactu is the consumer's responsibility: set `VERIFACTU_ENABLED=true`. The value is parsed strictly (`true`/`false`, `1`/`0`, `on`/`off`, `yes`/`no`); anything else, an empty value included, throws `ConfigurationException` instead of being read as off or on. A configuration file published before 1.7 reads the missing key as off.
+- **`Verifactu::enabled()`** answers whether the package will register, so consumers ask the package instead of reading its configuration. **`Verifactu::fake(honourSwitch: true)`** makes the fake follow the switch; the default fake ignores it and `enabled()` returns `true` under it. `amendRejected()` is now intercepted in fake mode.
+- **`VerifactuDisabledException`**, with `isSubmissionRefusal()` and `registryId()` to tell a send refused before leaving from any other refusal.
+
+### Changed
+
+- **A consumer that never set `verifactu.enabled` now gets `VerifactuDisabledException` from `register()`, `cancel()`, `amendRejected()` and `sendBatch()`.** Set `VERIFACTU_ENABLED=true` to keep today's behaviour. While disabled, nothing creates a registry, chains, sends or fires an event; `batchRegister()` throws before its loop; `submitToAeat()` leaves the registry untouched; `verifactu:register` exits with failure; `verifactu:retry-failed` sends nothing and exits with success; the three queued jobs end in a logged `verifactu.disabled_noop` and are consumed, not paused. Reads keep working. Pending registries are not resent automatically when the switch turns on (`retry.resend_pending` is the lever). **This ships as a minor version only under the owner's signed exception of 2026-11-08** (`2026-11-08-excepcion-firmada-lara-verifactu-aid-1907`, review due 2026-11-23). See `UPGRADE-1.7.md`.
+- **While the package is disabled, resolving the registrar, the facade or a job no longer builds the AEAT client.** The package binds `AeatClientContract` to an internal proxy that builds the client at once when the switch is on, exactly as before, and defers it when off, so an unusable AEAT configuration cannot fail before an activation guard.
+- **`AeatClient::sendBatch()` is one admitted effect**: it checks activation once and refuses the whole batch when off; a switch change during an admitted batch no longer turns its remaining items into generic failures.
+- **`verifactu:status` and `verifactu:install` warn when the package is disabled** and report an invalid value instead of throwing. `verifactu:install` now reads the environment from `aeat.environment` instead of the undeclared `verifactu.environment`.
+
+### Fixed
+
+- **`verifactu:status` no longer crashes when no certificate path is configured.** It passed `null` to `file_exists()` under strict types and threw a `TypeError`, so the command never printed anything on an installation without `VERIFACTU_CERT_PATH` — including the new disabled warning.
+
 ## [1.6.0] - 2026-11-09
 
 ### Changed

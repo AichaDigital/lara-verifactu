@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace AichaDigital\LaraVerifactu\Exceptions;
 
+use AichaDigital\LaraVerifactu\Support\Activation;
+
 final class ConfigurationException extends VerifactuException
 {
     public static function missingCertificate(): self
@@ -24,6 +26,24 @@ final class ConfigurationException extends VerifactuException
     public static function invalidEnvironment(string $environment): self
     {
         return self::make("Invalid environment '{$environment}'. Environment must be 'production' or 'sandbox'.");
+    }
+
+    /**
+     * The activation switch holds a value that is not a recognised boolean
+     * (AID-1907). Never read as off nor as on.
+     */
+    public static function invalidActivation(mixed $raw): self
+    {
+        $described = is_scalar($raw) ? get_debug_type($raw) . ' ' . var_export($raw, true) : get_debug_type($raw);
+
+        return self::make(sprintf(
+            'Invalid value (%s) for %s. Accepted: true/false, 1/0, "true"/"false", "on"/"off", "yes"/"no". '
+            . 'Set %s=true to enable the package or %s=false to keep it off.',
+            $described,
+            Activation::CONFIG_KEY,
+            Activation::ENV_VARIABLE,
+            Activation::ENV_VARIABLE,
+        ));
     }
 
     public static function modelDoesNotImplementContract(string $model, string $contract): self

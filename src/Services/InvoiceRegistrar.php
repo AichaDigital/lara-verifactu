@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AichaDigital\LaraVerifactu\Services;
 
+use AichaDigital\LaraVerifactu\Contracts\ActivationContract;
 use AichaDigital\LaraVerifactu\Contracts\AeatClientContract;
 use AichaDigital\LaraVerifactu\Contracts\CertificateManagerContract;
 use AichaDigital\LaraVerifactu\Contracts\InvoiceContract;
@@ -17,13 +18,17 @@ use AichaDigital\LaraVerifactu\Events\RegistryFailedEvent;
 use AichaDigital\LaraVerifactu\Events\RegistrySubmittedEvent;
 use AichaDigital\LaraVerifactu\Exceptions\AeatException;
 use AichaDigital\LaraVerifactu\Exceptions\ValidationException;
+use AichaDigital\LaraVerifactu\Exceptions\VerifactuDisabledException;
 use AichaDigital\LaraVerifactu\Exceptions\VerifactuException;
 use AichaDigital\LaraVerifactu\Models\Registry;
 use AichaDigital\LaraVerifactu\Support\AeatLogSanitizer;
 use AichaDigital\LaraVerifactu\Support\AeatResponse;
 use AichaDigital\LaraVerifactu\Support\DispatchesQuietly;
+use AichaDigital\LaraVerifactu\Support\LazyAeatClient;
 use AichaDigital\LaraVerifactu\Support\OverlapLockStore;
 use AichaDigital\LaraVerifactu\Support\RegistrationCircumstances;
+use AichaDigital\LaraVerifactu\Support\SendAdmission;
+use Closure;
 use DOMDocument;
 use DOMXPath;
 use Illuminate\Support\Facades\Cache;
@@ -59,6 +64,10 @@ final class InvoiceRegistrar
      */
     public function register(InvoiceContract $invoice, bool $submitToAeat = true): RegistryContract
     {
+        // Activation first (AID-1907): before any lock, transaction or row, and
+        // before the AID-725 guard, so the caller gets the real reason.
+        $this->assertEnabled('register');
+
         $this->assertCanSubmitFromHere($submitToAeat, 'register');
 
         // The transaction covers creating and signing the record — and NOTHING
@@ -108,6 +117,10 @@ final class InvoiceRegistrar
      */
     public function cancel(InvoiceContract $invoice, bool $submitToAeat = true): RegistryContract
     {
+        // Activation first (AID-1907): before any lock, transaction or row, and
+        // before the AID-725 guard, so the caller gets the real reason.
+        $this->assertEnabled('cancel');
+
         $this->assertCanSubmitFromHere($submitToAeat, 'cancel');
 
         // Same boundary as register() (AID-717): the transaction ends where the
@@ -193,24 +206,47 @@ final class InvoiceRegistrar
             $this->registryManager->assertSubmissionPayloadIntact($registry);
         }
 
+        // The activation re-check (AID-1907, spec §4.1 rule (a)): the ONLY code
+        // path that raises a submission refusal, and outside the transport try,
+        // so a refused send never reaches markAsFailed(), RegistryFailedEvent or
+        // AeatException. The registry stays pending with its attempts untouched.
+        // The admission it grants is the only key to the package client's
+        // admitted path, and is spent by that one send.
+        $admission = SendAdmission::grant(
+            fn () => VerifactuDisabledException::submissionRefused((string) $registry->getId()),
+        );
+
         try {
             // Submit to AEAT. This call, and ONLY this call, is what the catch
             // below is allowed to classify as a transport failure (AID-729).
-            $response = $this->aeatClient->sendRegistration($registry);
+            //
+            // The send is admitted as a whole by the re-check above (AID-1907
+            // rule (b)): the package's own client is reached through its
+            // unguarded admitted path, so no client guard can refuse it: the
+            // proxy through sendAdmitted(), the concrete client (when a
+            // consumer binds it directly) through sendCore(). A consumer's own
+            // client is called as before.
+            $response = match (true) {
+                $this->aeatClient instanceof LazyAeatClient => $this->aeatClient->sendAdmitted($registry, $admission),
+                $this->aeatClient instanceof AeatClient => $this->aeatClient->sendCore($registry, $admission),
+                default => $this->aeatClient->sendRegistration($registry),
+            };
         } catch (\Throwable $e) {
-            $this->registryManager->markAsFailed($registry, $e->getMessage(), $budget);
+            $this->outcomePhase(function () use ($registry, $e, $budget): void {
+                $this->registryManager->markAsFailed($registry, $e->getMessage(), $budget);
 
-            Log::channel(config('verifactu.logging.channel', 'single'))
-                ->error('Exception during AEAT submission', [
-                    'registry_number' => $registry->getRegistryNumber(),
-                    'error' => AeatLogSanitizer::redactText($e->getMessage()),
-                    ...AeatLogSanitizer::traceContext($e),
-                ]);
+                Log::channel(config('verifactu.logging.channel', 'single'))
+                    ->error('Exception during AEAT submission', [
+                        'registry_number' => $registry->getRegistryNumber(),
+                        'error' => AeatLogSanitizer::redactText($e->getMessage()),
+                        ...AeatLogSanitizer::traceContext($e),
+                    ]);
 
-            $this->dispatchQuietly(
-                new RegistryFailedEvent($registry, $e->getMessage(), $registry->getSubmissionAttempts()),
-                $registry,
-            );
+                $this->dispatchQuietly(
+                    new RegistryFailedEvent($registry, $e->getMessage(), $registry->getSubmissionAttempts()),
+                    $registry,
+                );
+            });
 
             throw AeatException::connectionFailed($e->getMessage());
         }
@@ -218,6 +254,14 @@ final class InvoiceRegistrar
         // Past this point the agency has answered. The outcome of the operation
         // is fixed by that answer, and nothing that happens now may reclassify
         // it — which is exactly what the old single catch did (AID-729).
+        return $this->outcomePhase(fn (): AeatResponse => $this->persistOutcome($registry, $response, $budget));
+    }
+
+    /**
+     * Persist the agency's answer to an admitted send.
+     */
+    private function persistOutcome(RegistryContract $registry, AeatResponse $response, int $budget): AeatResponse
+    {
         if ($response->isSuccess()) {
             if ($response->isAcceptedWithErrors()) {
                 // Asked first (AID-1626): a duplicate of a record accepted
@@ -300,6 +344,10 @@ final class InvoiceRegistrar
             'registries' => [],
         ];
 
+        // Before the loop (AID-1907): a disabled package must not surface as
+        // N silent per-invoice failures.
+        $this->assertEnabled('batchRegister');
+
         foreach ($invoices as $invoice) {
             try {
                 $registry = $this->register($invoice, $submitToAeat);
@@ -332,12 +380,20 @@ final class InvoiceRegistrar
      * declared it exhausted.
      *
      * @param  int|null  $maxAttempts  Total budget for this run; null reads verifactu.retry.max_submission_attempts.
-     * @return array{success: int, failed: int, skipped: int, exhausted: int}
+     *                                 When the package is disabled the result carries `disabled => true`
+     *                                 (AID-1907): at start nothing is attempted; mid-pass, the refused
+     *                                 candidate and every later one are counted as skipped, never failed.
+     * @return array{success: int, failed: int, skipped: int, exhausted: int, disabled?: true}
      *
      * @throws VerifactuException When the budget is below 1, or pending_grace is invalid while pending resend is on.
      */
     public function retryFailed(?int $maxAttempts = null, int $limit = 50, bool $includeExhausted = false): array
     {
+        // Disabled at start (AID-1907): nothing is selected, locked or sent.
+        if (! app(ActivationContract::class)->isEnabled()) {
+            return ['success' => 0, 'failed' => 0, 'skipped' => 0, 'exhausted' => 0, 'disabled' => true];
+        }
+
         // The sweeper obeys the same chain discipline as SubmitRegistryToAeatJob
         // (AID-1673): it must not send underneath a running submission job, so
         // it holds the same sequential lock the job holds — otherwise the two
@@ -368,7 +424,7 @@ final class InvoiceRegistrar
      * Run the retry pass. Always called while holding the
      * `fiscal_verification_queue` lock.
      *
-     * @return array{success: int, failed: int, skipped: int, exhausted: int}
+     * @return array{success: int, failed: int, skipped: int, exhausted: int, disabled?: true}
      *
      * @throws VerifactuException When the budget is below 1, or pending_grace is invalid while pending resend is on.
      */
@@ -434,6 +490,22 @@ final class InvoiceRegistrar
                     // exactly what the job's guard refuses.
                     break;
                 }
+            } catch (VerifactuDisabledException $e) {
+                // The pass ends as "disabled" ONLY for this candidate's own
+                // pre-send refusal (AID-1907): the flag plus the same registry
+                // id. Anything else — a nested refusal from a listener after the
+                // send was admitted — is a failure, exactly as today.
+                if ($e->isSubmissionRefusal() && $e->registryId() === (string) $registry->getId()) {
+                    $results['skipped'] += $total - $index;
+                    $results['disabled'] = true;
+
+                    break;
+                }
+
+                $results['failed']++;
+                $results['skipped'] += $total - $index - 1;
+
+                break;
             } catch (\Throwable) {
                 $results['failed']++;
                 $results['skipped'] += $total - $index - 1;
@@ -505,6 +577,10 @@ final class InvoiceRegistrar
         InvoiceContract $correctedInvoice,
         bool $submitToAeat = true
     ): RegistryContract {
+        // Activation first (AID-1907): before any lock, transaction or row, and
+        // before the AID-725 guard, so the caller gets the real reason.
+        $this->assertEnabled('amendRejected');
+
         $this->assertCanSubmitFromHere($submitToAeat, 'amendRejected');
 
         $registry = DB::transaction(function () use ($rejectedRegistry, $correctedInvoice) {
@@ -685,6 +761,39 @@ final class InvoiceRegistrar
         $value = $node->textContent;
 
         return $value !== '' ? trim($value) : null;
+    }
+
+    /**
+     * Entry guard of the activation switch (AID-1907).
+     *
+     * @throws VerifactuDisabledException
+     */
+    private function assertEnabled(string $operation): void
+    {
+        if (! app(ActivationContract::class)->isEnabled()) {
+            throw VerifactuDisabledException::forOperation($operation);
+        }
+    }
+
+    /**
+     * Run an outcome phase of submitToAeat() (AID-1907, spec §4.1 rule (c)).
+     *
+     * A disabled refusal raised here can only come from a nested package call
+     * (a listener, an observer) after the send was admitted. It is rewrapped
+     * unflagged, so no catch can mistake it for this send being refused.
+     *
+     * @template TResult
+     *
+     * @param  Closure(): TResult  $phase
+     * @return TResult
+     */
+    private function outcomePhase(Closure $phase): mixed
+    {
+        try {
+            return $phase();
+        } catch (VerifactuDisabledException $nested) {
+            throw VerifactuDisabledException::forOperation('outcome', $nested);
+        }
     }
 
     /**

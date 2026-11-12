@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace AichaDigital\LaraVerifactu\Console;
 
+use AichaDigital\LaraVerifactu\Support\ReportsActivation;
 use Illuminate\Console\Command;
 
 class VerifactuInstallCommand extends Command
 {
+    use ReportsActivation;
+
     protected $signature = 'verifactu:install
                             {--force : Force overwrite of existing files}
                             {--no-migrate : Skip running migrations}';
@@ -42,11 +45,9 @@ class VerifactuInstallCommand extends Command
         $this->newLine();
         $this->info('🔍 Validating configuration...');
 
-        if (! config('verifactu.enabled')) {
-            $this->warn('⚠ Verifactu is DISABLED in config. Set VERIFACTU_ENABLED=true to enable.');
-        }
+        $this->reportActivation();
 
-        $environment = config('verifactu.environment');
+        $environment = config('verifactu.aeat.environment', 'production');
         $this->info("✓ Environment: {$environment}");
 
         // 5. Ejecutar migraciones si no se especificó --no-migrate

@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace AichaDigital\LaraVerifactu\Commands;
 
+use AichaDigital\LaraVerifactu\Contracts\ActivationContract;
 use AichaDigital\LaraVerifactu\Exceptions\VerifactuException;
 use AichaDigital\LaraVerifactu\Models\Invoice;
 use AichaDigital\LaraVerifactu\Services\InvoiceRegistrar;
+use AichaDigital\LaraVerifactu\Support\Activation;
 use Illuminate\Console\Command;
 
 /**
@@ -35,6 +37,14 @@ class RegisterInvoiceCommand extends Command
      */
     public function handle(InvoiceRegistrar $registrar): int
     {
+        // Activation first (AID-1907): before any candidate lookup, so `--all`
+        // with nothing to register does not report success while disabled.
+        if (! app(ActivationContract::class)->isEnabled()) {
+            $this->error(Activation::disabledNotice() . ': nothing registered. Set ' . Activation::ENV_VARIABLE . '=true to enable it.');
+
+            return self::FAILURE;
+        }
+
         $invoiceId = $this->argument('invoice');
         $registerAll = $this->option('all');
         $submitToAeat = ! $this->option('no-submit');
