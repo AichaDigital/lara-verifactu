@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace AichaDigital\LaraVerifactu\Commands;
 
+use AichaDigital\LaraVerifactu\Contracts\ActivationContract;
 use AichaDigital\LaraVerifactu\Services\InvoiceRegistrar;
+use AichaDigital\LaraVerifactu\Support\Activation;
 use AichaDigital\LaraVerifactu\Support\OverlapLockStore;
 use Illuminate\Console\Command;
 
@@ -33,6 +35,14 @@ class RetryFailedCommand extends Command
      */
     public function handle(InvoiceRegistrar $registrar): int
     {
+        // Activation first (AID-1907, G4): before the overlap-lock machinery, so
+        // a busy lock or a refused cache store does not mask the reason.
+        if (! app(ActivationContract::class)->isEnabled()) {
+            $this->warn(self::disabledWarning());
+
+            return self::SUCCESS;
+        }
+
         // Never run two of these at once (AID-731). Candidate selection neither
         // claims nor locks, so two overlapping runs would hand the same record
         // to both and race to write its outcome. Since AID-717 there are
@@ -58,6 +68,27 @@ class RetryFailedCommand extends Command
     /**
      * Run the retry pass. Always called while holding the overlap lock.
      */
+    private static function disabledWarning(): string
+    {
+        return Activation::disabledNotice() . ': nothing sent, registries kept. Set '
+            . Activation::ENV_VARIABLE . '=true to enable it.';
+    }
+
+    /**
+     * @param  array{success: int, failed: int, skipped: int, exhausted: int, disabled?: true}  $results
+     * @return list<array{0: string, 1: int}>
+     */
+    private function resultRows(array $results): array
+    {
+        return [
+            ['Success', $results['success']],
+            ['Failed', $results['failed']],
+            ['Skipped', $results['skipped']],
+            ['Swept to exhausted', $results['exhausted']],
+            ['Total resent', $results['success'] + $results['failed']],
+        ];
+    }
+
     private function retry(InvoiceRegistrar $registrar): int
     {
         $rawMaxAttempts = $this->option('max-attempts');
@@ -86,6 +117,15 @@ class RetryFailedCommand extends Command
                 (bool) $this->option('include-exhausted'),
             );
 
+            // Disabled during the pass (AID-1907): the refused candidate and the
+            // rest were counted as skipped, never failed.
+            if ($results['disabled'] ?? false) {
+                $this->warn(self::disabledWarning());
+                $this->table(['Result', 'Count'], $this->resultRows($results));
+
+                return $results['failed'] > 0 ? self::FAILURE : self::SUCCESS;
+            }
+
             if ($results['success'] === 0 && $results['failed'] === 0 && $results['exhausted'] === 0 && $results['skipped'] === 0) {
                 $this->info('No failed registries to retry');
 
@@ -93,16 +133,7 @@ class RetryFailedCommand extends Command
             }
 
             $this->info('✓ Retry process completed');
-            $this->table(
-                ['Result', 'Count'],
-                [
-                    ['Success', $results['success']],
-                    ['Failed', $results['failed']],
-                    ['Skipped', $results['skipped']],
-                    ['Swept to exhausted', $results['exhausted']],
-                    ['Total resent', $results['success'] + $results['failed']],
-                ]
-            );
+            $this->table(['Result', 'Count'], $this->resultRows($results));
 
             return $results['failed'] > 0 ? self::FAILURE : self::SUCCESS;
         } catch (\Throwable $e) {

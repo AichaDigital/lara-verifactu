@@ -76,6 +76,12 @@ class TestCase extends Orchestra
             config()->set('verifactu.transaction_guard.baseline_level', 1);
         }
 
+        // The harness plays a consumer that has turned the package on
+        // (AID-1907): the shipped default is off, and every pre-1.7 test
+        // exercises the enabled behaviour. Tests of the disabled state set
+        // verifactu.enabled to false themselves.
+        config()->set('verifactu.enabled', true);
+
         // A cache store the overlapping processes can actually share.
         //
         // Testbench defaults to `array`, which lives in the memory of ONE

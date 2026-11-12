@@ -5,9 +5,9 @@ declare(strict_types=1);
 use AichaDigital\LaraVerifactu\Contracts\AeatClientContract;
 use AichaDigital\LaraVerifactu\Contracts\InvoiceContract;
 use AichaDigital\LaraVerifactu\Contracts\QrGeneratorContract;
-use AichaDigital\LaraVerifactu\Services\AeatClient;
 use AichaDigital\LaraVerifactu\Services\InvoiceRegistrar;
 use AichaDigital\LaraVerifactu\Services\QrGenerator;
+use AichaDigital\LaraVerifactu\Support\LazyAeatClient;
 use AichaDigital\LaraVerifactu\Verifactu;
 
 /**
@@ -43,7 +43,8 @@ it('resolves the QR validation URL according to the AEAT environment', function 
 it('resolves the AEAT client from the container', function () {
     $client = app(AeatClientContract::class);
 
-    expect($client)->toBeInstanceOf(AeatClient::class);
+    // AID-1907: the package binds the lazy proxy, which wraps the concrete client.
+    expect($client)->toBeInstanceOf(LazyAeatClient::class);
 });
 
 it('resolves the invoice registrar orchestrator from the container', function () {

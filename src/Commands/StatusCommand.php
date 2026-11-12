@@ -7,6 +7,7 @@ namespace AichaDigital\LaraVerifactu\Commands;
 use AichaDigital\LaraVerifactu\Enums\RegistryStatusEnum;
 use AichaDigital\LaraVerifactu\Models\Invoice;
 use AichaDigital\LaraVerifactu\Models\Registry;
+use AichaDigital\LaraVerifactu\Support\ReportsActivation;
 use Illuminate\Console\Command;
 
 /**
@@ -16,6 +17,8 @@ use Illuminate\Console\Command;
  */
 class StatusCommand extends Command
 {
+    use ReportsActivation;
+
     /**
      * The name and signature of the console command.
      */
@@ -50,11 +53,12 @@ class StatusCommand extends Command
         $this->newLine();
 
         $config = [
+            ['Enabled', $this->reportActivation()],
             ['Mode', config('verifactu.mode', 'native')],
             ['Environment', config('verifactu.aeat_client.environment', 'test')],
             ['Queue Enabled', config('verifactu.queue.enabled', false) ? 'Yes' : 'No'],
             ['Queue Name', config('verifactu.queue.name', 'default')],
-            ['Certificate', file_exists(config('verifactu.certificate.path', '')) ? 'Found' : 'Not Found'],
+            ['Certificate', file_exists((string) config('verifactu.certificate.path', '')) ? 'Found' : 'Not Found'],
         ];
 
         $this->table(['Setting', 'Value'], $config);

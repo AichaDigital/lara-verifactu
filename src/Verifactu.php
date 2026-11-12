@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace AichaDigital\LaraVerifactu;
 
+use AichaDigital\LaraVerifactu\Contracts\ActivationContract;
 use AichaDigital\LaraVerifactu\Contracts\InvoiceContract;
 use AichaDigital\LaraVerifactu\Contracts\QrGeneratorContract;
 use AichaDigital\LaraVerifactu\Contracts\RegistryContract;
 use AichaDigital\LaraVerifactu\Enums\RegistryStatusEnum;
 use AichaDigital\LaraVerifactu\Enums\RegistryTypeEnum;
+use AichaDigital\LaraVerifactu\Exceptions\ConfigurationException;
+use AichaDigital\LaraVerifactu\Exceptions\VerifactuDisabledException;
 use AichaDigital\LaraVerifactu\Models\Registry;
 use AichaDigital\LaraVerifactu\Services\InvoiceRegistrar;
 use Carbon\Carbon;
@@ -24,6 +27,9 @@ use PHPUnit\Framework\Assert;
 final class Verifactu
 {
     private bool $fakeMode = false;
+
+    /** Whether the fake follows the activation switch (AID-1907). */
+    private bool $fakeHonoursSwitch = false;
 
     /**
      * @var array<string, InvoiceContract>
@@ -46,6 +52,8 @@ final class Verifactu
     public function register(InvoiceContract $invoice, bool $submitToAeat = true): RegistryContract
     {
         if ($this->fakeMode) {
+            $this->assertFakeEnabled('register');
+
             $this->fakeRegistered[$invoice->getInvoiceNumber()] = $invoice;
 
             return $this->fakeRegistry($invoice, RegistryTypeEnum::REGISTRATION);
@@ -60,6 +68,8 @@ final class Verifactu
     public function cancel(InvoiceContract $invoice, bool $submitToAeat = true): RegistryContract
     {
         if ($this->fakeMode) {
+            $this->assertFakeEnabled('cancel');
+
             $this->fakeCancelled[$invoice->getInvoiceNumber()] = $invoice;
 
             return $this->fakeRegistry($invoice, RegistryTypeEnum::CANCELLATION);
@@ -76,6 +86,16 @@ final class Verifactu
         InvoiceContract $correctedInvoice,
         bool $submitToAeat = true
     ): RegistryContract {
+        if ($this->fakeMode) {
+            // Recorded as a registration of the corrected invoice (AID-1907 G3),
+            // through the same map and builder as register().
+            $this->assertFakeEnabled('amendRejected');
+
+            $this->fakeRegistered[$correctedInvoice->getInvoiceNumber()] = $correctedInvoice;
+
+            return $this->fakeRegistry($correctedInvoice, RegistryTypeEnum::REGISTRATION);
+        }
+
         return $this->registrar->amendRejected($rejectedRegistry, $correctedInvoice, $submitToAeat);
     }
 
@@ -88,6 +108,9 @@ final class Verifactu
     public function sendBatch(iterable $invoices, bool $submitToAeat = true): array
     {
         if ($this->fakeMode) {
+            // Checked before iterating, so an empty batch is refused too.
+            $this->assertFakeEnabled('sendBatch');
+
             $registries = [];
 
             foreach ($invoices as $invoice) {
@@ -95,6 +118,12 @@ final class Verifactu
             }
 
             return ['success' => count($registries), 'failed' => 0, 'registries' => $registries];
+        }
+
+        // Checked before materialising the iterable: a generator must not be
+        // evaluated (lookups, side effects) while the package is disabled.
+        if (! app(ActivationContract::class)->isEnabled()) {
+            throw VerifactuDisabledException::forOperation('sendBatch');
         }
 
         return $this->registrar->batchRegister(
@@ -149,11 +178,35 @@ final class Verifactu
     }
 
     /**
-     * Enable fake mode: calls are intercepted in-memory for assertions
+     * Whether the package will register (AID-1907): "ask the package whether
+     * it will register". The answer reflects the activation switch only; it
+     * does not promise that the certificate or the environment is configured.
+     *
+     * A default fake answers true, so a consumer that gates on this keeps
+     * reaching the fake; fake(honourSwitch: true) reports the switch.
+     *
+     * @throws ConfigurationException When the switch holds an unparseable value.
      */
-    public function fake(): void
+    public function enabled(): bool
+    {
+        if ($this->fakeMode && ! $this->fakeHonoursSwitch) {
+            return true;
+        }
+
+        return app(ActivationContract::class)->isEnabled();
+    }
+
+    /**
+     * Enable fake mode: calls are intercepted in-memory for assertions.
+     *
+     * By default the fake ignores the activation switch. With
+     * `honourSwitch: true` it follows it: enabled() reports the configured
+     * value and the write methods throw VerifactuDisabledException when off.
+     */
+    public function fake(bool $honourSwitch = false): void
     {
         $this->fakeMode = true;
+        $this->fakeHonoursSwitch = $honourSwitch;
         $this->fakeRegistered = [];
         $this->fakeCancelled = [];
     }
@@ -223,6 +276,16 @@ final class Verifactu
             'status' => RegistryStatusEnum::PENDING->value,
             'submission_attempts' => 0,
         ]);
+    }
+
+    /**
+     * @throws VerifactuDisabledException
+     */
+    private function assertFakeEnabled(string $operation): void
+    {
+        if ($this->fakeHonoursSwitch && ! app(ActivationContract::class)->isEnabled()) {
+            throw VerifactuDisabledException::forOperation($operation);
+        }
     }
 
     private function ensureFakeMode(): void

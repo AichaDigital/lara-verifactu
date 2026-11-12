@@ -9,6 +9,24 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Activation switch
+    |--------------------------------------------------------------------------
+    |
+    | Package-wide switch, off until the consumer turns it on. Activating
+    | Verifactu is the consumer's responsibility: while it is false the
+    | package creates no registry, chains nothing and sends nothing to the
+    | AEAT, and the write methods throw VerifactuDisabledException.
+    |
+    | Accepted values: true/false, 1/0, "true"/"false", "on"/"off",
+    | "yes"/"no". Anything else (including an empty value) is a
+    | configuration error, never read as off nor as on.
+    |
+    */
+
+    'enabled' => env('VERIFACTU_ENABLED', false),
+
+    /*
+    |--------------------------------------------------------------------------
     | Operation Mode
     |--------------------------------------------------------------------------
     |
